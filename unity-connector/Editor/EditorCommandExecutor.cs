@@ -23,11 +23,7 @@ namespace UnityCliConnector
                     EditorApplication.ExitPlaymode();
                     break;
                 case "refresh":
-                    AssetDatabase.Refresh();
-                    if (parameters != null &&
-                        parameters.TryGetValue("compile", out var c) &&
-                        c is bool compile && compile)
-                        CompilationPipeline.RequestScriptCompilation();
+                    Editor.Services.AssetRefreshService.Refresh(parameters);
                     break;
             }
         }

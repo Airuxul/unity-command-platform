@@ -38,6 +38,12 @@
       "expectJob": "succeeded",
       "timeoutMs": 20000,
       "allowConnectionRetry": true
+    },
+    {
+      "name": "console",
+      "command": "console",
+      "args": ["--type", "error,warning,log", "--lines", "10"],
+      "expect": { "ok": true }
     }
   ]
 }

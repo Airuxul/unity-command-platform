@@ -11,6 +11,10 @@ const BOOTSTRAP_ALIAS_TO_COMMAND = {
   reload: 'compile',
   'reload-scripts': 'compile',
   'editor.recompile': 'compile',
+  console: 'editor.console',
+  logs: 'editor.console',
+  menu: 'editor.menu',
+  screenshot: 'editor.screenshot',
 };
 
 const CACHE_DIR = path.join(os.homedir(), '.unity-cmd', 'cache');

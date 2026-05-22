@@ -90,6 +90,8 @@ function coerceParameters(flags) {
   const out = { ...flags };
   if (out.compile === 'true' || out.compile === '1') out.compile = true;
   if (out.compile === 'false' || out.compile === '0') out.compile = false;
+  if (out.clear === 'true' || out.clear === '1') out.clear = true;
+  if (out.force === 'true' || out.force === '1') out.force = true;
   return out;
 }
 
@@ -101,6 +103,10 @@ Usage:
   unity-cmd list
   unity-cmd recompile              # recompile scripts (waits for job, default 120s)
   unity-cmd compile | editor.recompile
+  unity-cmd console [--type error,warning] [--lines 50] [--stacktrace user]
+  unity-cmd console --clear
+  unity-cmd menu --menu_path "File/Save Project"
+  unity-cmd screenshot [--view scene|game] [--output_path path]
   unity-cmd <command> [--key value] [--timeout ms]
 
 Environment:

@@ -1,6 +1,6 @@
 # unity-connector — Implementation
 
-Version: 0.1.1
+Version: 0.1.2
 
 ## Assemblies
 
@@ -81,6 +81,21 @@ Port: `UNITY_CMD_PORT` or `6400 + hash(dataPath) % 800`.
 - `Core/Http/CommandPipeline` — shared sync (200) vs job (202) handling
 - `Editor/EditorRequestDispatcher` — `/health`, `/list`, `/command`, `/jobs/{id}`
 - `Runtime/RuntimeRequestDispatcher` — `/health`, `/command` only
+
+## Editor tool commands
+
+| Command | Aliases | Notes |
+|---------|---------|-------|
+| `editor.console` | `console`, `logs` | Read/clear Unity console via `LogEntries` reflection |
+| `editor.menu` | `menu` | `EditorApplication.ExecuteMenuItem` |
+| `editor.screenshot` | `screenshot` | Scene/Game view PNG capture |
+
+### `editor.console` parameters
+
+- `type` — comma-separated: `error`, `warning`, `log` (default all three)
+- `lines` / `count` — max entries
+- `stacktrace` — `none`, `user` (default), `full`
+- `clear` — clear console when `true`
 
 ## Main-thread execution
 

@@ -2,7 +2,7 @@
 
 Unity Editor / Player HTTP bridge for [unity-cmd](../unity-cmd/).
 
-**Version:** 0.1.0  
+**Version:** 0.1.2  
 **UPM name:** `com.airuxul.unity-connector`
 
 ## Install (local path)
@@ -32,6 +32,17 @@ Open the project in the Editor. The connector logs a URL like `http://127.0.0.1:
 | `editor.play` | editor | yes |
 | `editor.stop` | editor | yes |
 | `refresh` | editor | yes if `compile=true` |
+| `editor.console` | editor | no (`console`, `logs`) |
+| `editor.menu` | editor | no (`menu`) |
+| `editor.screenshot` | editor | no (`screenshot`) |
+
+### Console
+
+```bash
+unity-cmd console --type error,warning --lines 20
+unity-cmd console --stacktrace full
+unity-cmd console --clear
+```
 
 ## Extend with `[CliCommand]`
 

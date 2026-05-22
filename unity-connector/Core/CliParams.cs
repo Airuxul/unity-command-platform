@@ -28,5 +28,21 @@ namespace UnityCliConnector
             if (raw is bool b) return b;
             return bool.TryParse(raw.ToString(), out var parsed) && parsed;
         }
+
+        public int? GetInt(string key, int? defaultValue = null)
+        {
+            if (!_values.TryGetValue(key, out var raw) || raw == null)
+                return defaultValue;
+            if (raw is int i)
+                return i;
+            if (raw is long l)
+                return (int)l;
+            if (int.TryParse(raw.ToString(), out var parsed))
+                return parsed;
+            return defaultValue;
+        }
+
+        public Dictionary<string, object> ToDictionary() =>
+            new Dictionary<string, object>(_values);
     }
 }

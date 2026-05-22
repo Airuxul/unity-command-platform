@@ -13,9 +13,7 @@ namespace UnityCliConnector
             if (string.IsNullOrEmpty(command))
                 return null;
 
-            if (command == "refresh" && parameters != null &&
-                parameters.TryGetValue("compile", out var compile) &&
-                compile is bool b && b)
+            if (command == "refresh" && GetBoolParam(parameters, "compile"))
                 return CompletionCompilation;
 
             var handler = CommandDiscovery.Find(command);
@@ -27,5 +25,14 @@ namespace UnityCliConnector
 
         public static bool IsJobCommand(string command, Dictionary<string, object> parameters) =>
             !string.IsNullOrEmpty(GetCompletionKind(command, parameters));
+
+        private static bool GetBoolParam(Dictionary<string, object> parameters, string key)
+        {
+            if (parameters == null || !parameters.TryGetValue(key, out var raw) || raw == null)
+                return false;
+            if (raw is bool b)
+                return b;
+            return bool.TryParse(raw.ToString(), out var parsed) && parsed;
+        }
     }
 }

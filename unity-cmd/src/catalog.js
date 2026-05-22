@@ -5,6 +5,14 @@ import { fetchCatalog } from './client/command.js';
 
 export const LOCAL_META = new Set(['ping', 'list', 'help']);
 
+/** Used when Unity catalog has no alias map (pre-build-4 connector). */
+const BOOTSTRAP_ALIAS_TO_COMMAND = {
+  recompile: 'compile',
+  reload: 'compile',
+  'reload-scripts': 'compile',
+  'editor.recompile': 'compile',
+};
+
 const CACHE_DIR = path.join(os.homedir(), '.unity-cmd', 'cache');
 
 export function cachePathForTarget(target) {
@@ -66,7 +74,10 @@ export async function loadCatalog(target, options = {}) {
  * @param {ReturnType<typeof indexCatalog>} catalog
  */
 export function resolveRemoteCommand(command, flags = {}, catalog) {
-  const aliasMap = catalog?.alias_to_command ?? {};
+  const aliasMap = {
+    ...BOOTSTRAP_ALIAS_TO_COMMAND,
+    ...(catalog?.alias_to_command ?? {}),
+  };
   const byName = catalog?.commands_by_name ?? {};
 
   let canonical = command;

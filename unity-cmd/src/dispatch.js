@@ -64,7 +64,7 @@ export async function runCommand(command, flags, timeoutMs) {
     process.exit(0);
   }
 
-  const parameters = { ...flags };
+  const parameters = coerceParameters({ ...flags });
   delete parameters.project;
 
   const catalog = await loadCatalog(target, { timeoutMs });
@@ -84,6 +84,13 @@ export async function runCommand(command, flags, timeoutMs) {
 
 function printJson(obj) {
   console.log(JSON.stringify(obj, null, 2));
+}
+
+function coerceParameters(flags) {
+  const out = { ...flags };
+  if (out.compile === 'true' || out.compile === '1') out.compile = true;
+  if (out.compile === 'false' || out.compile === '0') out.compile = false;
+  return out;
 }
 
 function printHelp() {

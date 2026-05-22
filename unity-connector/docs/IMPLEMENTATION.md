@@ -6,8 +6,8 @@ Version: 0.1.0
 
 | Assembly | Platform | Contents |
 |----------|----------|----------|
-| `UnityCliConnector.Core` | all | Protocol, discovery, router, SimpleJson |
-| `UnityCliConnector.Editor` | Editor | HTTP host, jobs, heartbeat, builtins |
+| `UnityCliConnector.Core` | all | Protocol, discovery, `HttpServer`, `CommandCatalog` |
+| `UnityCliConnector.Editor` | Editor | `EditorRequestDispatcher`, jobs, heartbeat, builtins |
 | `UnityCliConnector.Runtime` | Player | Runtime HTTP (debug builds), `echo.runtime` |
 
 ## HTTP API
@@ -17,7 +17,7 @@ Version: 0.1.0
 | GET | `/health` | `{ ok, host }` |
 | POST | `/command` | `200` sync result or `202` + `job_id` |
 | GET | `/jobs/{id}` | job status + result |
-| POST | `/list` | command catalog |
+| POST | `/list` | full catalog (`catalog_version`, `commands`, `alias_to_command`) |
 
 ### POST /command body
 
@@ -31,7 +31,7 @@ Version: 0.1.0
 
 ## Job lifecycle
 
-1. `CommandJobCatalog` classifies destructive commands.
+1. `[CliCommand]` metadata (`IsJob`, `Completion`) plus `refresh?compile=true` classifies job commands.
 2. `JobManager.Create` stores job in `SessionState` key `UnityCliConnector.Jobs`.
 3. Side effect runs on `EditorApplication.delayCall` (compile, play, stop).
 4. `EditorApplication.update` → `CompletionPolicy.Tick()` observes `isCompiling` / `isPlaying`.
@@ -74,6 +74,13 @@ Port: `UNITY_CMD_PORT` or `6400 + hash(dataPath) % 800`.
 - Editor host, not playing: Editor + Any commands.
 - Editor host, playing: Runtime + Any commands; Editor-scoped commands rejected.
 - Runtime host (debug player): Runtime + Any only.
+
+## HTTP layering
+
+- `Core/Http/HttpServer` — listener loop and JSON responses
+- `Core/Http/CommandPipeline` — shared sync (200) vs job (202) handling
+- `Editor/EditorRequestDispatcher` — `/health`, `/list`, `/command`, `/jobs/{id}`
+- `Runtime/RuntimeRequestDispatcher` — `/health`, `/command` only
 
 ## Main-thread execution
 

@@ -3,7 +3,10 @@ namespace UnityCliConnector.Builtin
     [CliCommand(
         "editor.recompile",
         Scope = CommandScope.Editor,
-        Description = "Recompile scripts (async job, alias of compile)")]
+        Description = "Recompile scripts (async job, alias of compile)",
+        IsJob = true,
+        Completion = CommandJobCatalog.CompletionCompilation,
+        DefaultTimeoutMs = 120000)]
     public static class EditorRecompileCommand
     {
         public static CommandResult Run(CliParams p) =>

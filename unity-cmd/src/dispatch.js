@@ -1,9 +1,7 @@
-import { sendCommand, ping, listCommands } from './client/command.js';
+import { sendCommand, ping, fetchCatalog } from './client/command.js';
 import { selectInstance } from './client/target.js';
 import { resolveTimeoutMs } from './timeout.js';
-import { resolveRemoteCommand } from './commands.js';
-
-const META = new Set(['ping', 'list', 'help']);
+import { loadCatalog, resolveRemoteCommand, LOCAL_META } from './catalog.js';
 
 export function parseArgs(argv) {
   const args = [...argv];
@@ -56,7 +54,7 @@ export async function runCommand(command, flags, timeoutMs) {
   }
 
   if (command === 'list') {
-    const res = await listCommands(target, { timeoutMs });
+    const res = await fetchCatalog(target, { timeoutMs });
     printJson(res);
     process.exit(res.ok ? 0 : 1);
   }
@@ -69,7 +67,8 @@ export async function runCommand(command, flags, timeoutMs) {
   const parameters = { ...flags };
   delete parameters.project;
 
-  const resolved = resolveRemoteCommand(command, parameters);
+  const catalog = await loadCatalog(target, { timeoutMs });
+  const resolved = resolveRemoteCommand(command, parameters, catalog);
   const effectiveTimeout =
     resolved.minTimeoutMs != null
       ? Math.max(timeoutMs, resolved.minTimeoutMs)

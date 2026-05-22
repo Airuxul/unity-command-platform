@@ -2,6 +2,7 @@ using System.Collections.Generic;
 
 namespace UnityCliConnector
 {
+    /// <summary>Legacy list entry shape; prefer <see cref="CommandCatalog"/>.</summary>
     public sealed class CommandListEntry
     {
         public string Name { get; set; }
@@ -15,21 +16,10 @@ namespace UnityCliConnector
     {
         public static List<Dictionary<string, object>> Build()
         {
-            var list = new List<Dictionary<string, object>>();
-            foreach (var handler in CommandDiscovery.Handlers)
-            {
-                var completion = CommandJobCatalog.GetCompletionKind(handler.Name, null);
-                list.Add(new Dictionary<string, object>
-                {
-                    ["name"] = handler.Name,
-                    ["scope"] = handler.Scope.ToString().ToLowerInvariant(),
-                    ["description"] = handler.Description ?? "",
-                    ["is_job"] = completion != null,
-                    ["completion"] = completion,
-                });
-            }
-
-            return list;
+            var response = CommandCatalog.BuildResponse();
+            return response.TryGetValue("commands", out var raw) && raw is List<Dictionary<string, object>> list
+                ? list
+                : new List<Dictionary<string, object>>();
         }
     }
 }

@@ -8,14 +8,6 @@ namespace UnityCliConnector
         public const string CompletionEnterPlay = "enter_play";
         public const string CompletionExitPlay = "exit_play";
 
-        private static readonly Dictionary<string, string> BuiltIn = new()
-        {
-            { "compile", CompletionCompilation },
-            { "editor.recompile", CompletionCompilation },
-            { "editor.play", CompletionEnterPlay },
-            { "editor.stop", CompletionExitPlay },
-        };
-
         public static string GetCompletionKind(string command, Dictionary<string, object> parameters)
         {
             if (string.IsNullOrEmpty(command))
@@ -26,7 +18,11 @@ namespace UnityCliConnector
                 compile is bool b && b)
                 return CompletionCompilation;
 
-            return BuiltIn.TryGetValue(command, out var kind) ? kind : null;
+            var handler = CommandDiscovery.Find(command);
+            if (handler != null && handler.IsJob && !string.IsNullOrEmpty(handler.Completion))
+                return handler.Completion;
+
+            return null;
         }
 
         public static bool IsJobCommand(string command, Dictionary<string, object> parameters) =>

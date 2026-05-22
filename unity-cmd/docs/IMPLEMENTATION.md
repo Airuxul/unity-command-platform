@@ -14,7 +14,8 @@ Thin HTTP client and argv front-end. No Unity-specific business logic lives here
 | `src/client/target.js` | Read `~/.unity-cmd/instances/*.json`, select project |
 | `src/client/http.js` | `fetch` wrapper with abort |
 | `src/client/job.js` | Poll `GET /jobs/{id}` until terminal state |
-| `src/client/command.js` | `POST /command`, handle 200 vs 202 |
+| `src/client/command.js` | `POST /command`, `fetchCatalog` via `POST /list` |
+| `src/catalog.js` | Cache catalog under `~/.unity-cmd/cache/`, resolve aliases/timeouts |
 | `src/dispatch.js` | CLI routing for `ping`, `list`, `help`, arbitrary commands |
 | `bin/unity-cmd.js` | Entry point |
 
@@ -22,6 +23,8 @@ Thin HTTP client and argv front-end. No Unity-specific business logic lives here
 
 ```text
 argv → dispatch → selectInstance (heartbeat)
+              → loadCatalog (cached POST /list)
+              → resolveRemoteCommand (aliases, job timeouts)
               → POST /command
               → if 202: pollJob until succeeded/failed/timeout
               → print JSON, exit code
@@ -39,6 +42,13 @@ argv → dispatch → selectInstance (heartbeat)
 
 Skip semantics: no heartbeat within 20s → stderr hints → exit `0`, `report.json` has `skipped: true`.
 
+## Command catalog
+
+Unity is the source of truth. `POST /list` returns `catalog_version`, `commands`, and `alias_to_command`.
+The CLI caches per project under `~/.unity-cmd/cache/catalog-*.json`.
+
+Local-only commands: `ping`, `list`, `help`.
+
 ## Extending
 
-New Unity commands only require `[CliCommand]` in the connector — no changes here unless CLI UX is needed.
+Add `[CliCommand]` on a static class in the connector (with `IsJob`, `Completion`, `Aliases`, `DefaultTimeoutMs` as needed). No `unity-cmd` code changes unless you add new local meta commands.

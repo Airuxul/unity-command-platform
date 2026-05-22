@@ -10,6 +10,10 @@ namespace UnityCliConnector
         public string Description { get; set; } = "";
         public bool IsJob { get; set; }
         public string Completion { get; set; }
+        /// <summary>Comma-separated CLI aliases (e.g. recompile,reload).</summary>
+        public string Aliases { get; set; } = "";
+        public int DefaultTimeoutMs { get; set; }
+        public bool AllowConnectionRetry { get; set; } = true;
 
         public CliCommandAttribute(string name)
         {

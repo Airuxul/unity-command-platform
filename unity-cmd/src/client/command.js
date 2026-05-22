@@ -48,7 +48,7 @@ export async function ping(target, options = {}) {
   return { ok: status === 200 && data?.ok, status, data };
 }
 
-export async function listCommands(target, options = {}) {
+export async function fetchCatalog(target, options = {}) {
   const timeoutMs = resolveTimeoutMs(options.timeoutMs);
   const baseUrl = `http://${target.host}:${target.port}`;
   const { status, data } = await requestJson(`${baseUrl}/list`, {
@@ -56,5 +56,17 @@ export async function listCommands(target, options = {}) {
     body: {},
     timeoutMs,
   });
-  return { ok: status === 200, data: data?.commands ?? [], status };
+  return {
+    ok: status === 200 && data?.ok !== false,
+    status,
+    catalog_version: data?.catalog_version ?? null,
+    commands: data?.commands ?? [],
+    alias_to_command: data?.alias_to_command ?? {},
+  };
+}
+
+/** @deprecated Use fetchCatalog */
+export async function listCommands(target, options = {}) {
+  const res = await fetchCatalog(target, options);
+  return { ok: res.ok, data: res.commands, status: res.status };
 }

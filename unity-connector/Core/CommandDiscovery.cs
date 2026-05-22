@@ -76,20 +76,38 @@ namespace UnityCliConnector
             }
         }
 
+        private static string[] ParseAliases(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return Array.Empty<string>();
+
+            return raw.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(a => a.Trim())
+                .Where(a => a.Length > 0)
+                .ToArray();
+        }
+
         private sealed class ReflectiveHandler : ICommandHandler
         {
             private readonly CliCommandAttribute _attr;
             private readonly MethodInfo _method;
+            private readonly string[] _aliases;
 
             public ReflectiveHandler(CliCommandAttribute attr, MethodInfo method)
             {
                 _attr = attr;
                 _method = method;
+                _aliases = ParseAliases(attr.Aliases);
             }
 
             public string Name => _attr.Name;
             public CommandScope Scope => _attr.Scope;
             public string Description => _attr.Description ?? "";
+            public bool IsJob => _attr.IsJob;
+            public string Completion => _attr.Completion ?? "";
+            public string[] Aliases => _aliases;
+            public int DefaultTimeoutMs => _attr.DefaultTimeoutMs;
+            public bool AllowConnectionRetry => _attr.AllowConnectionRetry;
 
             public CommandResult Execute(CliParams parameters)
             {

@@ -76,7 +76,7 @@
     {
       "name": "connector_state",
       "command": "connector.state",
-      "expect": { "ok": true, "dataHas": ["is_playing", "is_compiling"] }
+      "expect": { "ok": true, "dataHas": ["is_playing", "is_compiling", "connector_build", "recent_console_count"] }
     },
     {
       "name": "compile",

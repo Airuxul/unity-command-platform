@@ -3,6 +3,8 @@ import { selectInstance } from './client/target.js';
 import { resolveTimeoutMs } from './timeout.js';
 import { loadCatalog, resolveRemoteCommand, LOCAL_META } from './catalog.js';
 import { coerceParameters } from './params.js';
+import { cliError, enrichFailure, enrichThrown } from './errors.js';
+import { formatHelp } from './help.js';
 
 export function parseArgs(argv) {
   const args = [...argv];
@@ -41,73 +43,94 @@ export async function runCommand(command, flags, timeoutMs) {
   const projectHint = process.env.UNITY_CMD_PROJECT ?? flags.project;
   const target = selectInstance(projectHint);
   if (!target) {
-    console.error(
-      'No Unity Editor instance found. Open your project with unity-connector installed.',
+    const err = cliError(
+      'No Unity Editor instance found in heartbeat registry.',
+      'NO_INSTANCE',
+      'Open your project with unity-connector installed. Set UNITY_CMD_PROJECT when multiple Editors run.',
     );
-    console.error('Set UNITY_CMD_PROJECT to disambiguate multiple instances.');
+    printJson(err);
     process.exit(1);
   }
 
   if (command === 'ping') {
     const res = await ping(target, { timeoutMs });
-    printJson(res);
+    printJson(res.ok ? res : enrichFailure(res));
     process.exit(res.ok ? 0 : 1);
   }
 
   if (command === 'list') {
-    const res = await fetchCatalog(target, { timeoutMs });
-    printJson(res);
-    process.exit(res.ok ? 0 : 1);
+    try {
+      const forceRefresh = flags['refresh-catalog'] === true || flags.refresh_catalog === true;
+      const catalog = await loadCatalog(target, { timeoutMs, forceRefresh });
+      printJson({
+        ok: true,
+        catalog_version: catalog.catalog_version,
+        connector_build: catalog.connector_build,
+        commands: catalog.commands,
+        alias_to_command: catalog.alias_to_command,
+      });
+      process.exit(0);
+    } catch (err) {
+      printJson(enrichThrown(err));
+      process.exit(1);
+    }
   }
 
   if (command === 'help') {
-    printHelp();
+    try {
+      const catalog = await loadCatalog(target, { timeoutMs });
+      console.log(formatHelp(catalog));
+    } catch {
+      console.log(formatHelp(null));
+    }
     process.exit(0);
   }
 
+  const forceCatalogRefresh =
+    flags['refresh-catalog'] === true || flags.refresh_catalog === true;
+
   const parameters = coerceParameters({ ...flags });
   delete parameters.project;
+  delete parameters['refresh-catalog'];
+  delete parameters.refresh_catalog;
 
-  const catalog = await loadCatalog(target, { timeoutMs });
+  let catalog;
+  try {
+    catalog = await loadCatalog(target, {
+      timeoutMs,
+      forceRefresh: forceCatalogRefresh,
+    });
+  } catch (err) {
+    printJson(enrichThrown(err, { command }));
+    process.exit(1);
+  }
+
   const resolved = resolveRemoteCommand(command, parameters, catalog);
   const effectiveTimeout =
     resolved.minTimeoutMs != null
       ? Math.max(timeoutMs, resolved.minTimeoutMs)
       : timeoutMs;
 
-  const res = await sendCommand(target, resolved.command, parameters, {
-    timeoutMs: effectiveTimeout,
-    allowConnectionRetry: resolved.allowConnectionRetry,
-  });
-  printJson(res);
-  process.exit(res.ok ? 0 : 1);
+  try {
+    const res = await sendCommand(target, resolved.command, parameters, {
+      timeoutMs: effectiveTimeout,
+      allowConnectionRetry: resolved.allowConnectionRetry,
+    });
+    const out = res.ok
+      ? res
+      : enrichFailure(res, {
+          command: resolved.command,
+          status: res.status,
+          job: Boolean(res.job_id),
+        });
+    printJson(out);
+    process.exit(res.ok ? 0 : 1);
+  } catch (err) {
+    printJson(enrichThrown(err, { command: resolved.command }));
+    process.exit(1);
+  }
 }
 
 function printJson(obj) {
   console.log(JSON.stringify(obj, null, 2));
-}
-
-function printHelp() {
-  console.log(`unity-cmd — send commands to unity-connector
-
-Usage:
-  unity-cmd ping
-  unity-cmd list
-  unity-cmd recompile              # recompile scripts (waits for job, default 120s)
-  unity-cmd compile | editor.recompile
-  unity-cmd console [--type error,warning] [--lines 50] [--stacktrace user]
-  unity-cmd console --clear
-  unity-cmd menu --menu_path "File/Save Project"
-  unity-cmd screenshot [--view scene|game] [--output_path path]
-  unity-cmd exec --code "return 1+1;"
-  unity-cmd profiler --action status
-  unity-cmd manage --action pause
-  unity-cmd reserialize --path Assets/foo.prefab
-  unity-cmd <command> [--key value] [--timeout ms]
-
-Environment:
-  UNITY_CMD_PROJECT       Select Editor instance by path or name
-  UNITY_CMD_HOST / PORT   Override endpoint
-  UNITY_CMD_TIMEOUT_MS    Default timeout (20000; recompile uses at least 120000)
-`);
 }

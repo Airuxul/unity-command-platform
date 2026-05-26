@@ -21,7 +21,9 @@ unity-cmd editor.play
 unity-cmd echo.editor --message hello
 unity-cmd recompile          # recommended after editing unity-connector (120s job timeout)
 unity-cmd compile            # same as recompile
-unity-cmd console --type error,warning --lines 20
+unity-cmd console --lines 20          # default: error,warning only
+unity-cmd help                        # live catalog from Unity
+unity-cmd list --refresh-catalog
 unity-cmd logs               # alias → editor.console
 unity-cmd menu --menu_path "File/Save Project"
 unity-cmd screenshot --view game --output_path Screenshots/game.png

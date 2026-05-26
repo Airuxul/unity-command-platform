@@ -17,12 +17,12 @@ namespace UnityCliConnector.Editor.Services
                 case "hierarchy":
                     return Hierarchy(p);
                 case "enable":
-                    Profiler.enabled = true;
+                    UnityEngine.Profiling.Profiler.enabled = true;
                     ProfilerDriver.enabled = true;
                     return new Dictionary<string, object> { ["enabled"] = true };
                 case "disable":
                     ProfilerDriver.enabled = false;
-                    Profiler.enabled = false;
+                    UnityEngine.Profiling.Profiler.enabled = false;
                     return new Dictionary<string, object> { ["enabled"] = false };
                 case "status":
                     var first = ProfilerDriver.firstFrameIndex;

@@ -2,7 +2,7 @@
 
 Unity Editor / Player HTTP bridge for [unity-cmd](../unity-cmd/).
 
-**Version:** 0.1.3  
+**Version:** 0.1.4  
 **UPM name:** `com.airuxul.unity-connector`
 
 ## Install (local path)
@@ -28,7 +28,6 @@ Open the project in the Editor. The connector logs a URL like `http://127.0.0.1:
 | `echo.editor` | editor | no |
 | `echo.runtime` | runtime (Play Mode) | no |
 | `compile` | editor | yes |
-| `editor.recompile` | editor | yes (same as `compile`) |
 | `editor.play` | editor | yes |
 | `editor.stop` | editor | yes |
 | `refresh` | editor | yes if `compile=true` |
@@ -73,7 +72,7 @@ Recompile after changing the connector (from repo):
 
 ```bash
 unity-cmd recompile
-# or: unity-cmd compile / unity-cmd editor.recompile
+# or: unity-cmd compile / unity-cmd recompile
 ```
 
 ## EditMode tests (optional)

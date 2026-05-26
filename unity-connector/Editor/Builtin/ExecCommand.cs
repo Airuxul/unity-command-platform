@@ -11,7 +11,7 @@ namespace UnityCliConnector.Builtin
         {
             try
             {
-                return CommandResult.Success(Editor.Services.CSharpExecutor.Execute(p));
+                return CommandResult.Success(Editor.Services.CsharpExecutor.Execute(p));
             }
             catch (System.Exception ex)
             {

@@ -16,6 +16,8 @@ This document records the design goals from the initial refactor and their compl
 | No hardcoded CLI command table | Done | `commands.js` removed; bootstrap aliases for offline/legacy only |
 | Editor diagnostics tools | Done | `editor.console`, `editor.menu`, `editor.screenshot` |
 | Extended editor tools (reference port) | Done | `editor.exec`, `editor.profiler`, `editor.manage`, `editor.reserialize` |
+| Tech debt cleanup | Done | removed duplicate `editor.recompile`, catalog cache validation, HTTP health attach |
+| Agent-friendly CLI | Done | structured errors, dynamic help, console defaults, `connector.state` console snapshot |
 
 ## Request flow
 

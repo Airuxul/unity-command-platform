@@ -5,5 +5,11 @@ export function coerceParameters(flags) {
   if (out.compile === 'false' || out.compile === '0') out.compile = false;
   if (out.clear === 'true' || out.clear === '1') out.clear = true;
   if (out.force === 'true' || out.force === '1') out.force = true;
+  if (out['refresh-catalog'] === 'true' || out['refresh-catalog'] === '1') {
+    out['refresh-catalog'] = true;
+  }
+  if (out.refresh_catalog === 'true' || out.refresh_catalog === '1') {
+    out.refresh_catalog = true;
+  }
   return out;
 }

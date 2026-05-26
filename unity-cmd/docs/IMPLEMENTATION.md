@@ -50,6 +50,14 @@ The CLI caches per project under `~/.unity-cmd/cache/catalog-*.json`.
 
 Local-only commands: `ping`, `list`, `help`.
 
+## Agent-oriented CLI
+
+- Failures include `error_code` and `hint` (see `src/errors.js`).
+- `unity-cmd help` prints live catalog when Editor is reachable.
+- Catalog cache invalidates when `connector_build` from `/health` changes.
+- `unity-cmd list --refresh-catalog` forces cache refresh.
+- `unity-cmd console` defaults to `error,warning` (omit log noise unless `--type` is set).
+
 ## Extending
 
 Add `[CliCommand]` on a static class in the connector (with `IsJob`, `Completion`, `Aliases`, `DefaultTimeoutMs` as needed). No `unity-cmd` code changes unless you add new local meta commands.

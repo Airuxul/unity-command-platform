@@ -1,8 +1,10 @@
 import { requestJson } from './http.js';
 import { pollJob } from './job.js';
 import { resolveTimeoutMs } from '../timeout.js';
+import { enrichFailure } from '../errors.js';
 
 export async function sendCommand(target, command, parameters = {}, options = {}) {
+  options.command = command;
   const timeoutMs = resolveTimeoutMs(options.timeoutMs);
   const baseUrl = `http://${target.host}:${target.port}`;
   const body = {
@@ -19,26 +21,28 @@ export async function sendCommand(target, command, parameters = {}, options = {}
 
   if (status === 202 && data?.job_id) {
     const polled = await pollJob(baseUrl, data.job_id, timeoutMs, {
-      // Play/compile/stop often domain-reload; retry unless explicitly disabled.
       allowConnectionRetry: options.allowConnectionRetry !== false,
     });
-    return {
+    const result = {
       ok: polled.ok,
       status: polled.ok ? 200 : 500,
       data: polled.data?.result ?? polled.data,
       error: polled.error,
       job_id: data.job_id,
       request_id: data.request_id,
+      timedOut: polled.timedOut,
     };
+    return polled.ok ? result : enrichFailure(result, { job: true, status: result.status });
   }
 
-  return {
+  const result = {
     ok: data?.ok ?? (status >= 200 && status < 300),
     status,
     data: data?.data,
     error: data?.error,
     request_id: data?.request_id,
   };
+  return result.ok ? result : enrichFailure(result, { status, command: options.command });
 }
 
 export async function ping(target, options = {}) {
@@ -63,10 +67,4 @@ export async function fetchCatalog(target, options = {}) {
     commands: data?.commands ?? [],
     alias_to_command: data?.alias_to_command ?? {},
   };
-}
-
-/** @deprecated Use fetchCatalog */
-export async function listCommands(target, options = {}) {
-  const res = await fetchCatalog(target, options);
-  return { ok: res.ok, data: res.commands, status: res.status };
 }

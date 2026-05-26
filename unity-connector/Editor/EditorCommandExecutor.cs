@@ -13,7 +13,6 @@ namespace UnityCliConnector
             switch (command)
             {
                 case "compile":
-                case "editor.recompile":
                     CompilationPipeline.RequestScriptCompilation();
                     break;
                 case "editor.play":

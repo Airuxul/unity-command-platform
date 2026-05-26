@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fetchCatalog } from './client/command.js';
-
+import { fetchCatalog, ping } from './client/command.js';
 export const LOCAL_META = new Set(['ping', 'list', 'help']);
 
 /** Used when Unity catalog has no alias map (pre-build-4 connector). */
@@ -32,7 +31,11 @@ export function cachePathForTarget(target) {
   return path.join(CACHE_DIR, `catalog-${key}.json`);
 }
 
-function indexCatalog(raw) {
+/**
+ * @param {object} raw
+ * @returns {import('./catalog.js').CatalogIndex}
+ */
+export function indexCatalog(raw) {
   const commands = raw?.commands ?? [];
   const commandsByName = Object.create(null);
   for (const entry of commands) {
@@ -40,10 +43,34 @@ function indexCatalog(raw) {
   }
   return {
     catalog_version: raw?.catalog_version ?? null,
+    connector_build: raw?.connector_build ?? null,
     commands,
     commands_by_name: commandsByName,
     alias_to_command: raw?.alias_to_command ?? {},
   };
+}
+
+/**
+ * @param {object} cached
+ * @param {object} target
+ * @param {number} timeoutMs
+ */
+export async function isCacheValid(cached, target, timeoutMs) {
+  if (!cached?.commands?.length || !cached?.catalog_version) return false;
+
+  const health = await ping(target, { timeoutMs: Math.min(timeoutMs, 5000) });
+  if (!health.ok) return false;
+
+  const liveBuild = health.data?.connector_build;
+  if (
+    cached.connector_build != null &&
+    liveBuild != null &&
+    cached.connector_build !== liveBuild
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function loadCatalog(target, options = {}) {
@@ -53,19 +80,36 @@ export async function loadCatalog(target, options = {}) {
   if (!forceRefresh && fs.existsSync(cachePath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-      if (cached?.commands?.length) return indexCatalog(cached);
+      if (await isCacheValid(cached, target, timeoutMs)) {
+        return indexCatalog(cached);
+      }
     } catch {
       // refresh below
     }
   }
 
+  const health = await ping(target, { timeoutMs });
+  if (!health.ok) {
+    throw Object.assign(
+      new Error('Failed to reach Unity Editor HTTP endpoint.'),
+      {
+        error_code: 'CONNECTION_FAILED',
+        hint: 'Open the project in Unity and run unity-cmd ping.',
+      },
+    );
+  }
+
   const res = await fetchCatalog(target, { timeoutMs });
   if (!res.ok) {
-    throw new Error('Failed to fetch command catalog from Unity Editor.');
+    throw Object.assign(new Error('Failed to fetch command catalog from Unity Editor.'), {
+      error_code: 'CATALOG_FETCH_FAILED',
+      hint: 'Run unity-cmd refresh --compile true if connector scripts changed.',
+    });
   }
 
   const catalog = indexCatalog({
     catalog_version: res.catalog_version,
+    connector_build: health.data?.connector_build ?? null,
     commands: res.commands,
     alias_to_command: res.alias_to_command,
   });

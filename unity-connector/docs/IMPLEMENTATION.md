@@ -1,6 +1,6 @@
 # unity-connector — Implementation
 
-Version: 0.1.3
+Version: 0.1.4
 
 ## Assemblies
 
@@ -83,8 +83,6 @@ Port: `UNITY_CMD_PORT` or `6400 + hash(dataPath) % 800`.
 - `Editor/EditorRequestDispatcher` — `/health`, `/list`, `/command`, `/jobs/{id}`
 - `Runtime/RuntimeRequestDispatcher` — `/health`, `/command` only
 
-`CommandListBuilder` delegates to `CommandCatalog` (single catalog source).
-
 ## Editor tool commands
 
 | Command | Aliases | Notes |
@@ -99,7 +97,7 @@ Port: `UNITY_CMD_PORT` or `6400 + hash(dataPath) % 800`.
 
 ### `editor.console` parameters
 
-- `type` — comma-separated: `error`, `warning`, `log` (default all three)
+- `type` — comma-separated: `error`, `warning`, `log` (default `error,warning` for agents)
 - `lines` / `count` — max entries
 - `stacktrace` — `none`, `user` (default), `full`
 - `clear` — clear console when `true`

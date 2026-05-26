@@ -28,9 +28,13 @@ namespace UnityCliConnector.Builtin
             }
 
             var lines = p.GetInt("lines") ?? p.GetInt("count");
+            var typeFilter = p.Has("type")
+                ? p.GetString("type")
+                : "error,warning";
+
             var entries = UnityConsoleReader.Read(new UnityConsoleReader.ConsoleReadOptions
             {
-                TypeFilter = p.GetString("type", "error,warning,log"),
+                TypeFilter = typeFilter,
                 MaxEntries = lines,
                 Stacktrace = p.GetString("stacktrace", "user"),
             });
@@ -39,7 +43,7 @@ namespace UnityCliConnector.Builtin
             {
                 ["count"] = entries.Count,
                 ["entries"] = entries,
-                ["types"] = p.GetString("type", "error,warning,log"),
+                ["types"] = typeFilter,
                 ["stacktrace"] = p.GetString("stacktrace", "user"),
             });
         }

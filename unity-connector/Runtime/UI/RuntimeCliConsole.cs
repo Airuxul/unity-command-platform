@@ -18,7 +18,7 @@ namespace UnityCliConnector
     {
         [Header("UI References")]
         [SerializeField] private InputField _inputField;
-        [SerializeField] private Text _historyText;
+        [SerializeField] private ScrollRect _historyScrollRect;
         [SerializeField] private ScrollRect _suggestionScrollRect;
         [SerializeField] private Button _suggestionItemPrefab;
 
@@ -28,7 +28,7 @@ namespace UnityCliConnector
         [SerializeField] private bool _clearInputAfterExecute = true;
         [SerializeField] private string _hostNameOverride = "";
 
-        private readonly List<string> _historyLines = new();
+        private readonly List<Text> _historyItems = new();
         private readonly List<string> _executedCommandHistory = new();
         private readonly Dictionary<string, string> _pendingCommandNames = new();
         private readonly List<SuggestionItem> _suggestions = new();
@@ -38,6 +38,7 @@ namespace UnityCliConnector
         private bool _suppressBrowseResetOnInputChanged;
         private string _tabCompletionSeed = "";
         private int _tabCompletionIndex = -1;
+        private bool _historyScrollPending;
 
         private struct SuggestionItem
         {
@@ -50,6 +51,7 @@ namespace UnityCliConnector
         {
             if (_inputField != null)
                 _inputField.onValueChanged.AddListener(OnInputChanged);
+            EnsureHistoryScrollLayout();
             RefreshSuggestions(_inputField != null ? _inputField.text : "");
             AppendHistory(FormatHistoryLine("system", $"Runtime CLI ready ({ResolveHostName()})."));
         }
@@ -59,6 +61,7 @@ namespace UnityCliConnector
             if (_inputField != null)
                 _inputField.onValueChanged.RemoveListener(OnInputChanged);
             ClearSuggestionButtons();
+            _historyItems.Clear();
         }
 
         private void Update()
@@ -70,6 +73,14 @@ namespace UnityCliConnector
             else if (Input.GetKeyDown(KeyCode.DownArrow)) HandleDownKey();
             else if (Input.GetKeyDown(KeyCode.Tab)) HandleTabCompletion();
             else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) HandleSubmit();
+        }
+
+        private void LateUpdate()
+        {
+            if (!_historyScrollPending)
+                return;
+            ScrollHistoryToBottomImmediate();
+            _historyScrollPending = false;
         }
 
         private void HandleUpKey()
@@ -793,14 +804,127 @@ namespace UnityCliConnector
 
         private void AppendHistory(string line)
         {
-            if (_historyText == null)
+            if (_historyScrollRect == null || _historyScrollRect.content == null)
                 return;
 
-            _historyLines.Add(line);
-            while (_historyLines.Count > Math.Max(10, _maxHistoryLines))
-                _historyLines.RemoveAt(0);
+            var item = CreateHistoryItem(line ?? "");
+            _historyItems.Add(item);
+            while (_historyItems.Count > Math.Max(10, _maxHistoryLines))
+                RemoveOldestHistoryItem();
 
-            _historyText.text = string.Join("\n", _historyLines);
+            ScrollHistoryToBottom();
+        }
+
+        private void EnsureHistoryScrollLayout()
+        {
+            if (_historyScrollRect == null || _historyScrollRect.content == null)
+                return;
+
+            var content = _historyScrollRect.content;
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = Vector2.zero;
+
+            var layout = content.GetComponent<VerticalLayoutGroup>();
+            if (layout != null)
+            {
+                layout.childAlignment = TextAnchor.UpperLeft;
+                layout.childControlWidth = true;
+                layout.childControlHeight = false;
+                layout.childForceExpandWidth = true;
+                layout.childForceExpandHeight = false;
+            }
+
+            if (content.GetComponent<ContentSizeFitter>() == null)
+            {
+                var fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            }
+        }
+
+        private Text CreateHistoryItem(string line)
+        {
+            var go = new GameObject("HistoryItem", typeof(RectTransform));
+            go.transform.SetParent(_historyScrollRect.content, false);
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.sizeDelta = Vector2.zero;
+
+            var text = go.AddComponent<Text>();
+            ApplyHistoryItemStyle(text);
+            text.text = line;
+
+            var itemFitter = go.AddComponent<ContentSizeFitter>();
+            itemFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            itemFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            return text;
+        }
+
+        private void ApplyHistoryItemStyle(Text text)
+        {
+            if (text == null)
+                return;
+
+            text.supportRichText = true;
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.raycastTarget = false;
+            text.fontSize = 50;
+            text.lineSpacing = 1f;
+            text.color = Color.black;
+            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        }
+
+        private void RemoveOldestHistoryItem()
+        {
+            if (_historyItems.Count == 0)
+                return;
+
+            var oldest = _historyItems[0];
+            _historyItems.RemoveAt(0);
+            if (oldest == null)
+                return;
+            if (Application.isPlaying)
+                Destroy(oldest.gameObject);
+            else
+                DestroyImmediate(oldest.gameObject);
+        }
+
+        private void ScrollHistoryToBottom()
+        {
+            _historyScrollPending = true;
+            ScrollHistoryToBottomImmediate();
+        }
+
+        private void ScrollHistoryToBottomImmediate()
+        {
+            if (_historyScrollRect == null || _historyScrollRect.content == null)
+                return;
+
+            var content = _historyScrollRect.content;
+            var viewport = _historyScrollRect.viewport != null
+                ? _historyScrollRect.viewport
+                : _historyScrollRect.GetComponent<RectTransform>();
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            _historyScrollRect.StopMovement();
+
+            var overflow = content.rect.height - viewport.rect.height;
+            if (overflow > 0f)
+                content.anchoredPosition = new Vector2(content.anchoredPosition.x, overflow);
+            else
+                content.anchoredPosition = new Vector2(content.anchoredPosition.x, 0f);
+
+            _historyScrollRect.verticalNormalizedPosition = 0f;
         }
 
         private string ResolveHostName()
@@ -847,12 +971,12 @@ namespace UnityCliConnector
             var text = message ?? "";
             return level switch
             {
-                "input" => $"<color=#9CDCFE>> {text}</color>",
-                "ok" => $"<color=#4EC9B0>[ok]</color> {text}",
-                "error" => $"<color=#F44747>[error]</color> {text}",
-                "pending" => $"<color=#DCDCAA>[pending]</color> {text}",
-                "running" => $"<color=#C586C0>[running]</color> {text}",
-                "system" => $"<color=#808080>[system]</color> {text}",
+                "input" => $"<color=#1F4E79>> {text}</color>",
+                "ok" => $"<color=#0B6E4F>[ok]</color> {text}",
+                "error" => $"<color=#8B0000>[error]</color> {text}",
+                "pending" => $"<color=#7A5C00>[pending]</color> {text}",
+                "running" => $"<color=#5B2C6F>[running]</color> {text}",
+                "system" => $"<color=#404040>[system]</color> {text}",
                 _ => text,
             };
         }

@@ -1,4 +1,3 @@
-using System;
 using UnityEditor;
 using UnityEngine;
 using UnityCliConnector.Http;
@@ -43,8 +42,9 @@ namespace UnityCliConnector
         {
             lock (Gate)
             {
-                // Editor host should not bind while in Play Mode.
                 if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
+                    return;
+                if (_server != null)
                     return;
 
                 ConnectorHttpLifecycle.TryStart(
@@ -54,12 +54,13 @@ namespace UnityCliConnector
                     ConnectorNetwork.ResolveEditorPort(),
                     "Editor HTTP",
                     Debug.Log,
-                    Debug.LogError);
+                    Debug.LogWarning);
             }
         }
 
         private static void ScheduleStart()
         {
+            EditorApplication.delayCall -= DelayedStart;
             if (_startScheduled)
                 return;
             _startScheduled = true;
@@ -79,6 +80,14 @@ namespace UnityCliConnector
         {
             lock (Gate)
             {
+                if (_startScheduled)
+                {
+                    EditorApplication.delayCall -= DelayedStart;
+                    _startScheduled = false;
+                }
+                if (_server == null)
+                    return;
+
                 ConnectorHttpLifecycle.Stop(ref _server);
                 _listen = null;
             }
@@ -86,17 +95,8 @@ namespace UnityCliConnector
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.EnteredPlayMode)
-            {
-                Stop();
-                return;
-            }
-
             if (state == PlayModeStateChange.EnteredEditMode)
-            {
-                Stop();
                 ScheduleStart();
-            }
         }
     }
 }

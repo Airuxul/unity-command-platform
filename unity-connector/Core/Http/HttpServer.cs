@@ -43,7 +43,6 @@ namespace UnityCliConnector.Http
                 Name = "UnityCliConnector.Http",
             };
             _thread.Start();
-            _log?.Invoke($"[unity-connector] listening on {string.Join(", ", prefixes)}");
         }
 
         public void Stop()
@@ -68,7 +67,8 @@ namespace UnityCliConnector.Http
             {
                 try
                 {
-                    thread.Join(2000);
+                    // Listener.Stop() unblocks GetContext(); a short join avoids Play/Stop hitches.
+                    thread.Join(100);
                 }
                 catch
                 {

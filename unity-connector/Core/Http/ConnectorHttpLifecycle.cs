@@ -18,7 +18,7 @@ namespace UnityCliConnector.Http
             Action<string> logError,
             Action onStarted = null)
         {
-            const int maxAttempts = 20;
+            const int maxAttempts = 3;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 try
@@ -28,9 +28,6 @@ namespace UnityCliConnector.Http
                     server = new HttpServer(dispatcher, log, logError);
                     server.Start(listen.BindPrefixes);
                     onStarted?.Invoke();
-                    log?.Invoke(
-                        $"[unity-connector] {label} ({listen.BindMode}) " +
-                        $"http://{listen.AdvertiseHost}:{listen.Port}/");
                     return true;
                 }
                 catch (Exception ex)
@@ -40,22 +37,16 @@ namespace UnityCliConnector.Http
 
                     if (IsAddressInUseError(ex) && attempt < maxAttempts)
                     {
-                        Thread.Sleep(150);
+                        Thread.Sleep(25);
                         continue;
                     }
 
-                    if (IsAddressInUseError(ex))
+                    if (IsAddressInUseError(ex) && LooksLikeConnectorAlreadyRunning(listen))
                     {
-                        if (LooksLikeConnectorAlreadyRunning(listen))
-                        {
-                            log?.Invoke(
-                                $"[unity-connector] {label} already running on http://{listen.AdvertiseHost}:{listen.Port}/ (reuse).");
-                            onStarted?.Invoke();
-                            return true;
-                        }
+                        onStarted?.Invoke();
+                        return true;
                     }
 
-                    logError?.Invoke($"[unity-connector] {label} failed: {ex.Message}");
                     return false;
                 }
             }
@@ -94,22 +85,7 @@ namespace UnityCliConnector.Http
             if (listen == null)
                 return false;
 
-            var candidates = new[]
-            {
-                listen.AdvertiseHost,
-                "127.0.0.1",
-                "localhost",
-            };
-
-            foreach (var host in candidates)
-            {
-                if (string.IsNullOrWhiteSpace(host))
-                    continue;
-                if (ProbeHealth(host.Trim(), listen.Port))
-                    return true;
-            }
-
-            return false;
+            return ProbeHealth("127.0.0.1", listen.Port);
         }
 
         private static bool ProbeHealth(string host, int port)
@@ -119,8 +95,8 @@ namespace UnityCliConnector.Http
             {
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = "GET";
-                request.Timeout = 500;
-                request.ReadWriteTimeout = 500;
+                request.Timeout = 80;
+                request.ReadWriteTimeout = 80;
                 request.KeepAlive = false;
 
                 using var response = (HttpWebResponse)request.GetResponse();

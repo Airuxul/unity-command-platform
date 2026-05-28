@@ -15,10 +15,11 @@ namespace UnityCliConnector
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
+            // Defer HTTP lifecycle off the PlayMode callback to avoid blocking Enter/Exit Play.
             if (state == PlayModeStateChange.EnteredPlayMode)
-                EditorPlayHttpHost.Start();
+                EditorApplication.delayCall += static () => EditorPlayHttpHost.Start();
             else if (state is PlayModeStateChange.ExitingPlayMode or PlayModeStateChange.EnteredEditMode)
-                EditorPlayHttpHost.Stop();
+                EditorApplication.delayCall += static () => EditorPlayHttpHost.Stop();
         }
     }
 }

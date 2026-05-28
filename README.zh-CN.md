@@ -125,7 +125,7 @@ npm run test:integration
 
 ## 与 [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) 的差异
 
-同类方案（本机 HTTP、心跳、免 MCP）。**非 Fork**，CLI 与协议独立实现。
+理念相近：都走本机 HTTP（不依赖 MCP）来驱动 Unity。**本仓库不是其 Fork**，而是从 CLI 交互、协议形态到扩展机制均独立设计与实现。
 
 | | [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) | 本仓库 |
 |---|------------------------------------------------------------------------|--------|

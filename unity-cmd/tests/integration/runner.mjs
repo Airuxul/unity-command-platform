@@ -18,15 +18,23 @@ const scenarioName =
     : 'editor-lifecycle';
 const SCENARIO = path.join(__dirname, 'scenarios', `${scenarioName}.json`);
 const ATTACH_TIMEOUT_MS = 20_000;
+const RUN_TIMEOUT_MS = Number(process.env.UNITY_CMD_RUN_TIMEOUT_MS ?? 15 * 60_000);
 
 async function main() {
+  const watchdog = setTimeout(() => {
+    console.error(`[integration] timed out after ${RUN_TIMEOUT_MS}ms`);
+    process.exit(1);
+  }, RUN_TIMEOUT_MS);
+
   if (!fs.existsSync(SCENARIO)) {
     console.error(`[integration] Unknown scenario: ${scenarioName}`);
     console.error(`  Expected file: ${SCENARIO}`);
     process.exit(1);
   }
 
+  console.log(`[integration] scenario=${scenarioName}`);
   const profileName = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
+  console.log(`[integration] waiting profile=${profileName}, timeout=${ATTACH_TIMEOUT_MS}ms`);
   const instance = await waitForInstanceAsync({
     profile: profileName,
     timeoutMs: ATTACH_TIMEOUT_MS,
@@ -45,16 +53,23 @@ async function main() {
   for (const step of scenario.steps) {
     const timeoutMs = step.timeoutMs ?? 20_000;
     const stepStarted = Date.now();
+    console.log(`[running] ${step.name} (timeout=${timeoutMs}ms)`);
+    const heartbeat = setInterval(() => {
+      const elapsed = Date.now() - stepStarted;
+      console.log(`[running] ${step.name} still running (${elapsed}ms)`);
+    }, 5000);
     try {
       const result = await Promise.race([
         runStep(step, profileName, timeoutMs),
         timeoutAfter(step.name, timeoutMs),
       ]);
+      clearInterval(heartbeat);
       results.push(result);
       if (result.status !== 'passed') failed = true;
       console.log(`[${result.status}] ${result.name} (${result.elapsedMs}ms)`);
       if (result.error) console.error(`  ${result.error}`);
     } catch (err) {
+      clearInterval(heartbeat);
       failed = true;
       const isTimeout = String(err.message).includes('exceeded');
       const result = {
@@ -73,6 +88,7 @@ async function main() {
   }
 
   writeReport({ skipped: false, instance: { host: instance.host, port: instance.port }, results });
+  clearTimeout(watchdog);
   process.exit(failed ? 1 : 0);
 }
 

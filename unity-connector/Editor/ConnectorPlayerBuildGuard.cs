@@ -6,7 +6,7 @@ using UnityEngine;
 namespace UnityCliConnector
 {
     /// <summary>
-    /// Reminds that unity-connector Dev player HTTP is only included in Development Build players.
+    /// Reminds that player HTTP bootstrap is only included in Development Build players.
     /// </summary>
     public sealed class ConnectorPlayerBuildGuard : IPreprocessBuildWithReport
     {
@@ -17,12 +17,12 @@ namespace UnityCliConnector
             if (EditorUserBuildSettings.development)
             {
                 Debug.Log(
-                    "[unity-connector] Development Build: Dev player HTTP will be included (UnityCliConnector.Dev).");
+                    "[unity-connector] Development Build: player HTTP bootstrap will be included (UnityCliConnector.Runtime).");
                 return;
             }
 
             Debug.Log(
-                "[unity-connector] Release Build: UnityCliConnector.Dev is excluded — no player HTTP. Editor tools unchanged.");
+                "[unity-connector] Release Build: runtime bootstrap is excluded (by DEVELOPMENT_BUILD) — no player HTTP. Editor tools unchanged.");
         }
     }
 }

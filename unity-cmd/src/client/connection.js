@@ -202,7 +202,13 @@ export async function waitForInstance({ profile, timeoutMs = 20_000 } = {}) {
   if (!profileName) return null;
 
   const deadline = Date.now() + timeoutMs;
+  let attempts = 0;
   while (Date.now() < deadline) {
+    attempts += 1;
+    if (attempts === 1 || attempts % 5 === 0) {
+      const remaining = Math.max(0, deadline - Date.now());
+      console.log(`[connection] waiting profile=${profileName}, attempt=${attempts}, remaining=${remaining}ms`);
+    }
     const target = await resolveTarget({
       profile: profileName,
       timeoutMs: Math.min(5_000, deadline - Date.now()),

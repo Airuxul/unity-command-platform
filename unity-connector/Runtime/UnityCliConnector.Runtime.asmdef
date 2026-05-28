@@ -1,19 +1,18 @@
 {
-  "name": "UnityCliConnector.Editor",
+  "name": "UnityCliConnector.Runtime",
   "rootNamespace": "UnityCliConnector",
   "references": [
-    "UnityCliConnector.Core",
-    "UnityCliConnector.Runtime"
+    "UnityCliConnector.Core"
   ],
-  "includePlatforms": [
-    "Editor"
-  ],
+  "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],
   "autoReferenced": true,
-  "defineConstraints": [],
+  "defineConstraints": [
+    "UNITY_EDITOR || DEVELOPMENT_BUILD"
+  ],
   "versionDefines": [],
   "noEngineReferences": false
 }

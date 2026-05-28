@@ -54,7 +54,7 @@ Profiler、截图用 **`editor`** profile；Play 中 `echo` 用 **`editor-play`*
 
 ## Development Build 包体
 
-构建设置勾选 **Development Build** 后才会编入 `UnityCliConnector.Dev`（player HTTP、`/list`）；**Release 在编译期整包剔除**。
+构建设置勾选 **Development Build** 后才会编入 `UnityCliConnector.Runtime` 的 player 启动逻辑（player HTTP、`/list`）；**Release 在编译期剔除该启动逻辑**。
 
 CLI：`unity-cmd --profile package-play ping`、`unity-cmd --profile package-play echo`。
 

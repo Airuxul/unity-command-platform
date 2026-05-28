@@ -15,7 +15,7 @@ Version: 0.1.7
 | HTTP | `Http/`, `ConnectorJson` | Listener, routes, JSON bodies |
 | Command state | `CommandStateCore`, `CommandContext`, `CommandNotifier`, `CommandPersistence` | Shared deferred lifecycle; Editor/Runtime managers |
 | Execution | `CommandExecutor` | Shared command execution entry (single path) |
-| Play hosts | `Runtime/PlayMode*` | `editor_play` / `player` HTTP on main thread |
+| Play hosts | `Runtime/Host/*`, `Runtime/State/*`, `Runtime/Bootstrap/*` | `editor_play` / `player` HTTP on main thread |
 
 Editor assembly adds `CommandStateManager`, completion policies, builtins, and services.
 
@@ -23,9 +23,9 @@ Editor assembly adds `CommandStateManager`, completion policies, builtins, and s
 
 | Assembly | Platform | Contents |
 |----------|----------|----------|
-| `UnityCliConnector.Core` | all | Protocol, `CommandDiscovery`, `CommandExecutor`, `CommandStateCore`, `ConnectorJson`, play-mode HTTP |
+| `UnityCliConnector.Core` | all | Protocol, `CommandDiscovery`, `CommandExecutor`, `CommandStateCore`, `ConnectorJson` |
 | `UnityCliConnector.Editor` | Editor | `EditorHttpHost` (Edit Mode), `EditorPlayHttpBootstrap` (Play → `EditorPlayHttpHost`), `CommandStateManager`, builtins |
-| `UnityCliConnector.Dev` | Player (**Development Build only**) | `DevPlayerBootstrap` → `PlayerHttpHost` (Release excludes this assembly) |
+| `UnityCliConnector.Runtime` | Editor + Development Build player | Play-mode HTTP host stack, runtime command store/state, runtime builtins, `DevPlayerBootstrap` |
 
 ## HTTP API (Editor)
 
@@ -46,7 +46,7 @@ All three can run on one PC at the same time without port clashes. CLI: named pr
 
 ## Runtime / Play-mode stack
 
-Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as the Editor host. There is **no** separate `UnityCliConnector.Runtime` assembly (removed); runtime lives in **Core** + **Dev** + Editor bootstrap.
+Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as the Editor host. Runtime logic is now isolated in `UnityCliConnector.Runtime` (sibling to `Editor`).
 
 ### Components
 
@@ -73,7 +73,7 @@ Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as 
 **Dev player (`player`):**
 
 1. After first scene load, `DevPlayerBootstrap` starts `PlayerHttpHost` (same endpoint stack, different `host` on `/health`).
-2. Release builds: `UnityCliConnector.Dev.asmdef` excluded — no bootstrap, no port 6795 listener.
+2. Release builds: `UnityCliConnector.Runtime.asmdef` excludes player runtime bootstrap by define constraint (`DEVELOPMENT_BUILD`) — no port 6795 listener.
 
 ### Scope routing on play-mode hosts
 
@@ -144,7 +144,7 @@ Command accepted: `202` + `{ command_id, request_id }`.
 | `CliParamContractResolver` | Maps `[CliParam]` keys to JSON property names |
 | `ICommandHandler.ParamDescriptions` | Help lines for `POST /list` / CLI `help` |
 
-Builtin param classes: `Editor/Builtin/BuiltinParams.cs`, `Core/Builtin/EchoParams.cs`.
+Builtin param classes: `Editor/Params/EditorCommandParams.cs`, `Runtime/Params/EchoParams.cs`.
 
 **Validation:** Missing `Required` properties throw bind errors before `Run` is invoked.
 

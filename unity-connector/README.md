@@ -53,7 +53,7 @@ Run `unity-cmd --profile editor help` to see per-command parameter lines from th
 | `editor_play` | 6794 | Editor Play Mode |
 | `player` | 6795 | Development Build player |
 
-**Implementation:** `PlayModeHttpEndpoint` + `PlayModeCommandBridge` (Core), `EditorPlayHttpBootstrap` (Editor), `DevPlayerBootstrap` (Dev assembly). No separate Runtime UPM assembly.
+**Implementation:** `PlayModeHttpEndpoint` + `PlayModeCommandBridge` (`Runtime` assembly), `EditorPlayHttpBootstrap` (Editor), `DevPlayerBootstrap` (`Runtime` assembly with `DEVELOPMENT_BUILD` constraint).
 
 | Command scope | `editor` :6547 | `editor_play` :6794 | `player` :6795 |
 |---------------|----------------|---------------------|----------------|
@@ -89,7 +89,7 @@ Profiler and screenshot use profile **`editor`**. In Play, use **`editor-play`**
 
 ## Development Build player
 
-Enable **Development Build** in Build Settings. The `UnityCliConnector.Dev` assembly auto-starts play-mode HTTP; **Release builds exclude it at compile time**.
+Enable **Development Build** in Build Settings. The `UnityCliConnector.Runtime` assembly includes `DEVELOPMENT_BUILD` constraint for player startup; Release players exclude runtime bootstrap code at compile time.
 
 CLI: `unity-cmd --profile package-play ping` / `unity-cmd --profile package-play echo`.
 

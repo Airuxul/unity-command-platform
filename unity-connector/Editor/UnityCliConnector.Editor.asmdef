@@ -2,8 +2,7 @@
   "name": "UnityCliConnector.Editor",
   "rootNamespace": "UnityCliConnector",
   "references": [
-    "UnityCliConnector.Core",
-    "UnityCliConnector.Runtime"
+    "UnityCliConnector.Core"
   ],
   "includePlatforms": [
     "Editor"

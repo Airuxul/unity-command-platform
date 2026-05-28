@@ -1,13 +1,22 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand("echo.editor", Scope = CommandScope.Editor, Description = "Echo from Editor host")]
-    public static class EchoEditorCommand
+    public class EchoEditorCommand : CommandBase, ICommand<EchoParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(new System.Collections.Generic.Dictionary<string, object>
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<EchoParams>(
+            CommandNames.Echo,
+            CommandScope.Editor,
+            "Echo from Editor host");
+
+        public void Run(EchoParams p)
+        {
+            var data = new System.Collections.Generic.Dictionary<string, object>
             {
                 ["channel"] = "editor",
-                ["message"] = p.GetString("message", "ok"),
-            });
+                ["message"] = p.Message ?? "ok",
+            };
+            CompleteSuccess(data);
+        }
     }
 }

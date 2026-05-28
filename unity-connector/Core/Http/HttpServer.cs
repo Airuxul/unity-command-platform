@@ -23,13 +23,18 @@ namespace UnityCliConnector.Http
             _logError = logError;
         }
 
-        public void Start(string host, int port)
+        public void Start(string host, int port) =>
+            Start(new[] { $"http://{host}:{port}/" });
+
+        public void Start(IReadOnlyList<string> prefixes)
         {
-            if (_running)
+            if (_running || prefixes == null || prefixes.Count == 0)
                 return;
 
             _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://{host}:{port}/");
+            foreach (var prefix in prefixes)
+                _listener.Prefixes.Add(prefix);
+
             _listener.Start();
             _running = true;
             _thread = new Thread(ListenLoop)
@@ -38,23 +43,38 @@ namespace UnityCliConnector.Http
                 Name = "UnityCliConnector.Http",
             };
             _thread.Start();
-            _log?.Invoke($"[unity-connector] listening on http://{host}:{port}/");
+            _log?.Invoke($"[unity-connector] listening on {string.Join(", ", prefixes)}");
         }
 
         public void Stop()
         {
             _running = false;
+            var listener = _listener;
+            var thread = _thread;
+            _listener = null;
+            _thread = null;
+
             try
             {
-                _listener?.Stop();
-                _listener?.Close();
+                listener?.Stop();
+                listener?.Close();
             }
             catch
             {
                 // ignored
             }
 
-            _listener = null;
+            if (thread != null && thread.IsAlive)
+            {
+                try
+                {
+                    thread.Join(2000);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
         }
 
         public void Dispose() => Stop();
@@ -68,11 +88,7 @@ namespace UnityCliConnector.Http
                     var ctx = _listener.GetContext();
                     ThreadPool.QueueUserWorkItem(_ => Handle(ctx));
                 }
-                catch (HttpListenerException)
-                {
-                    break;
-                }
-                catch (ObjectDisposedException)
+                catch (Exception ex) when (IsBenignShutdownError(ex))
                 {
                     break;
                 }
@@ -92,7 +108,20 @@ namespace UnityCliConnector.Http
                 var method = ctx.Request.HttpMethod?.ToUpperInvariant() ?? "GET";
                 var body = ReadBody(ctx.Request);
 
-                if (_dispatcher.TryDispatch(method, path, body, (status, payload) => WriteJson(ctx, status, payload)))
+                var authToken = ctx.Request.Headers["X-Unity-Cmd-Token"];
+                if (string.IsNullOrEmpty(authToken))
+                {
+                    var auth = ctx.Request.Headers["Authorization"];
+                    if (auth != null && auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                        authToken = auth.Substring("Bearer ".Length).Trim();
+                }
+
+                if (_dispatcher.TryDispatch(
+                        method,
+                        path,
+                        body,
+                        (status, payload) => WriteJson(ctx, status, payload),
+                        authToken))
                     return;
 
                 WriteJson(ctx, 404, new Dictionary<string, object> { ["ok"] = false, ["error"] = "not_found" });
@@ -111,9 +140,23 @@ namespace UnityCliConnector.Http
             return reader.ReadToEnd();
         }
 
+        private static bool IsBenignShutdownError(Exception ex)
+        {
+            if (ex is HttpListenerException or ObjectDisposedException or ThreadAbortException)
+                return true;
+
+            var msg = ex.Message ?? "";
+            if (msg.IndexOf("Thread was being aborted", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (msg.IndexOf("I/O operation has been aborted", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            return ex.InnerException != null && IsBenignShutdownError(ex.InnerException);
+        }
+
         private static void WriteJson(HttpListenerContext ctx, int status, Dictionary<string, object> payload)
         {
-            var bytes = Encoding.UTF8.GetBytes(SimpleJson.Serialize(payload));
+            var bytes = Encoding.UTF8.GetBytes(ConnectorJson.Serialize(payload));
             ctx.Response.StatusCode = status;
             ctx.Response.ContentType = "application/json";
             ctx.Response.ContentEncoding = Encoding.UTF8;

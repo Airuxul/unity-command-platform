@@ -1,35 +1,36 @@
-using System;
 using System.Collections.Generic;
+using UnityCliConnector.Http;
 
 namespace UnityCliConnector
 {
     public sealed class EditorCommandHost : ICommandHost
     {
         public static readonly EditorCommandHost Instance = new();
+        private static readonly ICommandNotifier Notifier = new CommandNotifier(
+            CommandStateManager.MarkRunning,
+            CommandStateManager.Succeed,
+            CommandStateManager.Fail);
 
         public string HostName => "editor";
 
-        public Http.CommandPipeline.PostResult HandleCommand(CommandRequest request) =>
-            Http.CommandPipeline.HandlePost(
+        public CommandPipeline.PostResult HandleCommand(CommandRequest request) =>
+            CommandPipeline.HandleUnifiedPost(
                 request,
-                CommandJobCatalog.GetCompletionKind,
-                AcceptJob,
-                EditorCommandExecutor.ExecuteSync);
+                CreateContext,
+                EditorCommandExecutor.ExecuteCommand);
 
-        private static Dictionary<string, object> AcceptJob(CommandRequest request, string completion)
+        private static (string commandId, CommandContext context) CreateContext(CommandRequest request, string completion)
         {
-            return EditorMainThread.Run(() =>
+            var command = CommandStateManager.Create(request.Command, completion, request.RequestId);
+            var ctx = new CommandContext
             {
-                var job = JobManager.Create(request.Command, completion, request.RequestId);
-                EditorCommandExecutor.StartJobSideEffect(request.Command, request.Parameters);
-                return new Dictionary<string, object>
-                {
-                    ["ok"] = true,
-                    ["job_id"] = job.Id,
-                    ["completion"] = completion,
-                    ["request_id"] = request.RequestId,
-                };
-            }, TimeSpan.FromSeconds(30));
+                CommandId = command.Id,
+                RequestId = request.RequestId,
+                Command = request.Command,
+                HostName = Instance.HostName,
+                Notifier = Notifier,
+            };
+            return (command.Id, ctx);
         }
     }
 }

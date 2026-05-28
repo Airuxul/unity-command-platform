@@ -1,0 +1,11 @@
+using System;
+using System.Collections.Generic;
+
+namespace UnityCliConnector.Http
+{
+    /// <summary>Runs POST /command handling (Editor: main thread queue; Runtime: player main thread).</summary>
+    public interface ICommandScheduler
+    {
+        void Schedule(string body, Action<int, Dictionary<string, object>> writeJson);
+    }
+}

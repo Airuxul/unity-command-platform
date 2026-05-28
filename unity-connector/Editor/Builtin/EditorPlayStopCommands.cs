@@ -1,28 +1,35 @@
+using UnityCliConnector.Commands;
+using UnityEditor;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.play",
-        Scope = CommandScope.Editor,
-        Description = "Enter Play Mode (async job)",
-        IsJob = true,
-        Completion = CommandJobCatalog.CompletionEnterPlay,
-        DefaultTimeoutMs = 60000)]
-    public static class EditorPlayCommand
+    public class EditorPlayCommand : CommandBase, ICommand<PlayParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(new { started = true });
+        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<PlayParams>(
+            CommandNames.Play,
+            CommandScope.Editor,
+            "Enter Play Mode (deferred)",
+            CommandCompletionCatalog.CompletionEnterPlay,
+            defaultTimeoutMs: 60000);
+
+        public void Run(PlayParams p)
+        {
+            EditorApplication.EnterPlaymode();
+        }
     }
 
-    [CliCommand(
-        "editor.stop",
-        Scope = CommandScope.Editor,
-        Description = "Exit Play Mode (async job)",
-        IsJob = true,
-        Completion = CommandJobCatalog.CompletionExitPlay,
-        DefaultTimeoutMs = 60000)]
-    public static class EditorStopCommand
+    public class EditorStopCommand : CommandBase, ICommand<StopParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(new { started = true });
+        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<StopParams>(
+            CommandNames.Stop,
+            CommandScope.Editor,
+            "Exit Play Mode (deferred)",
+            CommandCompletionCatalog.CompletionExitPlay,
+            defaultTimeoutMs: 60000);
+
+        public void Run(StopParams p)
+        {
+            EditorApplication.ExitPlaymode();
+        }
     }
 }

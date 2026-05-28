@@ -1,5 +1,5 @@
-using System;
 using System.Collections.Generic;
+using UnityCliConnector.Builtin;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine.SceneManagement;
@@ -8,26 +8,24 @@ namespace UnityCliConnector.Editor.Services
 {
     public static class AssetRefreshService
     {
-        public static Dictionary<string, object> Refresh(Dictionary<string, object> parameters)
+        public static Dictionary<string, object> Refresh(RefreshParams p)
         {
-            var mode = GetString(parameters, "mode", "if_dirty");
-            var force = GetBool(parameters, "force");
-            var compile = GetBool(parameters, "compile");
+            p ??= new RefreshParams();
 
-            if (!force && EditorApplication.isPlayingOrWillChangePlaymode)
+            if (!p.Force && EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                throw new InvalidOperationException(
+                throw new System.InvalidOperationException(
                     "Cannot refresh while Unity is in or entering play mode. Exit play mode first, or pass force=true.");
             }
 
-            var options = string.Equals(mode, "force", StringComparison.OrdinalIgnoreCase)
+            var options = p.Force
                 ? ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport
                 : ImportAssetOptions.ForceSynchronousImport;
 
             AssetDatabase.Refresh(options);
 
             var compileRequested = false;
-            if (compile)
+            if (p.Compile)
             {
                 CompilationPipeline.RequestScriptCompilation();
                 compileRequested = true;
@@ -45,8 +43,7 @@ namespace UnityCliConnector.Editor.Services
             {
                 ["refreshed"] = true,
                 ["compile_requested"] = compileRequested,
-                ["force"] = force,
-                ["mode"] = mode,
+                ["force"] = p.Force,
                 ["warning"] = warning,
                 ["dirty_scenes"] = dirtyScenes,
             };
@@ -64,22 +61,6 @@ namespace UnityCliConnector.Editor.Services
             }
 
             return scenes;
-        }
-
-        private static string GetString(Dictionary<string, object> parameters, string key, string defaultValue)
-        {
-            if (parameters == null || !parameters.TryGetValue(key, out var raw) || raw == null)
-                return defaultValue;
-            return raw.ToString();
-        }
-
-        private static bool GetBool(Dictionary<string, object> parameters, string key)
-        {
-            if (parameters == null || !parameters.TryGetValue(key, out var raw) || raw == null)
-                return false;
-            if (raw is bool b)
-                return b;
-            return bool.TryParse(raw.ToString(), out var parsed) && parsed;
         }
     }
 }

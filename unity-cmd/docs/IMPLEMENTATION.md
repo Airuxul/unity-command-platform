@@ -1,72 +1,130 @@
-# unity-cmd — Implementation
+﻿# unity-cmd — Implementation
 
 Version: 0.1.0
 
 ## Role
 
-Thin HTTP client and argv front-end. No Unity-specific business logic lives here.
+Thin HTTP client and argv front-end. No Unity business logic; all commands come from the connector catalog except local meta commands.
+
+## Entry point
+
+`bin/unity-cmd.js` → `src/dispatch.js` with `process.argv` slice from index 2. No command prints local help.
 
 ## Modules
 
 | Path | Responsibility |
 |------|----------------|
-| `src/timeout.js` | Default 20s timeout, `UNITY_CMD_TIMEOUT_MS` |
-| `src/client/target.js` | Read `~/.unity-cmd/instances/*.json`, select project |
-| `src/client/http.js` | `fetch` wrapper with abort |
-| `src/client/job.js` | Poll `GET /jobs/{id}` until terminal state |
-| `src/client/command.js` | `POST /command`, `fetchCatalog` via `POST /list` |
-| `src/catalog.js` | Cache catalog under `~/.unity-cmd/cache/`, resolve aliases/timeouts |
-| `src/params.js` | Coerce CLI flags (`compile`, `clear`, `force`) for Unity JSON |
-| `src/dispatch.js` | CLI routing for `ping`, `list`, `help`, arbitrary commands |
-| `bin/unity-cmd.js` | Entry point |
+| `src/timeout.js` | Default 20s; `UNITY_CMD_TIMEOUT_MS` |
+| `src/client/connection.js` | Profiles, retry, `resolveTarget`, `waitForInstance` |
+| `src/client/http.js` | `fetch` + `AbortSignal` timeout |
+| `src/client/command-status.js` | Poll `GET /commands/{id}` until terminal status |
+| `src/client/command.js` | `ping` → `GET /health`; `fetchCatalog` → `POST /list`; `sendCommand` → `POST /command` |
+| `src/profile.js` | `profile list|show|create|set|delete` |
+| `src/catalog.js` | Cache, alias resolve, scope checks, `connector_build` + `catalog_version` invalidation |
+| `src/params.js` | Coerce flags (`compile`, `clear`, `force`) for Unity JSON bodies |
+| `src/errors.js` | `error_code`, `hint` on failures |
+| `src/help.js` | Local / offline / live help (parameters from catalog) |
+| `src/dispatch.js` | Route meta + remote commands |
 
-## Request flow
+## Local meta commands
 
-```text
-argv → dispatch → selectInstance (heartbeat)
-              → loadCatalog (cached POST /list)
-              → resolveRemoteCommand (aliases, job timeouts)
-              → POST /command
-              → if 202: pollJob until succeeded/failed/timeout
-              → print JSON, exit code
+| Command | Behavior |
+|---------|----------|
+| `help` | No profile → local usage; with profile → live catalog help (**always refetches** when online) |
+| `profile` | Manage `~/.unity-cmd/profiles/*.json` |
+| `ping` | `GET /health` (requires `--profile`) |
+| `list` | `loadCatalog` JSON (requires `--profile`) |
+
+Remote commands require `--profile <name>` or `UNITY_CMD_PROFILE`.
+
+### `list` output schema
+
+```json
+{
+  "ok": true,
+  "profile": "editor",
+  "catalog_version": "4a6528daab10",
+  "connector_build": 17,
+  "commands": [
+    {
+      "name": "console",
+      "scope": "editor",
+      "params": ["--type <string> [error|warning|log] ...", "--lines <int> max entries", "..."]
+    }
+  ],
+  "alias_to_command": { "recompile": "compile" }
+}
 ```
 
-## Job polling
+Flag: `--refresh-catalog` forces network fetch and rewrites cache file.
 
-- Interval: 200ms
-- Budget: `UNITY_CMD_TIMEOUT_MS` or `--timeout`
-- `allowConnectionRetry`: retry fetch errors during domain reload (used for `compile`)
+## Profiles
+
+- Path: `~/.unity-cmd/profiles/{name}.json`
+- Fields: `name`, `host`, `port`, `connector_host` (`editor` | `editor_play` | `player`), `updated_at`
+- `profile create` pings `/health` by default (`--no-verify` to skip)
+- `resolveTarget({ profile })` loads file, verifies `/health` `host` matches `connector_host`
+
+Default ports: editor **6547**, editor_play **6794**, player **6795**.
+
+Integration mapping (`PROFILE_BY_HOST_KIND`): `editor_play` → profile `editor-play`, `player` → `package-play`.
+
+## Catalog cache
+
+- Path: `~/.unity-cmd/cache/catalog-<host>:<port>.json`
+- Valid when: file exists, `ping` succeeds, `connector_build` matches live `/health`, **`catalog_version` matches** `/health`, and cached `host_kind` matches profile
+- Aliases and `params` from Unity `POST /list` only
+- `readCachedCatalog(target)` — shared disk read for offline help fallback
+
+## Scope check (CLI)
+
+`checkScopeCompatibility` mirrors Unity `CommandAvailability`:
+
+- Play hosts (`editor_play`, `player`): `runtime` + `any` only
+- Editor host: `editor` + `any` only
+
+## `resolveRemoteCommand`
+
+1. Map argv command through `alias_to_command`
+2. Look up `commands_by_name[canonical]`
+3. `refresh` + `compile=true` → extend timeout to compile default
+4. Return `{ command, allowConnectionRetry, minTimeoutMs }`
+
+## Remote command dispatch
+
+1. `requireProfile` → `resolveTarget`
+2. `loadCatalog` → `resolveRemoteCommand` → scope check
+3. `POST /command`; `202` → `pollCommandStatus`
+4. `printJson`; exit `0` / `1`
+
+## Help formatting
+
+`formatProfileHelp` prints each command, then indented lines from `entry.params` (generated on the Unity side from `[CliParam]` metadata).
+
+When the connector is online, `runHelp` calls `loadCatalog(..., { forceRefresh: true })` so parameter lines are never served from a stale cache file.
+
+## Agent cheat sheet
+
+| Intent | Profile | Port |
+|--------|---------|------|
+| Compile, console, play/stop, profiler (edit) | `editor` | 6547 |
+| Runtime in Editor Play | `editor-play` | 6794 |
+| Dev Player build | `package-play` | 6795 |
+
+`play` / `stop` always use profile **`editor`**.
 
 ## Integration runner
 
-`tests/integration/runner.mjs` loads `scenarios/full-lifecycle.json`, attaches to an Editor instance, runs steps with per-step 20s cap.
+| Scenario | `UNITY_CMD_PROFILE` | File |
+|----------|---------------------|------|
+| `editor-lifecycle` (default) | `editor` | `scenarios/editor-lifecycle.json` |
+| `player-runtime` | `package-play` | `scenarios/player-runtime.json` |
 
-Skip semantics: no heartbeat within 20s → stderr hints → exit `0`, `report.json` has `skipped: true`.
-
-## Command catalog
-
-Unity is the source of truth. `POST /list` returns `catalog_version`, `commands`, and `alias_to_command`.
-The CLI caches per project under `~/.unity-cmd/cache/catalog-*.json`.
-
-Local-only commands: `ping`, `list`, `help`.
-
-## Agent-oriented CLI
-
-- Failures include `error_code` and `hint` (see `src/errors.js`).
-- `unity-cmd help` prints live catalog when Editor is reachable.
-- Catalog cache invalidates when `connector_build` from `/health` changes.
-- `unity-cmd list --refresh-catalog` forces cache refresh.
-- `unity-cmd console` defaults to `error,warning` (omit log noise unless `--type` is set).
-
-## Extending
-
-Add `[CliCommand]` on a static class in the connector (with `IsJob`, `Completion`, `Aliases`, `DefaultTimeoutMs` as needed). No `unity-cmd` code changes unless you add new local meta commands.
+Steps may set `"hostKind": "editor_play"` to select profile via `profileNameForHostKind`.  
+Step types: `sleepMs`, `waitProfile`, `assertFile`, `expectFailure`, `expectCatalog`, `expectConnectorBuild` (see `MIN_CONNECTOR_BUILD` in `src/constants.js`).
 
 ## Tests
 
-| Suite | Path | Requires Unity |
-|-------|------|----------------|
-| Unit | `tests/unit/*.test.js` | No |
-| Integration | `tests/integration/runner.mjs` | Yes (attach) |
+`npm run test:unit` — no Unity required.
 
-Unit tests cover catalog resolution, job polling, target selection, timeout, and parameter coercion.
+`npm run test:integration` — needs profiles + running connector; skips if unreachable.

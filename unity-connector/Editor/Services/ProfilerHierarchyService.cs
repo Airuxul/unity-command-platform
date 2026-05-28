@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityCliConnector.Builtin;
 using UnityEditor.Profiling;
 using UnityEditorInternal;
 using UnityEngine;
@@ -9,9 +10,9 @@ namespace UnityCliConnector.Editor.Services
 {
     public static class ProfilerHierarchyService
     {
-        public static Dictionary<string, object> Execute(CliParams p)
+        public static Dictionary<string, object> Execute(ProfilerParams p)
         {
-            var action = p.GetString("action", "hierarchy")?.ToLowerInvariant();
+            var action = (p.Action ?? "hierarchy").ToLowerInvariant();
             switch (action)
             {
                 case "hierarchy":
@@ -44,15 +45,15 @@ namespace UnityCliConnector.Editor.Services
             }
         }
 
-        private static Dictionary<string, object> Hierarchy(CliParams p)
+        private static Dictionary<string, object> Hierarchy(ProfilerParams p)
         {
             if (!ProfilerDriver.enabled && ProfilerDriver.lastFrameIndex < 0)
                 throw new InvalidOperationException(
                     "Profiler has no captured data. Run with action=enable or enable profiling in Editor.");
 
-            var fromFrame = p.GetInt("from", -1) ?? -1;
-            var toFrame = p.GetInt("to", -1) ?? -1;
-            var framesCount = p.GetInt("frames", 0) ?? 0;
+            var fromFrame = p.From ?? -1;
+            var toFrame = p.To ?? -1;
+            var framesCount = p.Frames ?? 0;
 
             if (fromFrame >= 0 || toFrame >= 0)
             {
@@ -67,7 +68,7 @@ namespace UnityCliConnector.Editor.Services
                     ProfilerDriver.lastFrameIndex - framesCount + 1,
                     ProfilerDriver.lastFrameIndex);
 
-            var frameIndex = p.GetInt("frame", -1) ?? -1;
+            var frameIndex = p.Frame ?? -1;
             if (frameIndex < 0)
                 frameIndex = ProfilerDriver.lastFrameIndex;
 
@@ -77,14 +78,14 @@ namespace UnityCliConnector.Editor.Services
                     $"Frame {frameIndex} out of range [{ProfilerDriver.firstFrameIndex}..{ProfilerDriver.lastFrameIndex}].");
             }
 
-            var threadIndex = p.GetInt("thread", 0) ?? 0;
-            var rootName = p.GetString("root");
-            var parentId = p.GetInt("parent");
-            var minTime = p.GetFloat("min", 0f) ?? 0f;
-            var sortBy = p.GetString("sort", "total")?.ToLowerInvariant() ?? "total";
-            var maxItems = p.GetInt("max", 30) ?? 30;
+            var threadIndex = p.Thread ?? 0;
+            var rootName = p.Root;
+            var parentId = p.Parent;
+            var minTime = p.Min ?? 0f;
+            var sortBy = (p.Sort ?? "total").ToLowerInvariant();
+            var maxItems = p.Max ?? 30;
             if (maxItems <= 0) maxItems = 30;
-            var depth = p.GetInt("depth", 1) ?? 1;
+            var depth = p.Depth ?? 1;
             if (depth <= 0) depth = 999;
 
             var sortColumn = GetSortColumn(sortBy);
@@ -134,7 +135,7 @@ namespace UnityCliConnector.Editor.Services
             };
         }
 
-        private static Dictionary<string, object> AveragedHierarchy(CliParams p, int fromFrame, int toFrame)
+        private static Dictionary<string, object> AveragedHierarchy(ProfilerParams p, int fromFrame, int toFrame)
         {
             var firstAvail = ProfilerDriver.firstFrameIndex;
             var lastAvail = ProfilerDriver.lastFrameIndex;
@@ -147,13 +148,13 @@ namespace UnityCliConnector.Editor.Services
                     $"No frames in range [{fromFrame}..{toFrame}]. Available: [{firstAvail}..{lastAvail}].");
             }
 
-            var threadIndex = p.GetInt("thread", 0) ?? 0;
-            var rootName = p.GetString("root");
-            var minTime = p.GetFloat("min", 0f) ?? 0f;
-            var sortBy = p.GetString("sort", "total")?.ToLowerInvariant() ?? "total";
-            var maxItems = p.GetInt("max", 30) ?? 30;
+            var threadIndex = p.Thread ?? 0;
+            var rootName = p.Root;
+            var minTime = p.Min ?? 0f;
+            var sortBy = (p.Sort ?? "total").ToLowerInvariant();
+            var maxItems = p.Max ?? 30;
             if (maxItems <= 0) maxItems = 30;
-            var depth = p.GetInt("depth", 1) ?? 1;
+            var depth = p.Depth ?? 1;
             if (depth <= 0) depth = 999;
 
             var sortColumn = GetSortColumn(sortBy);

@@ -1,57 +1,181 @@
-const STATIC_HELP = `unity-cmd — send commands to unity-connector
+import { ping } from './client/command.js';
+import { loadProfile, listProfiles, normalizeHostKind, hostKindMatches } from './client/connection.js';
+import { loadCatalog, readCachedCatalog } from './catalog.js';
+import { hostKindLabel, reachHint } from './host-labels.js';
 
-Local commands (no catalog):
-  ping, list, help
+const OFFLINE_HINTS = {
+  editor: 'compile, console, profiler, play/stop, screenshot, ping',
+  editor_play: 'echo, ping',
+  player: 'echo, ping',
+};
 
-Common:
-  unity-cmd recompile
-  unity-cmd console [--type error,warning] [--lines 20]
-  unity-cmd list [--refresh-catalog]
-
-Environment:
-  UNITY_CMD_PROJECT, UNITY_CMD_TIMEOUT_MS (default 20000)
-`;
-
-/**
- * @param {import('./catalog.js').CatalogIndex | null} catalog
- */
-export function formatHelp(catalog) {
-  if (!catalog?.commands?.length) {
-    return `${STATIC_HELP}\n(No live catalog — open Unity and run unity-cmd list)`;
+function exampleLines(profileName, hostKind) {
+  const k = normalizeHostKind(hostKind);
+  const p = `--profile ${profileName}`;
+  if (k === 'editor_play' || k === 'player') {
+    return [`  unity-cmd ${p} echo`, `  unity-cmd ${p} ping`];
   }
+  return [
+    `  unity-cmd ${p} compile`,
+    `  unity-cmd ${p} play`,
+    `  unity-cmd ${p} console --lines 20`,
+  ];
+}
 
-  const lines = [
-    'unity-cmd — commands from Unity Editor (live catalog)',
-    `catalog_version: ${catalog.catalog_version ?? 'unknown'}`,
-    catalog.connector_build != null ? `connector_build: ${catalog.connector_build}` : null,
-    '',
-    'Local: ping | list | help',
-    '',
-    'Commands:',
-  ].filter(Boolean);
-
-  const sorted = [...catalog.commands].sort((a, b) =>
+function formatCommandList(catalog) {
+  const sorted = [...(catalog.commands ?? [])].sort((a, b) =>
     (a.name ?? '').localeCompare(b.name ?? ''),
   );
-
+  const lines = [];
   for (const entry of sorted) {
-    const aliases =
-      entry.aliases?.length > 0 ? ` (aliases: ${entry.aliases.join(', ')})` : '';
-    const job = entry.is_job ? ' [job]' : '';
+    const aliases = entry.aliases?.length > 0 ? ` (${entry.aliases.join(', ')})` : '';
     const desc = entry.description ? ` — ${entry.description}` : '';
-    lines.push(`  ${entry.name}${aliases}${job}${desc}`);
+    lines.push(`  ${entry.name}${aliases}${desc}`);
+    for (const param of entry.params ?? []) {
+      lines.push(`      ${param}`);
+    }
+  }
+  return lines;
+}
+
+export function formatLocalHelp(options = {}) {
+  const profiles = options.profiles ?? [];
+  const lines = [
+    'unity-cmd — local commands',
+    '',
+    'Local commands (no --profile required):',
+    '  help                         local help, or catalog with --profile <name> help',
+    '  profile list                 list saved profile names',
+    '  profile show <name>          show host, port, and host-kind for one profile',
+    '  profile create <name>        save endpoint after /health check (see: unity-cmd profile)',
+    '  profile set <name>           change --host, --port, and/or --host-kind on existing profile',
+    '  profile delete <name>        remove a profile file',
+    '',
+    'Remote commands (require --profile or UNITY_CMD_PROFILE):',
+    '  ping                         check /health for the profile endpoint',
+    '  list                         print command catalog as JSON',
+    '  help                         catalog for that profile (human-readable)',
+    '  <command>                    run a connector command (see --profile <name> help)',
+  ];
+
+  if (profiles.length > 0) {
+    lines.push('', 'Saved profile names:');
+    for (const p of profiles.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))) {
+      lines.push(`  ${p.name}`);
+    }
   }
 
-  lines.push(
-    '',
-    'Examples:',
-    '  unity-cmd console --type error,warning --lines 20',
-    '  unity-cmd recompile --timeout 120000',
-    '  unity-cmd connector.state',
-    '  unity-cmd <command> [--key value] [--timeout ms]',
-    '',
-    'Flags: --refresh-catalog  force refresh command catalog cache',
-  );
+  return lines.join('\n');
+}
+
+export function formatProfileHelp(profile, options = {}) {
+  const hostKind = normalizeHostKind(profile.connector_host ?? 'editor');
+  const { catalog, connected = false, cached = false, reason } = options;
+
+  const lines = [
+    `unity-cmd — profile "${profile.name}" (${hostKindLabel(hostKind)})`,
+    `${profile.host}:${profile.port}  host: ${hostKind}`,
+  ];
+
+  if (!connected) {
+    lines.push('', 'Status: offline');
+    if (reason) lines.push(`  ${reason}`);
+    const hint = reachHint(hostKind);
+    if (hint) lines.push('', hint);
+    if (catalog?.commands?.length) {
+      lines.push('', 'Commands (cached):', ...formatCommandList(catalog));
+    } else {
+      lines.push('', `Typical: ${OFFLINE_HINTS[hostKind] ?? OFFLINE_HINTS.editor}`);
+    }
+    lines.push('', `When online: unity-cmd --profile ${profile.name} help`);
+    return lines.join('\n');
+  }
+
+  if (catalog?.connector_build != null) {
+    lines.push(`  build: ${catalog.connector_build}`);
+  }
+  if (catalog?.catalog_version) {
+    lines.push(`  catalog: ${catalog.catalog_version}${cached ? ' (cached)' : ''}`);
+  }
+
+  lines.push('', 'Meta: ping | list | help', '', 'Commands:', ...formatCommandList(catalog ?? { commands: [] }));
+
+  lines.push('', 'Examples:', ...exampleLines(profile.name, hostKind));
+  lines.push('  --refresh-catalog  refresh cache');
 
   return lines.join('\n');
+}
+
+function resolveProfileName(flags) {
+  return flags.profile ?? process.env.UNITY_CMD_PROFILE ?? null;
+}
+
+export async function runHelp(flags, timeoutMs) {
+  const profileName = resolveProfileName(flags);
+  if (!profileName) {
+    console.log(formatLocalHelp({ profiles: listProfiles() }));
+    process.exit(0);
+  }
+
+  const saved = loadProfile(profileName);
+  if (!saved) {
+    console.log(`Profile "${profileName}" not found.`);
+    console.log(
+      `Create: unity-cmd profile create ${profileName} --host 127.0.0.1 --port <port> --host-kind <editor|editor_play|player>`,
+    );
+    process.exit(0);
+  }
+
+  const profile = { ...saved, name: profileName };
+  const target = {
+    profile: profileName,
+    host: saved.host,
+    port: saved.port,
+    connector_host: normalizeHostKind(saved.connector_host ?? 'editor'),
+  };
+
+  const probeMs = Math.min(timeoutMs, 5000);
+  let healthOk = false;
+  let healthDetail = null;
+  try {
+    const res = await ping(target, { timeoutMs: probeMs, retryOnDisconnect: false });
+    healthOk = res.ok && hostKindMatches(target.connector_host, res.data?.host);
+    healthDetail = res.ok ? res.data : { status: res.status };
+  } catch (err) {
+    healthDetail = String(err?.cause?.code ?? err?.message ?? err);
+  }
+
+  if (healthOk) {
+    try {
+      const catalog = await loadCatalog(target, { timeoutMs, forceRefresh: true });
+      console.log(formatProfileHelp(profile, { catalog, connected: true }));
+      process.exit(0);
+    } catch {
+      const cached = readCachedCatalog(target);
+      console.log(
+        formatProfileHelp(profile, {
+          connected: false,
+          reason: 'catalog fetch failed',
+          catalog: cached,
+          cached: Boolean(cached),
+        }),
+      );
+      process.exit(0);
+    }
+  }
+
+  const cached = readCachedCatalog(target);
+  const reason =
+    healthDetail && typeof healthDetail === 'object'
+      ? `expected ${target.connector_host}, got ${healthDetail.host ?? 'none'}`
+      : String(healthDetail ?? 'unreachable');
+  console.log(
+    formatProfileHelp(profile, {
+      connected: false,
+      reason,
+      catalog: cached,
+      cached: Boolean(cached),
+    }),
+  );
+  process.exit(0);
 }

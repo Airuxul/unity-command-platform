@@ -9,9 +9,9 @@ test('cliError includes code and hint', () => {
   assert.equal(e.hint, 'open unity');
 });
 
-test('enrichFailure adds job timeout hint', () => {
-  const e = enrichFailure({ ok: false, error: 'job_poll_timeout', timedOut: true }, { job: true });
-  assert.equal(e.error_code, 'JOB_TIMEOUT');
+test('enrichFailure adds deferred timeout hint', () => {
+  const e = enrichFailure({ ok: false, error: 'command_status_poll_timeout', timedOut: true }, { deferred: true });
+  assert.equal(e.error_code, 'COMMAND_STATUS_TIMEOUT');
   assert.match(e.hint, /console/i);
 });
 

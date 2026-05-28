@@ -21,15 +21,15 @@ namespace UnityCliConnector
         public static Dictionary<string, object> ToManifestObject()
         {
             var state = Capture();
-            var activeJob = FindActiveJobId();
+            var activeCommand = FindActiveCommandId();
             var manifest = new Dictionary<string, object>
             {
                 ["is_playing"] = state.IsPlaying,
                 ["is_compiling"] = state.IsCompiling,
                 ["ready_for_tools"] = state.ReadyForTools,
                 ["blocking_reasons"] = BuildBlockingReasons(state),
-                ["active_job"] = activeJob,
-                ["connector_build"] = EditorRequestDispatcher.ConnectorBuild,
+                ["active_command"] = activeCommand,
+                ["connector_build"] = ConnectorBuild.Id,
             };
 
             if (UnityConsoleReader.IsReady)
@@ -52,13 +52,13 @@ namespace UnityCliConnector
             return manifest;
         }
 
-        private static string FindActiveJobId()
+        private static string FindActiveCommandId()
         {
-            foreach (var pair in JobManager.AllJobs)
+            foreach (var pair in CommandStateManager.AllCommands)
             {
-                var job = pair.Value;
-                if (job.Status is JobStatus.Pending or JobStatus.Running)
-                    return job.Id;
+                var command = pair.Value;
+                if (command.Status is CommandStatus.Pending or CommandStatus.Running)
+                    return command.Id;
             }
 
             return null;

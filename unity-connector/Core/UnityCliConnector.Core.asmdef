@@ -1,7 +1,9 @@
 {
   "name": "UnityCliConnector.Core",
   "rootNamespace": "UnityCliConnector",
-  "references": [],
+  "references": [
+    "Unity.Newtonsoft.Json"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

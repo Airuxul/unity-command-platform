@@ -1,4 +1,4 @@
-/** @typedef {'NO_INSTANCE' | 'CONNECTION_FAILED' | 'CATALOG_FETCH_FAILED' | 'COMMAND_FAILED' | 'JOB_FAILED' | 'JOB_TIMEOUT' | 'JOB_NOT_FOUND' | 'HTTP_TIMEOUT' | 'UNKNOWN'} ErrorCode */
+/** @typedef {'NO_INSTANCE' | 'NO_PROFILE' | 'CONNECTION_FAILED' | 'CATALOG_FETCH_FAILED' | 'SCOPE_MISMATCH' | 'COMMAND_FAILED' | 'DEFERRED_COMMAND_FAILED' | 'COMMAND_STATUS_TIMEOUT' | 'COMMAND_NOT_FOUND' | 'HTTP_TIMEOUT' | 'UNKNOWN'} ErrorCode */
 
 /**
  * @param {string} message
@@ -30,20 +30,20 @@ export function enrichFailure(res, context = {}) {
   let error_code = 'COMMAND_FAILED';
   let hint = null;
 
-  if (error.includes('job_poll_timeout') || res?.timedOut) {
-    error_code = 'JOB_TIMEOUT';
-    hint = 'Increase --timeout or check Unity Console (unity-cmd console).';
-  } else if (error === 'job_not_found') {
-    error_code = 'JOB_NOT_FOUND';
-    hint = 'Domain reload may have cleared the job. Retry the command.';
-  } else if (error === 'failed' || error === 'orphaned' || context.job) {
-    error_code = 'JOB_FAILED';
+  if (error.includes('command_status_poll_timeout') || res?.timedOut) {
+    error_code = 'COMMAND_STATUS_TIMEOUT';
+    hint = 'Increase --timeout or check Unity Console (--profile editor console).';
+  } else if (error === 'command_not_found') {
+    error_code = 'COMMAND_NOT_FOUND';
+    hint = 'Domain reload may have cleared the command status. Retry the command.';
+  } else if (error === 'failed' || error === 'orphaned' || context.deferred) {
+    error_code = 'DEFERRED_COMMAND_FAILED';
     hint = 'Run unity-cmd console --type error,warning to inspect Editor errors.';
   } else if (status === 404) {
     error_code = 'COMMAND_FAILED';
-    hint = 'Run unity-cmd list to refresh the command catalog.';
+    hint = 'Run unity-cmd --profile <name> list --refresh-catalog';
   } else if (status >= 500) {
-    hint = 'Check Unity Editor console and try unity-cmd refresh --compile true.';
+    hint = 'Check Unity Editor console and try --profile editor refresh --compile true';
   }
 
   return {
@@ -69,10 +69,10 @@ export function enrichThrown(err, context = {}) {
   } else if (message.includes('fetch failed') || message.includes('ECONNREFUSED')) {
     error_code = 'CONNECTION_FAILED';
     hint =
-      'Unity Editor HTTP is not reachable. Open the project, wait for compile, then unity-cmd ping.';
+      'Endpoint unreachable. Open Unity, verify profile (unity-cmd profile list), then --profile <name> ping.';
   } else if (message.includes('command catalog')) {
     error_code = 'CATALOG_FETCH_FAILED';
-    hint = 'Try unity-cmd ping then unity-cmd list --refresh-catalog';
+    hint = 'Try --profile <name> ping then list --refresh-catalog';
   }
 
   return cliError(message, error_code, hint, { command: context.command ?? null });

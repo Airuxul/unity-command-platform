@@ -1,21 +1,32 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readManifestEditorState, listInstances } from './instance.mjs';
+import {
+  profileNameForHostKind,
+  waitForInstance,
+} from '../../../src/client/connection.js';
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function expandEnv(text) {
+  if (typeof text !== 'string') return text;
+  return text.replace(/\$\{([A-Z0-9_]+)\}/gi, (_, key) => process.env[key] ?? '');
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(__dirname, '..', '..', '..', 'bin', 'unity-cmd.js');
 
-export function runCli(command, args = [], env, timeoutMs, target) {
+export function runCli(command, args = [], env, timeoutMs, profileName) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [CLI, command, ...args], {
       env: {
         ...process.env,
         ...env,
+        UNITY_CMD_PROFILE: profileName,
         UNITY_CMD_TIMEOUT_MS: String(timeoutMs),
-        ...(target?.project_path
-          ? { UNITY_CMD_PROJECT: target.project_path }
-          : {}),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -37,36 +48,73 @@ export function runCli(command, args = [], env, timeoutMs, target) {
   });
 }
 
-export async function runStep(step, target, timeoutMs) {
+export async function runStep(step, defaultProfile, timeoutMs) {
   const started = Date.now();
 
-  if (step.assertManifest) {
-    const instances = listInstances();
-    const inst = instances.find((i) => i.port === target.port) ?? target;
-    const state = readManifestEditorState(inst);
-    for (const [key, expected] of Object.entries(step.assertManifest)) {
-      if (state[key] !== expected) {
-        return {
-          name: step.name,
-          status: 'failed',
-          elapsedMs: Date.now() - started,
-          error: `manifest.${key}: expected ${expected}, got ${state[key]}`,
-        };
-      }
+  if (step.sleepMs != null) {
+    await sleep(step.sleepMs);
+    return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+  }
+
+  if (step.waitProfile) {
+    const timeout = step.timeoutMs ?? timeoutMs;
+    const target = await waitForInstance({ profile: step.waitProfile, timeoutMs: timeout });
+    if (!target?.host) {
+      return fail(
+        step.name,
+        started,
+        `profile "${step.waitProfile}" not reachable within ${timeout}ms`,
+      );
     }
     return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
   }
 
-  const args = step.args ?? [];
-  const res = await runCli(step.command, args, {}, timeoutMs, target);
-  return finishCliStep(step, res, started, { checkExpect: Boolean(step.expect) });
+  if (step.assertFile) {
+    const explicitPath = expandEnv(step.assertFile.path);
+    const projectRoot = expandEnv(step.assertFile.projectRoot ?? process.env.UNITY_CMD_WORKSPACE?.trim());
+    const rel = expandEnv(step.assertFile.relativePath);
+    const full = explicitPath || (projectRoot && rel ? path.join(projectRoot, rel) : null);
+    if (!full) {
+      return fail(
+        step.name,
+        started,
+        'assertFile requires assertFile.path or (projectRoot + relativePath) / UNITY_CMD_WORKSPACE',
+      );
+    }
+    if (!fs.existsSync(full)) {
+      return fail(step.name, started, `file not found: ${full}`);
+    }
+    const size = fs.statSync(full).size;
+    const minBytes = step.assertFile.minBytes ?? 1;
+    if (size < minBytes) {
+      return fail(step.name, started, `file too small: ${size} < ${minBytes} (${full})`);
+    }
+    return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+  }
+
+  const args = (step.args ?? []).map(expandEnv);
+  const profile = profileForStep(step, defaultProfile);
+  const res = await runCli(step.command, args, {}, timeoutMs, profile);
+  return finishCliStep(step, res, started, {
+    checkExpect: Boolean(step.expect),
+    expectFailure: Boolean(step.expectFailure),
+  });
 }
 
-function finishCliStep(step, res, started, { checkExpect = false } = {}) {
+function profileForStep(step, defaultProfile) {
+  if (step.profile) return step.profile;
+  if (step.hostKind) return profileNameForHostKind(step.hostKind);
+  return defaultProfile ?? process.env.UNITY_CMD_PROFILE ?? 'editor';
+}
+
+function finishCliStep(step, res, started, { checkExpect = false, expectFailure = false } = {}) {
   let parsed;
   try {
-    parsed = JSON.parse(res.stdout);
+    parsed = JSON.parse(res.stdout.trim() || '{}');
   } catch {
+    if (expectFailure && res.code !== 0) {
+      return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+    }
     return fail(
       step.name,
       started,
@@ -74,12 +122,26 @@ function finishCliStep(step, res, started, { checkExpect = false } = {}) {
     );
   }
 
+  if (expectFailure) {
+    if (res.code === 0 && parsed.ok) {
+      return fail(step.name, started, 'expected failure but command succeeded');
+    }
+    if (step.expectErrorCode && parsed.error_code !== step.expectErrorCode) {
+      return fail(
+        step.name,
+        started,
+        `error_code expected ${step.expectErrorCode}, got ${parsed.error_code ?? 'none'}`,
+      );
+    }
+    return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+  }
+
   if (res.code !== 0 || !parsed.ok) {
     return fail(step.name, started, parsed.error ?? res.stderr ?? `exit ${res.code}`);
   }
 
   if (step.expectConnectorBuild != null) {
-    const build = parsed.data?.connector_build;
+    const build = parsed.data?.connector_build ?? parsed.connector_build;
     if (build == null || build < step.expectConnectorBuild) {
       return fail(
         step.name,
@@ -100,6 +162,27 @@ function finishCliStep(step, res, started, { checkExpect = false } = {}) {
     for (const required of step.expectCatalog.commands ?? []) {
       if (!names.has(required)) {
         return fail(step.name, started, `catalog missing command: ${required}`);
+      }
+    }
+    for (const forbidden of step.expectCatalog.forbidden ?? []) {
+      if (names.has(forbidden)) {
+        return fail(step.name, started, `catalog must not include: ${forbidden}`);
+      }
+    }
+    if (step.expectCatalog.forbiddenScopes?.length) {
+      const bad = parsed.commands.filter((c) =>
+        step.expectCatalog.forbiddenScopes.includes(c.scope),
+      );
+      if (bad.length > 0) {
+        const sample = bad
+          .slice(0, 5)
+          .map((c) => `${c.name}(${c.scope})`)
+          .join(', ');
+        return fail(
+          step.name,
+          started,
+          `catalog has forbidden scope(s) [${step.expectCatalog.forbiddenScopes.join(', ')}]: ${sample}`,
+        );
       }
     }
   }

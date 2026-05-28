@@ -1,38 +1,52 @@
 using System;
 using System.Collections.Generic;
+using UnityCliConnector.Commands;
 using UnityEditor;
 
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.menu",
-        Scope = CommandScope.Editor,
-        Description = "Execute a Unity menu item by path",
-        Aliases = "menu")]
-    public static class MenuCommand
+    public class MenuCommand : CommandBase, ICommand<MenuParams>, ICommandDescriptorProvider
     {
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<MenuParams>(
+            CommandNames.Menu,
+            CommandScope.Editor,
+            "Execute a Unity menu item by path");
+
         private static readonly HashSet<string> Blocklist = new(StringComparer.OrdinalIgnoreCase)
         {
             "File/Quit",
         };
 
-        public static CommandResult Run(CliParams p)
+        public void Run(MenuParams p)
         {
-            var menuPath = p.GetString("menu_path") ?? p.GetString("path");
+            var menuPath = p.MenuPath;
             if (string.IsNullOrWhiteSpace(menuPath))
-                return CommandResult.Fail("Parameter 'menu_path' is required (e.g. File/Save Project).");
+            {
+                const string error = "Parameter 'menu_path' is required (e.g. File/Save Project).";
+                CompleteFail(error);
+                return;
+            }
 
             if (Blocklist.Contains(menuPath))
-                return CommandResult.Fail($"Execution of '{menuPath}' is blocked for safety.");
+            {
+                var error = $"Execution of '{menuPath}' is blocked for safety.";
+                CompleteFail(error);
+                return;
+            }
 
             if (!EditorApplication.ExecuteMenuItem(menuPath))
-                return CommandResult.Fail($"Failed to execute menu item '{menuPath}'.");
+            {
+                var error = $"Failed to execute menu item '{menuPath}'.";
+                CompleteFail(error);
+                return;
+            }
 
-            return CommandResult.Success(new Dictionary<string, object>
+            var data = new Dictionary<string, object>
             {
                 ["menu_path"] = menuPath,
                 ["executed"] = true,
-            });
+            };
+            CompleteSuccess(data);
         }
     }
 }

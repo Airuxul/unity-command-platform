@@ -1,13 +1,22 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand("ping", Scope = CommandScope.Any, Description = "Health check")]
-    public static class PingCommand
+    public class PingCommand : CommandBase, ICommand, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(new System.Collections.Generic.Dictionary<string, object>
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor(
+            CommandNames.Ping,
+            CommandScope.Any,
+            "Health check");
+
+        public void Run()
+        {
+            var data = new System.Collections.Generic.Dictionary<string, object>
             {
                 ["pong"] = true,
                 ["host"] = "editor",
-            });
+            };
+            CompleteSuccess(data);
+        }
     }
 }

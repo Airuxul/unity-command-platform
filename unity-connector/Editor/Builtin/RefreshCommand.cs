@@ -1,25 +1,32 @@
-using System.Collections.Generic;
+using UnityCliConnector.Commands;
 using UnityCliConnector.Editor.Services;
 
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "refresh",
-        Scope = CommandScope.Editor,
-        Description = "Refresh AssetDatabase; compile=true starts async compilation job")]
-    public static class RefreshCommand
+    /// <summary>Unified command: immediate complete for refresh-only, deferred for compile=true.</summary>
+    public class RefreshCommand : CommandBase, ICommand<RefreshParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<RefreshParams>(
+            CommandNames.Refresh,
+            CommandScope.Editor,
+            "Refresh AssetDatabase; compile=true uses compilation completion",
+            completion: CommandCompletionCatalog.CompletionCompilation);
+
+        public void Run(RefreshParams p)
         {
             try
             {
-                var data = AssetRefreshService.Refresh(p.ToDictionary());
-                return CommandResult.Success(data);
+                var data = Apply(p);
+                if (!p.Compile)
+                    CompleteSuccess(data);
             }
             catch (System.Exception ex)
             {
-                return CommandResult.Fail(ex.Message);
+                CompleteFail(ex.Message);
             }
         }
+
+        private static System.Collections.Generic.Dictionary<string, object> Apply(RefreshParams p) =>
+            AssetRefreshService.Refresh(p);
     }
 }

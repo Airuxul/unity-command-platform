@@ -1,0 +1,56 @@
+{
+  "name": "player-runtime",
+  "description": "Development Build player — runtime commands only, Editor tools must fail",
+  "steps": [
+    {
+      "name": "01_ping_player",
+      "command": "ping",
+      "expect": { "ok": true },
+      "expectConnectorBuild": 20
+    },
+    {
+      "name": "02_list_catalog_player",
+      "command": "list",
+      "expect": { "ok": true },
+      "expectCatalog": {
+        "commands": ["echo", "ping"],
+        "forbidden": [
+          "compile",
+          "console",
+          "echo.editor",
+          "exec",
+          "play",
+          "profiler",
+          "screenshot",
+          "state"
+        ],
+        "forbiddenScopes": ["editor"]
+      }
+    },
+    {
+      "name": "03_echo_runtime",
+      "command": "echo",
+      "expect": { "data": { "channel": "runtime" } }
+    },
+    {
+      "name": "04_reject_compile",
+      "command": "compile",
+      "expectFailure": true
+    },
+    {
+      "name": "05_reject_echo_editor",
+      "command": "echo.editor",
+      "expectFailure": true
+    },
+    {
+      "name": "06_reject_screenshot",
+      "command": "screenshot",
+      "expectFailure": true
+    },
+    {
+      "name": "07_reject_play",
+      "command": "play",
+      "expectFailure": true
+    }
+  ]
+}

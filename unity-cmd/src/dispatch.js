@@ -1,10 +1,11 @@
 import { sendCommand, ping, fetchCatalog } from './client/command.js';
-import { selectInstance } from './client/target.js';
+import { resolveTarget } from './client/connection.js';
 import { resolveTimeoutMs } from './timeout.js';
-import { loadCatalog, resolveRemoteCommand, LOCAL_META } from './catalog.js';
+import { loadCatalog, resolveRemoteCommand, checkScopeCompatibility } from './catalog.js';
 import { coerceParameters } from './params.js';
 import { cliError, enrichFailure, enrichThrown } from './errors.js';
-import { formatHelp } from './help.js';
+import { runHelp } from './help.js';
+import { runProfileCommand } from './profile.js';
 
 export function parseArgs(argv) {
   const args = [...argv];
@@ -39,31 +40,57 @@ export function parseArgs(argv) {
   return { positional, flags, timeoutMs: resolveTimeoutMs(timeoutMs) };
 }
 
-export async function runCommand(command, flags, timeoutMs) {
-  const projectHint = process.env.UNITY_CMD_PROJECT ?? flags.project;
-  const target = selectInstance(projectHint);
-  if (!target) {
-    const err = cliError(
-      'No Unity Editor instance found in heartbeat registry.',
-      'NO_INSTANCE',
-      'Open your project with unity-connector installed. Set UNITY_CMD_PROJECT when multiple Editors run.',
+function requireProfile(flags) {
+  const profile = flags.profile ?? process.env.UNITY_CMD_PROFILE ?? null;
+  if (!profile) {
+    printJson(
+      cliError(
+        'Profile is required. Use --profile <name> or set UNITY_CMD_PROFILE.',
+        'NO_PROFILE',
+        'Create one: unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor',
+      ),
     );
-    printJson(err);
+    process.exit(1);
+  }
+  return profile;
+}
+
+export async function runCommand(command, flags, timeoutMs, subArgs = []) {
+  if (command === 'help') {
+    await runHelp(flags, timeoutMs);
+    return;
+  }
+  if (command === 'profile') {
+    await runProfileCommand(subArgs, flags, timeoutMs);
+    return;
+  }
+  const profileName = requireProfile(flags);
+  const target = await resolveTarget({ profile: profileName, timeoutMs });
+  if (!target) {
+    printJson(
+      cliError(
+        `Profile "${profileName}" is unreachable or /health host mismatch.`,
+        'NO_INSTANCE',
+        `Check the profile file or run: unity-cmd profile show ${profileName}`,
+      ),
+    );
     process.exit(1);
   }
 
   if (command === 'ping') {
-    const res = await ping(target, { timeoutMs });
-    printJson(res.ok ? res : enrichFailure(res));
+    const res = await ping(target, { timeoutMs, retryOnDisconnect: true });
+    printJson(res.ok ? { ...res, target, profile: profileName } : enrichFailure(res));
     process.exit(res.ok ? 0 : 1);
   }
 
   if (command === 'list') {
     try {
-      const forceRefresh = flags['refresh-catalog'] === true || flags.refresh_catalog === true;
+      const forceRefresh = flags['refresh-catalog'] === true;
       const catalog = await loadCatalog(target, { timeoutMs, forceRefresh });
       printJson({
         ok: true,
+        profile: profileName,
+        target: { host: target.host, port: target.port, connector_host: target.connector_host },
         catalog_version: catalog.catalog_version,
         connector_build: catalog.connector_build,
         commands: catalog.commands,
@@ -76,23 +103,11 @@ export async function runCommand(command, flags, timeoutMs) {
     }
   }
 
-  if (command === 'help') {
-    try {
-      const catalog = await loadCatalog(target, { timeoutMs });
-      console.log(formatHelp(catalog));
-    } catch {
-      console.log(formatHelp(null));
-    }
-    process.exit(0);
-  }
-
-  const forceCatalogRefresh =
-    flags['refresh-catalog'] === true || flags.refresh_catalog === true;
+  const forceCatalogRefresh = flags['refresh-catalog'] === true;
 
   const parameters = coerceParameters({ ...flags });
-  delete parameters.project;
+  delete parameters.profile;
   delete parameters['refresh-catalog'];
-  delete parameters.refresh_catalog;
 
   let catalog;
   try {
@@ -106,6 +121,19 @@ export async function runCommand(command, flags, timeoutMs) {
   }
 
   const resolved = resolveRemoteCommand(command, parameters, catalog);
+  const entry = catalog?.commands_by_name?.[resolved.command];
+  if (entry?.scope && entry.scope !== 'any') {
+    const scopeError = checkScopeCompatibility(
+      resolved.command,
+      entry.scope,
+      target.connector_host,
+    );
+    if (scopeError) {
+      printJson(cliError(scopeError, 'SCOPE_MISMATCH', null, { command: resolved.command }));
+      process.exit(1);
+    }
+  }
+
   const effectiveTimeout =
     resolved.minTimeoutMs != null
       ? Math.max(timeoutMs, resolved.minTimeoutMs)
@@ -121,7 +149,7 @@ export async function runCommand(command, flags, timeoutMs) {
       : enrichFailure(res, {
           command: resolved.command,
           status: res.status,
-          job: Boolean(res.job_id),
+          deferred: Boolean(res.command_id),
         });
     printJson(out);
     process.exit(res.ok ? 0 : 1);

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using UnityCliConnector.Builtin;
 using UnityEditor;
 using UnityEngine;
 
@@ -28,15 +29,15 @@ namespace UnityCliConnector.Editor.Services
             "UnityEditor.SceneManagement",
         };
 
-        public static Dictionary<string, object> Execute(CliParams p)
+        public static Dictionary<string, object> Execute(ExecParams p)
         {
-            var code = p.GetString("code");
+            var code = p.Code;
             if (string.IsNullOrWhiteSpace(code))
                 throw new ArgumentException("Parameter 'code' is required.");
 
-            var extraUsings = p.GetStringArray("usings").ToList();
-            var cscPath = p.GetString("csc");
-            var dotnetPath = p.GetString("dotnet");
+            var extraUsings = (p.Usings ?? Array.Empty<string>()).ToList();
+            var cscPath = p.Csc;
+            var dotnetPath = p.Dotnet;
 
             var source = BuildSource(code, extraUsings);
             var result = CompileAndExecute(source, cscPath, dotnetPath);

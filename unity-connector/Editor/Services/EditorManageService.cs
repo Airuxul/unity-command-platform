@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityCliConnector.Builtin;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -12,14 +13,13 @@ namespace UnityCliConnector.Editor.Services
         private const int TotalLayerCount = 32;
         private static readonly TimeSpan PlayModeTimeout = TimeSpan.FromSeconds(60);
 
-        public static Dictionary<string, object> Execute(Dictionary<string, object> parameters)
+        public static Dictionary<string, object> Execute(ManageEditorParams p)
         {
-            var p = new CliParams(parameters);
-            var action = p.GetString("action")?.ToLowerInvariant();
+            var action = p.Action?.ToLowerInvariant();
             if (string.IsNullOrEmpty(action))
                 throw new ArgumentException("Parameter 'action' is required.");
 
-            var wait = p.GetBool("wait_for_completion");
+            var wait = p.Wait;
 
             switch (action)
             {
@@ -30,17 +30,17 @@ namespace UnityCliConnector.Editor.Services
                 case "stop":
                     return Stop(wait);
                 case "refresh":
-                    return AssetRefreshService.Refresh(parameters);
+                    return AssetRefreshService.Refresh(new RefreshParams());
                 case "set_active_tool":
-                    return SetActiveTool(p.GetString("tool_name"));
+                    return SetActiveTool(p.ToolName);
                 case "add_tag":
-                    return AddTag(p.GetString("tag_name"));
+                    return AddTag(p.TagName);
                 case "remove_tag":
-                    return RemoveTag(p.GetString("tag_name"));
+                    return RemoveTag(p.TagName);
                 case "add_layer":
-                    return ManageLayer("add_layer", p.GetString("layer_name"));
+                    return ManageLayer("add_layer", p.LayerName);
                 case "remove_layer":
-                    return ManageLayer("remove_layer", p.GetString("layer_name"));
+                    return ManageLayer("remove_layer", p.LayerName);
                 default:
                     throw new ArgumentException(
                         $"Unknown action '{action}'. Valid: play, stop, pause, refresh, set_active_tool, add_tag, remove_tag, add_layer, remove_layer.");

@@ -1,21 +1,24 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.manage",
-        Scope = CommandScope.Editor,
-        Description = "Editor control: play, stop, pause, refresh, tags, layers, tools",
-        Aliases = "manage")]
-    public static class ManageEditorCommand
+    public class ManageEditorCommand : CommandBase, ICommand<ManageEditorParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ManageEditorParams>(
+            CommandNames.Manage,
+            CommandScope.Editor,
+            "Editor control: play, stop, pause, refresh, tags, layers, tools");
+
+        public void Run(ManageEditorParams p)
         {
             try
             {
-                return CommandResult.Success(Editor.Services.EditorManageService.Execute(p.ToDictionary()));
+                var data = Editor.Services.EditorManageService.Execute(p);
+                CompleteSuccess(data);
             }
             catch (System.Exception ex)
             {
-                return CommandResult.Fail(ex.Message);
+                CompleteFail(ex.Message);
             }
         }
     }

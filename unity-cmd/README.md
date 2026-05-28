@@ -1,4 +1,6 @@
-# unity-cmd
+﻿# unity-cmd
+
+[简体中文](README.zh-CN.md)
 
 Node.js CLI that sends commands to [unity-connector](../unity-connector/) over HTTP.
 
@@ -12,55 +14,96 @@ npm install
 npm link   # optional
 ```
 
+## Profiles
+
+All remote commands need a profile:
+
+```bash
+unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor
+unity-cmd profile create editor-play --port 6794 --host-kind editor_play
+unity-cmd profile create package-play --port 6795 --host-kind player
+unity-cmd profile list
+```
+
+Or set `UNITY_CMD_PROFILE=editor` and omit `--profile`.
+
 ## Usage
 
 ```bash
-unity-cmd ping
-unity-cmd list
-unity-cmd editor.play
-unity-cmd echo.editor --message hello
-unity-cmd recompile          # recommended after editing unity-connector (120s job timeout)
-unity-cmd compile            # same as recompile
-unity-cmd console --lines 20          # default: error,warning only
-unity-cmd help                        # live catalog from Unity
-unity-cmd list --refresh-catalog
-unity-cmd logs               # alias → editor.console
-unity-cmd menu --menu_path "File/Save Project"
-unity-cmd screenshot --view game --output_path Screenshots/game.png
-unity-cmd refresh --compile true   # AssetDatabase refresh + compile job
-unity-cmd exec --code "return 1+1;"
-unity-cmd profiler --action hierarchy --max 10
-unity-cmd manage --action pause
-unity-cmd reserialize              # entire project (slow)
+unity-cmd help
+unity-cmd --profile editor help
+unity-cmd --profile editor ping
+unity-cmd --profile editor list
+unity-cmd --profile editor list --refresh-catalog
+
+unity-cmd --profile editor play
+unity-cmd --profile editor stop
+unity-cmd --profile editor echo --message hello
+
+unity-cmd --profile editor compile
+unity-cmd --profile editor refresh --compile true
+
+unity-cmd --profile editor console --lines 20
+unity-cmd --profile editor screenshot --view game --output_path Screenshots/game.png
+unity-cmd --profile editor-play echo
 ```
 
-Commands and aliases come from Unity (`POST /list`), cached under `~/.unity-cmd/cache/`. Local-only: `ping`, `list`, `help`.
+Commands and aliases come from Unity (`POST /list`), cached under `~/.unity-cmd/cache/`.
+
+**Local-only (no profile):** `help`, `profile …`
+
+**Remote (profile required):** `ping`, `list`, and all connector commands.
+
+## `list` vs `help`
+
+| Command | Output |
+|---------|--------|
+| `list` | JSON catalog |
+| `help` | Human-readable text; when online, refetches catalog and prints each command's `params` |
+
+## Commands per instance
+
+| Profile | Port | When |
+|---------|------|------|
+| `editor` | 6547 | Editor open (compile, play/stop, edit-mode tools) |
+| `editor-play` | 6794 | Editor in Play Mode |
+| `package-play` | 6795 | Development Build running |
+
+`play` / `stop` always use profile **`editor`**.
+
+Full examples: [../README.md#commands-per-instance](../README.md#commands-per-instance).
 
 ## Environment
 
 | Variable | Description |
 |----------|-------------|
-| `UNITY_CMD_PROJECT` | Select instance by project path or folder name |
-| `UNITY_CMD_HOST` | Override host |
-| `UNITY_CMD_PORT` | Override port |
+| `UNITY_CMD_PROFILE` | Default profile name |
+| `UNITY_CMD_WORKSPACE` | Integration tests: Unity project root for file asserts |
 | `UNITY_CMD_TIMEOUT_MS` | Default timeout (20000) |
+| `UNITY_CMD_TOKEN` | Optional HTTP auth token |
 
 ## npm scripts
 
 | Script | Description |
 |--------|-------------|
-| `npm run verify` | Unit tests + documentation version check |
-| `npm run test:unit` | Node unit tests only |
-| `npm run test:integration` | Full lifecycle against an open Editor (skips if none) |
+| `npm run verify` | Unit tests + doc version check |
+| `npm run test:unit` | Unit tests only |
+| `npm run test:integration` | Scenario tests (needs Unity + profiles) |
 | `npm run test:all` | `verify` then `test:integration` |
-| `npm run doc:check` | Sync doc `Version:` headers with package.json |
 
 ## Integration tests
 
-1. Install `unity-connector` in your Unity project and open it in the Editor.
-2. Set `UNITY_CMD_PROJECT` to your project path when multiple Editors are open.
-3. Run `npm run test:integration`.
+1. Install `unity-connector` and open the Unity project.
+2. Create profiles (`editor`, `editor-play`, `package-play`).
+3. `set UNITY_CMD_PROFILE=editor` and `npm run test:integration`.
 
-Scenario `tests/integration/scenarios/full-lifecycle.json` covers catalog, console, play/stop, runtime echo, connector state, and compile.
+| Scenario | `UNITY_CMD_PROFILE` |
+|----------|---------------------|
+| `editor-lifecycle` (default) | `editor` |
+| `player-runtime` | `package-play` |
 
-See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) and [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+## See also
+
+- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)
+- [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- [../unity-connector/README.md](../unity-connector/README.md)

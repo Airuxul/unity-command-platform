@@ -3,7 +3,7 @@ namespace UnityCliConnector
     public interface ICompletionPolicy
     {
         string Kind { get; }
-        bool TryComplete(JobRecord job, EditorStateSnapshot state, out object result, out string error);
+        bool TryComplete(CommandRecord command, EditorStateSnapshot state, out object result, out string error);
     }
 
     public sealed class EditorStateSnapshot

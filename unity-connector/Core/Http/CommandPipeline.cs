@@ -11,47 +11,65 @@ namespace UnityCliConnector.Http
             public Dictionary<string, object> Body;
         }
 
-        public static PostResult HandlePost(
+        public static PostResult HandleUnifiedPost(
             CommandRequest request,
-            Func<string, Dictionary<string, object>, string> resolveCompletion,
-            Func<CommandRequest, string, Dictionary<string, object>> acceptJob,
-            Func<CommandRequest, CommandResult> executeSync)
+            Func<CommandRequest, string, (string commandId, CommandContext context)> createContext,
+            Action<CommandContext, Dictionary<string, object>> execute)
         {
-            var completion = resolveCompletion(request.Command, request.Parameters);
-            if (completion != null)
+            try
             {
-                try
+                var completion = CommandCompletionCatalog.GetCompletionKind(request.Command)
+                    ?? CommandCompletionCatalog.CompletionDeferred;
+                var (commandId, context) = createContext(request, completion);
+
+                execute(context, request.Parameters);
+
+                if (context != null && context.IsCompleted)
                 {
-                    var accepted = acceptJob(request, completion);
-                    return new PostResult { StatusCode = 202, Body = accepted };
-                }
-                catch (Exception ex)
-                {
+                    var ok = string.IsNullOrEmpty(context.CompletedError);
                     return new PostResult
                     {
-                        StatusCode = 500,
+                        StatusCode = ok ? 200 : 400,
                         Body = new Dictionary<string, object>
                         {
-                            ["ok"] = false,
-                            ["error"] = ex.Message,
+                            ["ok"] = ok,
+                            ["data"] = context.CompletedResult,
+                            ["error"] = context.CompletedError,
                             ["request_id"] = request.RequestId,
+                            ["command_id"] = commandId,
                         },
                     };
                 }
-            }
 
-            var result = executeSync(request);
-            return new PostResult
-            {
-                StatusCode = result.Ok ? 200 : 400,
-                Body = new Dictionary<string, object>
+                return new PostResult
                 {
-                    ["ok"] = result.Ok,
-                    ["data"] = result.Data,
-                    ["error"] = result.Error,
-                    ["request_id"] = result.RequestId,
-                },
+                    StatusCode = 202,
+                    Body = new Dictionary<string, object>
+                    {
+                        ["ok"] = true,
+                        ["command_id"] = commandId,
+                        ["request_id"] = request.RequestId,
+                    },
+                };
+            }
+            catch (Exception ex)
+            {
+                return BuildFailure(ex.Message, request.RequestId, null);
+            }
+        }
+
+        private static PostResult BuildFailure(string error, string requestId, string commandId)
+        {
+            var body = new Dictionary<string, object>
+            {
+                ["ok"] = false,
+                ["error"] = error ?? "command_failed",
+                ["request_id"] = requestId,
             };
+            if (!string.IsNullOrEmpty(commandId))
+                body["command_id"] = commandId;
+
+            return new PostResult { StatusCode = 400, Body = body };
         }
     }
 }

@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { runStep } from '../integration/lib/steps.mjs';
+
+test('runStep sleepMs passes without CLI', async () => {
+  const t0 = Date.now();
+  const result = await runStep({ name: 'wait', sleepMs: 50 }, {}, 5000);
+  assert.equal(result.status, 'passed');
+  assert.ok(result.elapsedMs >= 45);
+});
+
+test('runStep assertFile checks size', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unity-cmd-step-'));
+  const project = path.join(dir, 'Proj');
+  const shots = path.join(project, 'Screenshots');
+  fs.mkdirSync(shots, { recursive: true });
+  const file = path.join(shots, 'test.png');
+  fs.writeFileSync(file, Buffer.alloc(800));
+
+  const ok = await runStep(
+    {
+      name: 'assert_png',
+      assertFile: { relativePath: 'Screenshots/test.png', minBytes: 400, projectRoot: project },
+    },
+    {},
+    5000,
+  );
+  assert.equal(ok.status, 'passed');
+
+  const bad = await runStep(
+    {
+      name: 'assert_small',
+      assertFile: { relativePath: 'Screenshots/test.png', minBytes: 900, projectRoot: project },
+    },
+    {},
+    5000,
+  );
+  assert.equal(bad.status, 'failed');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});

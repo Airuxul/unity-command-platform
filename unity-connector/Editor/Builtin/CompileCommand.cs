@@ -1,16 +1,21 @@
+using UnityCliConnector.Commands;
+using UnityEditor.Compilation;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "compile",
-        Scope = CommandScope.Editor,
-        Description = "Request script compilation (async job)",
-        IsJob = true,
-        Completion = CommandJobCatalog.CompletionCompilation,
-        Aliases = "recompile,reload,reload-scripts,editor.recompile",
-        DefaultTimeoutMs = 120000)]
-    public static class CompileCommand
+    public class CompileCommand : CommandBase, ICommand<CompileParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(new { started = true });
+        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<CompileParams>(
+            CommandNames.Compile,
+            CommandScope.Editor,
+            "Request script compilation (deferred)",
+            CommandCompletionCatalog.CompletionCompilation,
+            aliases: new[] { "recompile", "reload" },
+            defaultTimeoutMs: 30000);
+
+        public void Run(CompileParams p)
+        {
+            CompilationPipeline.RequestScriptCompilation();
+        }
     }
 }

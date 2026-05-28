@@ -1,7 +1,8 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { waitForInstanceAsync } from './lib/instance.mjs';
+import { waitForInstance as waitForInstanceAsync } from '../../src/client/connection.js';
 import { runStep } from './lib/steps.mjs';
 
 function sleep(ms) {
@@ -10,18 +11,29 @@ function sleep(ms) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, 'out');
-const SCENARIO = path.join(__dirname, 'scenarios', 'full-lifecycle.json');
+process.env.UNITY_CMD_CACHE_DIR ??= path.join(os.homedir(), '.unity-cmd', 'cache');
+const scenarioName =
+  process.env.UNITY_CMD_SCENARIO && process.env.UNITY_CMD_SCENARIO.trim().length > 0
+    ? process.env.UNITY_CMD_SCENARIO.trim()
+    : 'editor-lifecycle';
+const SCENARIO = path.join(__dirname, 'scenarios', `${scenarioName}.json`);
 const ATTACH_TIMEOUT_MS = 20_000;
 
 async function main() {
-  const projectHint = process.env.UNITY_CMD_PROJECT ?? null;
+  if (!fs.existsSync(SCENARIO)) {
+    console.error(`[integration] Unknown scenario: ${scenarioName}`);
+    console.error(`  Expected file: ${SCENARIO}`);
+    process.exit(1);
+  }
+
+  const profileName = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
   const instance = await waitForInstanceAsync({
-    projectHint,
+    profile: profileName,
     timeoutMs: ATTACH_TIMEOUT_MS,
   });
 
   if (!instance?.host || !instance?.port) {
-    logSkip(projectHint);
+    logSkip();
     writeReport({ skipped: true, reason: 'no_instance' });
     process.exit(0);
   }
@@ -35,7 +47,7 @@ async function main() {
     const stepStarted = Date.now();
     try {
       const result = await Promise.race([
-        runStep(step, instance, timeoutMs),
+        runStep(step, profileName, timeoutMs),
         timeoutAfter(step.name, timeoutMs),
       ]);
       results.push(result);
@@ -70,12 +82,18 @@ function timeoutAfter(name, ms) {
   );
 }
 
-function logSkip(projectHint) {
-  console.error('[integration] 未检测到可用的 Unity Editor 实例。');
+function defaultProfileForScenario(name) {
+  return name === 'player-runtime' ? 'package-play' : 'editor';
+}
+
+function logSkip() {
+  const profile = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
+  console.error(`[integration] 未检测到可用的 Unity profile (${profile})。`);
   console.error('  - 请在外部工程中安装 unity-connector 并用 Unity 打开该项目');
-  if (projectHint) console.error(`  - UNITY_CMD_PROJECT=${projectHint}`);
-  else console.error('  - 可设置 UNITY_CMD_PROJECT 指向工程路径（多实例时必需）');
-  console.error('  - 确认 ~/.unity-cmd/instances/ 下已有 heartbeat');
+  console.error('  - 先创建 profile: unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor');
+  console.error('  - Editor: set UNITY_CMD_SCENARIO=editor-lifecycle && npm run test:integration');
+  console.error('  - Player: set UNITY_CMD_SCENARIO=player-runtime && UNITY_CMD_PROFILE=package-play');
+  console.error('  - 截图默认写到 UNITY_CMD_CACHE_DIR（默认 ~/.unity-cmd/cache），无需 UNITY_CMD_WORKSPACE');
   console.error('  - 跳过集成测试（非失败）');
 }
 

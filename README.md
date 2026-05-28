@@ -1,86 +1,172 @@
-# unity-cli
+﻿# unity-cli
 
-Monorepo for controlling Unity Editor from the command line.
+[简体中文](README.zh-CN.md)
 
-| Project | Description |
-|---------|-------------|
-| [unity-cmd](unity-cmd/) | Node.js CLI — sends HTTP commands to the connector |
-| [unity-connector](unity-connector/) | Unity UPM package — HTTP server and command router inside the Editor / Player |
+Command-line control of Unity Editor over loopback HTTP — for scripts, CI, and agents.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design goals and completion checklist.
+| Package | Role |
+|---------|------|
+| [unity-cmd](unity-cmd/) | Node.js CLI |
+| [unity-connector](unity-connector/) | Unity UPM bridge (HTTP + commands) |
 
-## Install the connector
+## How it works
 
-Add to your Unity project's `Packages/manifest.json`:
-
-```json
-{
-  "dependencies": {
-    "com.airuxul.unity-connector": "file:../../unity-cli/unity-connector"
-  }
-}
+```text
+unity-cmd  →  GET /health, POST /list, POST /command, GET /commands/{id}
+              unity-connector (Editor :6547, Editor Play :6794, Player :6795)
 ```
 
-Adjust the path to where you cloned this repo. Open the project in Unity once so the connector starts and writes a heartbeat file.
+- Unity publishes the command catalog (`POST /list`); the CLI resolves aliases and caches it per endpoint (`~/.unity-cmd/cache/catalog-<host>:<port>.json`).
+- Long work (`compile`, `play`, …) returns **HTTP 202**; the CLI polls `GET /commands/{id}`.
+- Failures are JSON: `ok`, `error_code`, optional `hint`.
 
-## CLI quick reference
+Built-ins include play/stop, console, exec, profiler, screenshot, menu, reserialize. Extend commands in the connector — see [unity-connector/README.md](unity-connector/README.md).
+
+## Quick start
 
 ```bash
-cd unity-cmd
-npm install
-npm link   # optional: global `unity-cmd` command
+cd unity-cmd && npm install && npm link   # optional
 
-unity-cmd ping
-unity-cmd list                    # command catalog from Unity (cached)
-unity-cmd recompile               # script compile job (120s default)
-unity-cmd console --type error,warning --lines 20
-unity-cmd logs --lines 10         # alias of console
-unity-cmd editor.play
-unity-cmd menu --menu_path "File/Save Project"
-unity-cmd screenshot --view game
-unity-cmd exec --code "return 42;"
-unity-cmd profiler --action status
-unity-cmd manage --action stop
+unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor
+unity-cmd --profile editor ping
+unity-cmd --profile editor list
+unity-cmd --profile editor play
+unity-cmd --profile editor screenshot --view game --output_path Screenshots/game.png
+unity-cmd --profile editor stop
 ```
 
-After changing **unity-connector** sources, reload scripts in the open Editor:
+Install the connector and open your Unity project: [unity-connector/README.md](unity-connector/README.md).  
+CLI flags and npm scripts: [unity-cmd/README.md](unity-cmd/README.md).
 
-```bash
-unity-cmd refresh --compile true --timeout 120000
-# or: unity-cmd recompile
+After editing connector C#: `unity-cmd --profile editor compile` (alias `recompile`) or `refresh --compile true --timeout 30000`.
+
+Fixed ports: **Editor `6547`**, **Editor Play `6794`**, **Player `6795`** — all three can run together on one machine.
+
+## Commands per instance
+
+Use **`--profile <name>`** (or `UNITY_CMD_PROFILE`). Create profiles once:
+
+```bat
+unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor
+unity-cmd profile create editor-play --port 6794 --host-kind editor_play
+unity-cmd profile create package-play --port 6795 --host-kind player
+unity-cmd profile list
 ```
 
-## Environment variables
+### 1. Editor — Edit Mode (profile `editor`, port **6547**)
 
-| Variable | Description |
-|----------|-------------|
-| `UNITY_CMD_PROJECT` | Project path or name fragment to select an Editor instance |
-| `UNITY_CMD_HOST` | Override host (default from heartbeat) |
-| `UNITY_CMD_PORT` | Override port |
-| `UNITY_CMD_TIMEOUT_MS` | Per-command timeout (default `20000`) |
-| `UNITY_PROJECT_PATH` | External project path for Unity EditMode tests (UTF) |
+**When:** Unity Editor is open.  
+**Prerequisite:** Project has `unity-connector` installed; Console shows `http://127.0.0.1:6547/`.
+
+```bat
+unity-cmd --profile editor ping
+unity-cmd --profile editor list
+unity-cmd --profile editor state
+unity-cmd --profile editor compile
+unity-cmd --profile editor console --type error,warning --lines 20
+unity-cmd --profile editor profiler --action enable
+unity-cmd --profile editor play
+unity-cmd --profile editor screenshot --view scene --output_path Screenshots/edit.png
+```
+
+### 2. Editor Play (profile `editor-play`, port **6794**)
+
+**When:** Editor is in **Play Mode** (port listens only while playing).  
+Enter Play with `--profile editor` first.
+
+```bat
+unity-cmd --profile editor-play ping
+unity-cmd --profile editor-play echo
+unity-cmd --profile editor screenshot --view game --output_path Screenshots/play.png
+unity-cmd --profile editor-play profiler --action status
+```
+
+```bat
+unity-cmd --profile editor play
+REM ... editor-play commands ...
+unity-cmd --profile editor stop
+```
+
+### 3. Development Build player (profile `package-play`, port **6795**)
+
+**When:** A **Development Build** is running (not Release).
+
+```bat
+unity-cmd --profile package-play ping
+unity-cmd --profile package-play list
+unity-cmd --profile package-play echo
+```
+
+### Integration tests (from `unity-cmd/`)
+
+```bat
+set UNITY_CMD_PROFILE=editor
+set UNITY_CMD_WORKSPACE=C:\Project\GameDemo
+npm run test:integration
+
+set UNITY_CMD_PROFILE=package-play
+set UNITY_CMD_SCENARIO=player-runtime
+npm run test:integration
+```
+
+| Profile (example) | `connector_host` | Port | Use |
+|-------------------|------------------|------|-----|
+| `editor` | `editor` | 6547 | Edit Mode, deferred commands, enter/exit Play |
+| `editor-play` | `editor_play` | 6794 | During Editor Play |
+| `package-play` | `player` | 6795 | Development Build |
+
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#runtime--play-mode-http), [unity-cmd/README.md](unity-cmd/README.md#commands-per-instance), [unity-connector/docs/IMPLEMENTATION.md](unity-connector/docs/IMPLEMENTATION.md#runtime--play-mode-stack).
+
+## vs [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli)
+
+Same idea (local HTTP, no MCP). **Not a fork** — different CLI, protocol, and extension model.
+
+| | [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) | This repo |
+|---|------------------------------------------------------------------------|-----------|
+| CLI | Go binary, `install.sh` | Node `unity-cmd`, `npm install` |
+| Discovery | `~/.unity-cli/instances/` heartbeat | profiles + `/health` |
+| Commands | `unity-cli editor play` | `unity-cmd play` |
+| Discovery | Per-request reflection; `list` + param schemas | `POST /list` catalog + CLI cache |
+| Long tasks | Sync HTTP + `--wait` | **202 deferred command status** + poll |
+| Runtime / Play-mode | **Editor Edit Mode only** — no HTTP while playing, no Dev player endpoint | **`editor_play` :6794** + **`player` :6795**; runtime via play/player profiles; editor tools stay on **`editor` :6547** |
+| Status | `unity-cli status` | `ping`, `state` |
+| Custom tools | `[UnityCliTool]` + `HandleCommand(JObject)` | `Descriptor` + single `Run(...)` command class + `[CliParam]` |
+| Output | `success` / `message` | `ok`, `data`, `error_code`, `hint` |
+| Extras | `test`, `update` | — (use Unity/CI for tests) |
+| Compile deferred timeout | 120s | 30s (`compile` default) |
+
+| Upstream | Here |
+|----------|------|
+| `unity-cli status` | `unity-cmd ping` |
+| `unity-cli editor play` | `unity-cmd play` |
+| `unity-cli exec "code"` | `unity-cmd exec --code "code"` |
+| `unity-cli profiler hierarchy` | `unity-cmd profiler --action hierarchy` |
+| `unity-cli editor refresh --compile` | `unity-cmd refresh --compile true` |
+
+## Environment
+
+| Variable | Purpose |
+|----------|---------|
+| `UNITY_CMD_PROFILE` | Default profile name (`--profile` overrides) |
+| `UNITY_CMD_WORKSPACE` | Integration tests only: Unity project root for `assertFile` |
+| `UNITY_CMD_TIMEOUT_MS` | Timeout (default `20000`) |
+| `UNITY_CMD_TOKEN` | Optional auth token (must match Unity `UNITY_CMD_TOKEN`) |
+
+Unity-side port overrides (when creating profiles): `UNITY_CMD_PORT`, `UNITY_CMD_EDITOR_PLAY_PORT`, `UNITY_CMD_PLAYER_PORT`.
 
 ## Tests
 
-All npm scripts live under `unity-cmd/`:
-
 ```bash
 cd unity-cmd
-npm run verify              # unit tests + doc version check (no Unity)
-npm run test:integration    # full lifecycle against an open Editor
-npm run test:all            # verify + integration
+npm run verify              # unit tests, no Unity
+npm run test:integration    # needs Editor open; skips if no instance
 ```
 
-Integration tests **do not** start Unity. Open your project in the Editor first, then run `test:integration`. If no instance is found within 20s, the run logs hints and exits `0` (skipped, not failed).
+## Documentation
 
-## Layout
-
-```text
-unity-cli/
-├── README.md
-├── docs/ARCHITECTURE.md
-├── unity-cmd/
-└── unity-connector/
-```
-
-There is no root `package.json` — run commands from `unity-cmd/`.
+| Doc | |
+|-----|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design and request flow |
+| [docs/AGENTS.md](docs/AGENTS.md) | Automation notes |
+| [unity-cmd/docs/IMPLEMENTATION.md](unity-cmd/docs/IMPLEMENTATION.md) | CLI internals |
+| [unity-connector/docs/IMPLEMENTATION.md](unity-connector/docs/IMPLEMENTATION.md) | HTTP API and parameters |

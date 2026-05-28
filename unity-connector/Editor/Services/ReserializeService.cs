@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using UnityCliConnector.Builtin;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,15 +9,14 @@ namespace UnityCliConnector.Editor.Services
 {
     public static class ReserializeService
     {
-        public static Dictionary<string, object> Reserialize(CliParams p)
+        public static Dictionary<string, object> Reserialize(ReserializeParams p)
         {
-            var paths = p.GetStringArray("paths");
-            if (paths.Length == 0)
-            {
-                var single = p.GetString("path");
-                if (!string.IsNullOrEmpty(single))
-                    paths = new[] { single };
-            }
+            var paths = string.IsNullOrWhiteSpace(p.Paths)
+                ? Array.Empty<string>()
+                : p.Paths.Split(',', ';')
+                    .Select(s => s.Trim())
+                    .Where(s => s.Length > 0)
+                    .ToArray();
 
             if (paths.Length == 0)
             {

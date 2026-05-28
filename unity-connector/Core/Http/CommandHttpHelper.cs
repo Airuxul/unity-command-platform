@@ -7,7 +7,7 @@ namespace UnityCliConnector.Http
     {
         public static CommandRequest ParseCommandRequest(string body, string endpoint)
         {
-            var root = SimpleJson.ParseObject(body ?? "{}");
+            var root = ConnectorJson.ParseObject(body ?? "{}");
             var command = GetString(root, "command") ?? "";
             var dict = GetParameters(root);
             var requestId = GetString(root, "request_id");

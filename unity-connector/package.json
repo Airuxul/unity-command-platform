@@ -1,10 +1,13 @@
 {
   "name": "com.airuxul.unity-connector",
-  "version": "0.1.4",
+  "version": "0.1.7",
   "displayName": "Unity CLI Connector",
   "description": "HTTP command bridge for unity-cmd CLI",
   "unity": "2021.3",
   "author": {
     "name": "airuxul"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
   }
 }

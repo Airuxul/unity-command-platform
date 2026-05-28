@@ -2,9 +2,9 @@ namespace UnityCliConnector.Completion
 {
     public sealed class EnterPlayModePolicy : ICompletionPolicy
     {
-        public string Kind => CommandJobCatalog.CompletionEnterPlay;
+        public string Kind => CommandCompletionCatalog.CompletionEnterPlay;
 
-        public bool TryComplete(JobRecord job, EditorStateSnapshot state, out object result, out string error)
+        public bool TryComplete(CommandRecord command, EditorStateSnapshot state, out object result, out string error)
         {
             result = null;
             error = null;
@@ -15,8 +15,8 @@ namespace UnityCliConnector.Completion
                 return true;
             }
 
-            if (job.Status == JobStatus.Pending)
-                job.Status = JobStatus.Running;
+            if (command.Status == CommandStatus.Pending)
+                command.Status = CommandStatus.Running;
 
             return false;
         }

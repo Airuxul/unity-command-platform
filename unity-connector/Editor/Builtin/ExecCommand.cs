@@ -1,21 +1,24 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.exec",
-        Scope = CommandScope.Editor,
-        Description = "Compile and execute arbitrary C# in Editor context",
-        Aliases = "exec")]
-    public static class ExecCommand
+    public class ExecCommand : CommandBase, ICommand<ExecParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ExecParams>(
+            CommandNames.Exec,
+            CommandScope.Editor,
+            "Compile and execute arbitrary C# in Editor context");
+
+        public void Run(ExecParams p)
         {
             try
             {
-                return CommandResult.Success(Editor.Services.CsharpExecutor.Execute(p));
+                var data = Editor.Services.CsharpExecutor.Execute(p);
+                CompleteSuccess(data);
             }
             catch (System.Exception ex)
             {
-                return CommandResult.Fail(ex.Message);
+                CompleteFail(ex.Message);
             }
         }
     }

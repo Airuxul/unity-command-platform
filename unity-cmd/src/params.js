@@ -8,8 +8,5 @@ export function coerceParameters(flags) {
   if (out['refresh-catalog'] === 'true' || out['refresh-catalog'] === '1') {
     out['refresh-catalog'] = true;
   }
-  if (out.refresh_catalog === 'true' || out.refresh_catalog === '1') {
-    out.refresh_catalog = true;
-  }
   return out;
 }

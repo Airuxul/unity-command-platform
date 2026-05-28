@@ -1,9 +1,18 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand("connector.state", Scope = CommandScope.Editor, Description = "Editor state snapshot")]
-    public static class ConnectorStateCommand
+    public class ConnectorStateCommand : CommandBase, ICommand, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p) =>
-            CommandResult.Success(EditorStateProvider.ToManifestObject());
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor(
+            CommandNames.State,
+            CommandScope.Editor,
+            "Editor state snapshot");
+
+        public void Run()
+        {
+            var data = EditorStateProvider.ToManifestObject();
+            CompleteSuccess(data);
+        }
     }
 }

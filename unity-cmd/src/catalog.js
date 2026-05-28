@@ -2,33 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fetchCatalog, ping } from './client/command.js';
-export const LOCAL_META = new Set(['ping', 'list', 'help']);
-
-/** Used when Unity catalog has no alias map (pre-build-4 connector). */
-const BOOTSTRAP_ALIAS_TO_COMMAND = {
-  recompile: 'compile',
-  reload: 'compile',
-  'reload-scripts': 'compile',
-  'editor.recompile': 'compile',
-  console: 'editor.console',
-  logs: 'editor.console',
-  menu: 'editor.menu',
-  screenshot: 'editor.screenshot',
-  exec: 'editor.exec',
-  profiler: 'editor.profiler',
-  manage: 'editor.manage',
-  reserialize: 'editor.reserialize',
-};
 
 const CACHE_DIR = path.join(os.homedir(), '.unity-cmd', 'cache');
 
 export function cachePathForTarget(target) {
-  const key = (
-    target.project_path ??
-    target.project ??
-    `${target.host}:${target.port}`
-  ).replace(/[\\/:*?"<>|]/g, '_');
+  const key = `${target.host}:${target.port}`.replace(/[\\/:*?"<>|]/g, '_');
   return path.join(CACHE_DIR, `catalog-${key}.json`);
+}
+
+/** Read cached catalog from disk without validation. */
+export function readCachedCatalog(target) {
+  const cachePath = cachePathForTarget(target);
+  if (!fs.existsSync(cachePath)) return null;
+  try {
+    return indexCatalog(JSON.parse(fs.readFileSync(cachePath, 'utf8')));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -42,6 +32,7 @@ export function indexCatalog(raw) {
     if (entry?.name) commandsByName[entry.name] = entry;
   }
   return {
+    host_kind: raw?.host_kind ?? null,
     catalog_version: raw?.catalog_version ?? null,
     connector_build: raw?.connector_build ?? null,
     commands,
@@ -58,7 +49,10 @@ export function indexCatalog(raw) {
 export async function isCacheValid(cached, target, timeoutMs) {
   if (!cached?.commands?.length || !cached?.catalog_version) return false;
 
-  const health = await ping(target, { timeoutMs: Math.min(timeoutMs, 5000) });
+  const health = await ping(target, {
+    timeoutMs: Math.min(timeoutMs, 5000),
+    retryOnDisconnect: true,
+  });
   if (!health.ok) return false;
 
   const liveBuild = health.data?.connector_build;
@@ -67,6 +61,21 @@ export async function isCacheValid(cached, target, timeoutMs) {
     liveBuild != null &&
     cached.connector_build !== liveBuild
   ) {
+    return false;
+  }
+
+  const liveCatalogVersion = health.data?.catalog_version;
+  if (
+    cached.catalog_version &&
+    liveCatalogVersion &&
+    cached.catalog_version !== liveCatalogVersion
+  ) {
+    return false;
+  }
+
+  const cachedHost = cached.host_kind?.toLowerCase?.();
+  const targetHost = target.connector_host?.toLowerCase?.();
+  if (cachedHost && targetHost && cachedHost !== targetHost) {
     return false;
   }
 
@@ -88,7 +97,7 @@ export async function loadCatalog(target, options = {}) {
     }
   }
 
-  const health = await ping(target, { timeoutMs });
+  const health = await ping(target, { timeoutMs, retryOnDisconnect: true });
   if (!health.ok) {
     throw Object.assign(
       new Error('Failed to reach Unity Editor HTTP endpoint.'),
@@ -99,7 +108,7 @@ export async function loadCatalog(target, options = {}) {
     );
   }
 
-  const res = await fetchCatalog(target, { timeoutMs });
+  const res = await fetchCatalog(target, { timeoutMs, retryOnDisconnect: true });
   if (!res.ok) {
     throw Object.assign(new Error('Failed to fetch command catalog from Unity Editor.'), {
       error_code: 'CATALOG_FETCH_FAILED',
@@ -108,6 +117,7 @@ export async function loadCatalog(target, options = {}) {
   }
 
   const catalog = indexCatalog({
+    host_kind: target?.connector_host ?? null,
     catalog_version: res.catalog_version,
     connector_build: health.data?.connector_build ?? null,
     commands: res.commands,
@@ -120,16 +130,40 @@ export async function loadCatalog(target, options = {}) {
 }
 
 /**
+ * Mirror of Unity CommandAvailability.IsAvailableForHost.
+ * Returns an error string when the command scope is incompatible with the target host,
+ * or null when the command is fine to send.
+ *
+ * @param {string} command  canonical command name
+ * @param {string} scope   'editor' | 'runtime' | 'any'
+ * @param {string} hostKind  connector_host value from target
+ * @returns {string|null}
+ */
+export function checkScopeCompatibility(command, scope, hostKind) {
+  const normalized = hostKind?.toLowerCase?.() ?? '';
+  const isPlayHost = normalized === 'editor_play' || normalized === 'player';
+
+  if (isPlayHost) {
+    if (scope === 'editor')
+      return `Command '${command}' is Editor-only. Use --profile editor.`;
+    return null;
+  }
+
+  // editor host
+  if (scope === 'runtime')
+    return `Command '${command}' is Runtime-only. Use --profile editor-play or --profile package-play.`;
+
+  return null;
+}
+
+/**
  * Resolve CLI command name to remote command + polling options using Unity catalog.
  * @param {string} command
  * @param {Record<string, unknown>} flags
  * @param {ReturnType<typeof indexCatalog>} catalog
  */
 export function resolveRemoteCommand(command, flags = {}, catalog) {
-  const aliasMap = {
-    ...BOOTSTRAP_ALIAS_TO_COMMAND,
-    ...(catalog?.alias_to_command ?? {}),
-  };
+  const aliasMap = catalog?.alias_to_command ?? {};
   const byName = catalog?.commands_by_name ?? {};
 
   let canonical = command;
@@ -147,17 +181,18 @@ export function resolveRemoteCommand(command, flags = {}, catalog) {
     return {
       command: canonical,
       allowConnectionRetry: true,
-      minTimeoutMs: compileEntry?.default_timeout_ms ?? 120_000,
+      minTimeoutMs: compileEntry?.default_timeout_ms ?? 30_000,
     };
   }
 
   const minTimeoutMs =
     entry?.default_timeout_ms > 0 ? entry.default_timeout_ms : null;
+  const allowConnectionRetry =
+    entry?.allow_connection_retry !== false && entry?.allow_connection_retry !== 'false';
 
   return {
     command: canonical,
-    allowConnectionRetry:
-      entry?.allow_connection_retry === true || entry?.is_job === true,
+    allowConnectionRetry,
     minTimeoutMs,
   };
 }

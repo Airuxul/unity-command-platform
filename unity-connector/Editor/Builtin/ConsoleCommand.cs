@@ -1,51 +1,52 @@
 using System.Collections.Generic;
+using UnityCliConnector.Commands;
 using UnityCliConnector.Editor.Services;
 
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.console",
-        Scope = CommandScope.Editor,
-        Description = "Read or clear Unity Editor console logs",
-        Aliases = "console,logs")]
-    public static class ConsoleCommand
+    public class ConsoleCommand : CommandBase, ICommand<ConsoleParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ConsoleParams>(
+            CommandNames.Console,
+            CommandScope.Editor,
+            "Read or clear Unity Editor console logs");
+
+        public void Run(ConsoleParams p)
         {
             if (!UnityConsoleReader.IsReady)
             {
-                return CommandResult.Fail(
-                    $"Console reader unavailable: {UnityConsoleReader.InitError}");
+                var error = $"Console reader unavailable: {UnityConsoleReader.InitError}";
+                CompleteFail(error);
+                return;
             }
 
-            if (p.GetBool("clear"))
+            if (p.Clear)
             {
                 UnityConsoleReader.Clear();
-                return CommandResult.Success(new Dictionary<string, object>
+                var clearData = new Dictionary<string, object>
                 {
                     ["cleared"] = true,
-                });
+                };
+                CompleteSuccess(clearData);
+                return;
             }
 
-            var lines = p.GetInt("lines") ?? p.GetInt("count");
-            var typeFilter = p.Has("type")
-                ? p.GetString("type")
-                : "error,warning";
-
+            var stacktrace = string.IsNullOrEmpty(p.Stacktrace) ? "user" : p.Stacktrace;
             var entries = UnityConsoleReader.Read(new UnityConsoleReader.ConsoleReadOptions
             {
-                TypeFilter = typeFilter,
-                MaxEntries = lines,
-                Stacktrace = p.GetString("stacktrace", "user"),
+                TypeFilter = p.Type ?? "error,warning",
+                MaxEntries = p.Lines,
+                Stacktrace = stacktrace,
             });
 
-            return CommandResult.Success(new Dictionary<string, object>
+            var data = new Dictionary<string, object>
             {
                 ["count"] = entries.Count,
                 ["entries"] = entries,
-                ["types"] = typeFilter,
-                ["stacktrace"] = p.GetString("stacktrace", "user"),
-            });
+                ["types"] = p.Type ?? "error,warning",
+                ["stacktrace"] = stacktrace,
+            };
+            CompleteSuccess(data);
         }
     }
 }

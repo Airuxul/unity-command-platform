@@ -1,29 +1,31 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using UnityCliConnector.Commands;
 using UnityEditor;
 using UnityEngine;
 
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.screenshot",
-        Scope = CommandScope.Editor,
-        Description = "Capture Scene or Game view to PNG",
-        Aliases = "screenshot")]
-    public static class ScreenshotCommand
+    public class ScreenshotCommand : CommandBase, ICommand<ScreenshotParams>, ICommandDescriptorProvider
     {
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ScreenshotParams>(
+            CommandNames.Screenshot,
+            CommandScope.Editor,
+            "Capture Scene or Game view to PNG (Editor host only)");
+
         private const int DefaultWidth = 1920;
         private const int DefaultHeight = 1080;
 
-        public static CommandResult Run(CliParams p)
+        public void Run(ScreenshotParams p)
         {
+            (bool ok, object data, string error) result;
             try
             {
-                var view = (p.GetString("view", "scene") ?? "scene").ToLowerInvariant();
-                var width = p.GetInt("width") ?? DefaultWidth;
-                var height = p.GetInt("height") ?? DefaultHeight;
-                var outputPath = ResolveOutputPath(p.GetString("output_path"));
+                var view = (p.View ?? "scene").ToLowerInvariant();
+                var width = p.Width ?? DefaultWidth;
+                var height = p.Height ?? DefaultHeight;
+                var outputPath = ResolveOutputPath(p.OutputPath);
 
                 var dir = Path.GetDirectoryName(outputPath);
                 if (!string.IsNullOrEmpty(dir))
@@ -32,45 +34,58 @@ namespace UnityCliConnector.Builtin
                 switch (view)
                 {
                     case "scene":
-                        return CaptureScene(width, height, outputPath);
+                        result = CaptureScene(width, height, outputPath);
+                        break;
                     case "game":
-                        return CaptureGame(width, height, outputPath);
+                        result = CaptureGame(width, height, outputPath);
+                        break;
                     default:
-                        return CommandResult.Fail($"Unknown view '{view}'. Valid: scene, game.");
+                        result = Fail($"Unknown view '{view}'. Valid: scene, game.");
+                        break;
                 }
             }
             catch (Exception ex)
             {
-                return CommandResult.Fail($"Screenshot failed: {ex.Message}");
+                result = Fail($"Screenshot failed: {ex.Message}");
             }
+
+            if (result.ok)
+                CompleteSuccess(result.data);
+            else
+                CompleteFail(result.error);
         }
 
-        private static CommandResult CaptureScene(int width, int height, string outputPath)
+        private static (bool ok, object data, string error) CaptureScene(int width, int height, string outputPath)
         {
             var sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null)
-                return CommandResult.Fail("No active SceneView found.");
+                return Fail("No active SceneView found.");
 
             var camera = sceneView.camera;
             if (camera == null)
-                return CommandResult.Fail("SceneView camera is null.");
+                return Fail("SceneView camera is null.");
 
             return CaptureCamera(camera, width, height, outputPath);
         }
 
-        private static CommandResult CaptureGame(int width, int height, string outputPath)
+        private static (bool ok, object data, string error) CaptureGame(int width, int height, string outputPath)
         {
             var camera = Camera.main;
             if (camera == null)
                 camera = UnityEngine.Object.FindObjectOfType<Camera>();
 
             if (camera == null)
-                return CommandResult.Fail("No camera found in scene.");
+            {
+                var hint = Application.isPlaying
+                    ? "No camera in Play Mode. Tag a camera as MainCamera or add any Camera to the scene."
+                    : "No camera found in scene.";
+                return Fail(hint);
+            }
 
             return CaptureCamera(camera, width, height, outputPath);
         }
 
-        private static CommandResult CaptureCamera(Camera camera, int width, int height, string outputPath)
+        private static (bool ok, object data, string error) CaptureCamera(Camera camera, int width, int height, string outputPath)
         {
             var previousRt = camera.targetTexture;
             RenderTexture rt = null;
@@ -88,7 +103,7 @@ namespace UnityCliConnector.Builtin
                 tex.Apply();
                 File.WriteAllBytes(outputPath, tex.EncodeToPNG());
 
-                return CommandResult.Success(new Dictionary<string, object>
+                return Success(new Dictionary<string, object>
                 {
                     ["path"] = outputPath,
                     ["width"] = width,
@@ -117,5 +132,9 @@ namespace UnityCliConnector.Builtin
             var projectRoot = Path.GetDirectoryName(Application.dataPath);
             return Path.GetFullPath(Path.Combine(projectRoot, userPath));
         }
+
+        private static (bool ok, object data, string error) Success(object data) => (true, data, null);
+        private static (bool ok, object data, string error) Fail(string error) => (false, null, error);
+
     }
 }

@@ -1,21 +1,24 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.reserialize",
-        Scope = CommandScope.Editor,
-        Description = "Force reserialize assets (whole project or paths)",
-        Aliases = "reserialize")]
-    public static class ReserializeCommand
+    public class ReserializeCommand : CommandBase, ICommand<ReserializeParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ReserializeParams>(
+            CommandNames.Reserialize,
+            CommandScope.Editor,
+            "Force reserialize assets (whole project or paths)");
+
+        public void Run(ReserializeParams p)
         {
             try
             {
-                return CommandResult.Success(Editor.Services.ReserializeService.Reserialize(p));
+                var data = Editor.Services.ReserializeService.Reserialize(p);
+                CompleteSuccess(data);
             }
             catch (System.Exception ex)
             {
-                return CommandResult.Fail(ex.Message);
+                CompleteFail(ex.Message);
             }
         }
     }

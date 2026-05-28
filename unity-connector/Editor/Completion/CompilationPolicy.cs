@@ -2,29 +2,29 @@ namespace UnityCliConnector.Completion
 {
     public sealed class CompilationPolicy : ICompletionPolicy
     {
-        public string Kind => CommandJobCatalog.CompletionCompilation;
+        public string Kind => CommandCompletionCatalog.CompletionCompilation;
 
-        public bool TryComplete(JobRecord job, EditorStateSnapshot state, out object result, out string error)
+        public bool TryComplete(CommandRecord command, EditorStateSnapshot state, out object result, out string error)
         {
             result = null;
             error = null;
 
             if (state.IsCompiling)
             {
-                if (job.Status == JobStatus.Pending)
-                    job.Status = JobStatus.Running;
+                if (command.Status == CommandStatus.Pending)
+                    command.Status = CommandStatus.Running;
                 return false;
             }
 
-            if (job.Status == JobStatus.Running)
+            if (command.Status == CommandStatus.Running)
             {
                 result = new System.Collections.Generic.Dictionary<string, object> { ["compiled"] = true };
                 return true;
             }
 
-            if (job.Status == JobStatus.Pending)
+            if (command.Status == CommandStatus.Pending)
             {
-                job.Status = JobStatus.Running;
+                command.Status = CommandStatus.Running;
                 result = new System.Collections.Generic.Dictionary<string, object>
                 {
                     ["compiled"] = true,

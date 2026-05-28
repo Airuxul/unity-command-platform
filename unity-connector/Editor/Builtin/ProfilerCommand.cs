@@ -1,21 +1,24 @@
+using UnityCliConnector.Commands;
+
 namespace UnityCliConnector.Builtin
 {
-    [CliCommand(
-        "editor.profiler",
-        Scope = CommandScope.Editor,
-        Description = "Unity Profiler: hierarchy, enable, disable, status, clear",
-        Aliases = "profiler")]
-    public static class ProfilerCommand
+    public class ProfilerCommand : CommandBase, ICommand<ProfilerParams>, ICommandDescriptorProvider
     {
-        public static CommandResult Run(CliParams p)
+        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ProfilerParams>(
+            CommandNames.Profiler,
+            CommandScope.Editor,
+            "Unity Profiler: hierarchy, enable, disable, status, clear");
+
+        public void Run(ProfilerParams p)
         {
             try
             {
-                return CommandResult.Success(Editor.Services.ProfilerHierarchyService.Execute(p));
+                var data = Editor.Services.ProfilerHierarchyService.Execute(p);
+                CompleteSuccess(data);
             }
             catch (System.Exception ex)
             {
-                return CommandResult.Fail(ex.Message);
+                CompleteFail(ex.Message);
             }
         }
     }

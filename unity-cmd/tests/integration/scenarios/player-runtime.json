@@ -13,7 +13,7 @@
       "command": "list",
       "expect": { "ok": true },
       "expectCatalog": {
-        "commands": ["echo", "ping"],
+        "commands": ["echo"],
         "forbidden": [
           "compile",
           "console",

@@ -35,10 +35,10 @@ async function main() {
 
   console.log(`[integration] scenario=${scenarioName}`);
   const profileName = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
-  console.log(`[integration] waiting profile=${profileName}, timeout=${ATTACH_TIMEOUT_MS}ms`);
   const instance = await waitForInstanceAsync({
     profile: profileName,
     timeoutMs: ATTACH_TIMEOUT_MS,
+    logProgress: false,
   });
 
   if (!instance?.host || !instance?.port) {
@@ -55,17 +55,11 @@ async function main() {
   for (const step of scenario.steps) {
     const timeoutMs = step.timeoutMs ?? 20_000;
     const stepStarted = Date.now();
-    console.log(`[running] ${step.name} (timeout=${timeoutMs}ms)`);
-    const heartbeat = setInterval(() => {
-      const elapsed = Date.now() - stepStarted;
-      console.log(`[running] ${step.name} still running (${elapsed}ms)`);
-    }, 5000);
     try {
       const result = await Promise.race([
         runStep(step, profileName, timeoutMs),
         timeoutAfter(step.name, timeoutMs),
       ]);
-      clearInterval(heartbeat);
       if (shouldExportPlayProfiler(step, inPlay, result)) {
         exportPlayProfilerResult(scenarioName, step.name, result.output);
       }
@@ -76,7 +70,6 @@ async function main() {
       console.log(`[${result.status}] ${result.name} (${result.elapsedMs}ms)`);
       if (result.error) console.error(`  ${result.error}`);
     } catch (err) {
-      clearInterval(heartbeat);
       failed = true;
       const isTimeout = String(err.message).includes('exceeded');
       const result = {

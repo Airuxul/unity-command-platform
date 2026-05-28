@@ -197,7 +197,7 @@ export async function resolveTarget({ profile, timeoutMs = 20_000, verify = true
 }
 
 /** Poll until profile endpoint responds or timeout (integration tests). */
-export async function waitForInstance({ profile, timeoutMs = 20_000 } = {}) {
+export async function waitForInstance({ profile, timeoutMs = 20_000, logProgress = true } = {}) {
   const profileName = profile ?? process.env.UNITY_CMD_PROFILE ?? null;
   if (!profileName) return null;
 
@@ -205,7 +205,7 @@ export async function waitForInstance({ profile, timeoutMs = 20_000 } = {}) {
   let attempts = 0;
   while (Date.now() < deadline) {
     attempts += 1;
-    if (attempts === 1 || attempts % 5 === 0) {
+    if (logProgress && (attempts === 1 || attempts % 5 === 0)) {
       const remaining = Math.max(0, deadline - Date.now());
       console.log(`[connection] waiting profile=${profileName}, attempt=${attempts}, remaining=${remaining}ms`);
     }

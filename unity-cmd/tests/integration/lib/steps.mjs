@@ -22,9 +22,6 @@ const CLI = path.join(__dirname, '..', '..', '..', 'bin', 'unity-cmd.js');
 export function runCli(command, args = [], env, timeoutMs, profileName) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
-    console.log(
-      `[cli:start] cmd=${command} profile=${profileName} timeout=${timeoutMs}ms args=${JSON.stringify(args)}`,
-    );
     const child = spawn(process.execPath, [CLI, command, ...args], {
       env: {
         ...process.env,
@@ -57,11 +54,6 @@ export function runCli(command, args = [], env, timeoutMs, profileName) {
 
     child.on('close', (code) => {
       clearTimeout(timer);
-      if (!timeoutTriggered) {
-        console.log(
-          `[cli:end] cmd=${command} profile=${profileName} code=${code} elapsed=${Date.now() - started}ms stdout=${stdout.length}B stderr=${stderr.length}B`,
-        );
-      }
       resolve({ code, stdout, stderr });
     });
   });
@@ -77,8 +69,11 @@ export async function runStep(step, defaultProfile, timeoutMs) {
 
   if (step.waitProfile) {
     const timeout = step.timeoutMs ?? timeoutMs;
-    console.log(`[wait:profile] ${step.waitProfile} timeout=${timeout}ms`);
-    const target = await waitForInstance({ profile: step.waitProfile, timeoutMs: timeout });
+    const target = await waitForInstance({
+      profile: step.waitProfile,
+      timeoutMs: timeout,
+      logProgress: false,
+    });
     if (!target?.host) {
       return fail(
         step.name,

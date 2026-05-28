@@ -14,7 +14,8 @@
     "test": "npm run test:unit",
     "test:unit": "node --test tests/unit/**/*.test.js",
     "test:integration": "node tests/integration/runner.mjs",
-    "test:all": "npm run verify && npm run test:integration",
+    "test:integration:all": "node tests/integration/run-all.mjs",
+    "test:all": "npm run verify && npm run test:integration:all",
     "doc:check": "node scripts/doc-check.mjs"
   }
 }

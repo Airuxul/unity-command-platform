@@ -1,4 +1,4 @@
-﻿# unity-cli-command
+﻿# unity-cli
 
 [简体中文](README.zh-CN.md)
 

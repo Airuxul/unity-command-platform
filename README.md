@@ -1,8 +1,8 @@
 # unity-cli
 
-[¼òÌåÖÐÎÄ](README.zh-CN.md)
+[ç®€ä½“ä¸­æ–‡](README.zh-CN.md)
 
-Command-line control of Unity Editor over loopback HTTP ¡ª for scripts, CI, and agents.
+Command-line control of Unity Editor over loopback HTTP â€” for scripts, CI, and agents.
 
 | Package | Role |
 |---------|------|
@@ -12,15 +12,15 @@ Command-line control of Unity Editor over loopback HTTP ¡ª for scripts, CI, and 
 ## How it works
 
 ```text
-unity-cmd  ¡ú  GET /health, POST /list, POST /command, GET /commands/{id}
+unity-cmd  â†’  GET /health, POST /list, POST /command, GET /commands/{id}
               unity-connector (Editor :6547, Editor Play :6794, Player :6795)
 ```
 
 - Unity publishes the command catalog (`POST /list`); the CLI resolves aliases and caches it per endpoint (`~/.unity-cmd/cache/catalog-<host>:<port>.json`).
-- Long work (`compile`, `play`, ¡­) returns **HTTP 202**; the CLI polls `GET /commands/{id}`.
+- Long work (`compile`, `play`, â€¦) returns **HTTP 202**; the CLI polls `GET /commands/{id}`.
 - Failures are JSON: `ok`, `error_code`, optional `hint`.
 
-Built-ins include play/stop, console, exec, profiler, screenshot, menu, reserialize. Extend commands in the connector ¡ª see [unity-connector/README.md](unity-connector/README.md).
+Built-ins include play/stop, console, exec, profiler, screenshot, menu, reserialize. Extend commands in the connector â€” see [unity-connector/README.md](unity-connector/README.md).
 
 ## Quick start
 
@@ -40,11 +40,11 @@ CLI flags and npm scripts: [unity-cmd/README.md](unity-cmd/README.md).
 
 After editing connector C#: `unity-cmd --profile editor compile` (alias `recompile`) or `refresh --compile true --timeout 30000`.
 
-Fixed ports: **Editor `6547`**, **Editor Play `6794`**, **Player `6795`** ¡ª all three can run together on one machine.
+Fixed ports: **Editor `6547`**, **Editor Play `6794`**, **Player `6795`** â€” all three can run together on one machine.
 
 ## AI / Agent usage
 
-The [Cursor Agent Skill](https://cursor.com/docs/skills) source lives in **`docs/unity-cmd-skill/`** (committed to Git). `.cursor/` is usually not committed ¡ª **copy the folder into your local skills directory once**.
+The [Cursor Agent Skill](https://cursor.com/docs/skills) source lives in **`docs/unity-cmd-skill/`** (committed to Git). `.cursor/` is usually not committed â€” **copy the folder into your local skills directory once**.
 
 ### Install the skill (required)
 
@@ -73,7 +73,7 @@ See [docs/unity-cmd-skill/README.md](docs/unity-cmd-skill/README.md).
 ### Layout in the repo
 
 ```text
-docs/unity-cmd-skill/           # source in Git ¡ú copy to .cursor/skills/unity-cmd/
+docs/unity-cmd-skill/           # source in Git â†’ copy to .cursor/skills/unity-cmd/
   SKILL.md
   references/guide.zh-CN.md
 ```
@@ -91,23 +91,23 @@ docs/unity-cmd-skill/           # source in Git ¡ú copy to .cursor/skills/unity-
 ### Default logic (user asks to do X in Editor or runtime)
 
 ```text
-1. Pick domain ¡ú profile (editor / editor-play / package-play)
-2. unity-cmd --profile <name> list ¡ú match user intent on commands[]
-3. Catalog present but no match ¡ú list --refresh-catalog ¡ú match again
-4. Still no match ¡ú explain, suggest 2¨C5 command names ¡ú abort; do not invent commands
-5. ping OK ¡ú run matched command
+1. Pick domain â†’ profile (editor / editor-play / package-play)
+2. unity-cmd --profile <name> list â†’ match user intent on commands[]
+3. Catalog present but no match â†’ list --refresh-catalog â†’ match again
+4. Still no match â†’ explain, suggest 2â€“5 command names â†’ abort; do not invent commands
+5. ping OK â†’ run matched command
 ```
 
 Catalog lives in `~/.unity-cmd/cache/catalog-<host>_<port>.json` (CLI-managed). **Do not** copy it into skill markdown. Refresh: `list --refresh-catalog`.
 
 ### Example 1: check compile after script changes
 
-**User:** *"I changed C# ¡ª check Unity compile errors."*
+**User:** *"I changed C# â€” check Unity compile errors."*
 
 **Agent:**
 
 1. `unity-cmd --profile editor list`; confirm `compile` and `console` in `commands`.
-2. No match ¡ú abort per skill; do not invent commands.
+2. No match â†’ abort per skill; do not invent commands.
 3. Run:
 
 ```bash
@@ -152,8 +152,8 @@ then compile in the Unity Editor and show the last 20 error/warning console line
 
 ### Rules for agents
 
-- Flags come from `list` / catalog JSON ¡ª never invent CLI flags; do not maintain skill markdown command caches.
-- `play` / `stop` ¡ú profile **`editor`** only; runtime `echo` while playing ¡ú **`editor-play`**.
+- Flags come from `list` / catalog JSON â€” never invent CLI flags; do not maintain skill markdown command caches.
+- `play` / `stop` â†’ profile **`editor`** only; runtime `echo` while playing â†’ **`editor-play`**.
 
 ## Commands per instance
 
@@ -166,7 +166,7 @@ unity-cmd profile create package-play --port 6795 --host-kind player
 unity-cmd profile list
 ```
 
-### 1. Editor ¡ª Edit Mode (profile `editor`, port **6547**)
+### 1. Editor â€” Edit Mode (profile `editor`, port **6547**)
 
 **When:** Unity Editor is open.  
 **Prerequisite:** Project has `unity-connector` installed; Console shows `http://127.0.0.1:6547/`.
@@ -232,7 +232,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#runtime--play-mode-http), [
 
 ## vs [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli)
 
-Same idea (local HTTP, no MCP). **Not a fork** ¡ª different CLI, protocol, and extension model.
+Same idea (local HTTP, no MCP). **Not a fork** â€” different CLI, protocol, and extension model.
 
 | | [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) | This repo |
 |---|------------------------------------------------------------------------|-----------|
@@ -241,11 +241,11 @@ Same idea (local HTTP, no MCP). **Not a fork** ¡ª different CLI, protocol, and e
 | Commands | `unity-cli editor play` | `unity-cmd play` |
 | Discovery | Per-request reflection; `list` + param schemas | `POST /list` catalog + CLI cache |
 | Long tasks | Sync HTTP + `--wait` | **202 deferred command status** + poll |
-| Runtime / Play-mode | **Editor Edit Mode only** ¡ª no HTTP while playing, no Dev player endpoint | **`editor_play` :6794** + **`player` :6795**; runtime via play/player profiles; editor tools stay on **`editor` :6547** |
+| Runtime / Play-mode | **Editor Edit Mode only** â€” no HTTP while playing, no Dev player endpoint | **`editor_play` :6794** + **`player` :6795**; runtime via play/player profiles; editor tools stay on **`editor` :6547** |
 | Status | `unity-cli status` | `ping`, `state` |
 | Custom tools | `[UnityCliTool]` + `HandleCommand(JObject)` | `Descriptor` + single `Run(...)` command class + `[CliParam]` |
 | Output | `success` / `message` | `ok`, `data`, `error_code`, `hint` |
-| Extras | `test`, `update` | ¡ª (use Unity/CI for tests) |
+| Extras | `test`, `update` | â€” (use Unity/CI for tests) |
 | Compile deferred timeout | 120s | 30s (`compile` default) |
 
 | Upstream | Here |

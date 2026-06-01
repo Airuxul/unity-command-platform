@@ -1,6 +1,6 @@
 # unity-cmd
 
-[¼òÌåÖÐÎÄ](README.zh-CN.md)
+[ç®€ä½“ä¸­æ–‡](README.zh-CN.md)
 
 Node.js CLI that sends commands to [unity-connector](../unity-connector/) over HTTP.
 
@@ -50,7 +50,7 @@ unity-cmd --profile editor-play echo
 
 Commands and aliases come from Unity (`POST /list`), cached under `~/.unity-cmd/cache/`.
 
-**Local-only (no profile):** `help`, `profile ¡­`
+**Local-only (no profile):** `help`, `profile â€¦`
 
 **Remote (profile required):** `ping`, `list`, and all connector commands.
 

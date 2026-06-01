@@ -5,7 +5,7 @@
 | Document | Description |
 |----------|-------------|
 | [../README.md](../README.md) | Overview, upstream comparison, [commands per instance](../README.md#commands-per-instance), [AI examples](../README.md#ai--agent-usage) |
-| [unity-cmd-skill/](unity-cmd-skill/SKILL.md) | **Cursor Skill source** â€?copy to `.cursor/skills/unity-cmd/` ([README](../README.md#ai--agent-usage)) |
+| [unity-cmd-skill/](unity-cmd-skill/SKILL.md) | **Cursor Skill source** â€”copy to `.cursor/skills/unity-cmd/` ([README](../README.md#ai--agent-usage)) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture and request flow ([Runtime / Play-mode](ARCHITECTURE.md#runtime--play-mode-http)) |
 | [AGENTS.md](AGENTS.md) | Automation quick reference |
 | [MAINTENANCE.md](MAINTENANCE.md) | Command contract, bump builds, integration tests |

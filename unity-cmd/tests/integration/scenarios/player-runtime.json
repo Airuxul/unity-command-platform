@@ -1,6 +1,6 @@
 {
   "name": "player-runtime",
-  "description": "Development Build player â€” runtime commands only, Editor tools must fail",
+  "description": "Development Build player â€?runtime commands only, Editor tools must fail",
   "steps": [
     {
       "name": "01_ping_player",

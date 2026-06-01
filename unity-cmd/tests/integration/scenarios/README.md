@@ -1,4 +1,4 @@
-ï»¿# Integration scenarios
+# Integration scenarios
 
 | Scenario | Default profile | Unity prerequisite |
 |----------|-----------------|-------------------|
@@ -21,10 +21,10 @@ npm run test:integration
 
 ## editor-lifecycle (~26 steps)
 
-1. **Edit mode** â€” ping, state, catalog, echo (editor channel), console, profiler, exec  
-2. **Play** â€” play, wait for editor-play endpoint  
-3. **Play mode** â€” runtime echo on editor_play; catalog isolation; editor host: state, profiler, screenshot  
-4. **Exit** â€” stop, verify edit mode restored  
+1. **Edit mode** ¡ª ping, state, catalog, echo (editor channel), console, profiler, exec  
+2. **Play** ¡ª play, wait for editor-play endpoint  
+3. **Play mode** ¡ª runtime echo on editor_play; catalog isolation; editor host: state, profiler, screenshot  
+4. **Exit** ¡ª stop, verify edit mode restored  
 
 ## player-runtime (7 steps)
 

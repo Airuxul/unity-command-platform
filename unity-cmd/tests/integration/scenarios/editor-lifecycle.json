@@ -1,6 +1,6 @@
 {
   "name": "editor-lifecycle",
-  "description": "Editor edit mode tools â†’ Play â†’ editor_play runtime + editor screenshot/profiler â†’ stop â†’ edit mode again",
+  "description": "Editor edit mode tools â†?Play â†?editor_play runtime + editor screenshot/profiler â†?stop â†?edit mode again",
   "steps": [
     {
       "name": "00_force_stop_before_suite",

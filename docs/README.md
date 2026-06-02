@@ -10,6 +10,6 @@
 | [AGENTS.md](AGENTS.md) | Automation quick reference |
 | [MAINTENANCE.md](MAINTENANCE.md) | Command contract, bump builds, integration tests |
 | [../unity-cmd/README.md](../unity-cmd/README.md) | CLI usage |
-| [../unity-connector/README.md](../unity-connector/README.md) | Connector install and commands |
+| [../com.air.unity-connector/README.md](../com.air.unity-connector/README.md) | Connector install and commands |
 | [../unity-cmd/docs/IMPLEMENTATION.md](../unity-cmd/docs/IMPLEMENTATION.md) | CLI implementation |
-| [../unity-connector/docs/IMPLEMENTATION.md](../unity-connector/docs/IMPLEMENTATION.md) | HTTP API reference |
+| [../com.air.unity-connector/docs/IMPLEMENTATION.md](../com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API reference |

@@ -1,21 +1,20 @@
 # unity-connector — Implementation
 
-Version: 0.1.7
+Version: 2.3.0
 
 ## Package
 
-- **UPM name:** `unity-connector`
+- **UPM name:** `com.air.unity-connector`
 - **Version:** see `package.json` (synced with this doc `Version:` line for `doc:check`)
 
-## Code organization (Core)
+## Code organization
 
-| Module | Files | Responsibility |
-|--------|-------|----------------|
-| Commands | `Commands/`, `CommandDiscovery`, `CommandPipeline` | Typed command interfaces, runtime-bound execution, host-aware routing |
-| HTTP | `Http/`, `ConnectorJson` | `ConnectorHttpEndpoint`, `MainThreadHttpWork`, listener, routes, JSON bodies |
-| Command state | `CommandStateCore`, `CommandContext`, `CommandNotifier`, `CommandPersistence` | Shared deferred lifecycle; Editor/Runtime managers |
-| Execution | `CommandExecutor` | Shared command execution entry (single path) |
-| Play hosts | `Runtime/Http/*`, `Runtime/State/*`, `Runtime/Bootstrap/*` | `editor_play` / `player` HTTP on main thread |
+| Module | Location | Responsibility |
+|--------|----------|----------------|
+| Protocol | `Runtime/Host`, `Runtime/Http`, `Runtime/Invoke`, `Runtime/Job` | `HttpListenerHost`, `HostNetwork`, `InvokeCatalog`, `JobStateCore` (moved from game-core) |
+| Connector HTTP | `Runtime/Connector/Http` | `ConnectorHttpEndpoint`, `ConnectorMainThreadScheduler`, routes |
+| CLI commands | `Runtime/Cli`, `Editor/Commands` | `CliCommandDiscovery`, builtins, `InvokePipeline` |
+| Play hosts | `Runtime/Http`, `Runtime/State`, `Runtime/Bootstrap` | `editor_play` / `player` HTTP on main thread |
 
 Editor assembly adds deferred command dispatch, completion policies, builtins, and services (see folder layout below).
 
@@ -23,8 +22,8 @@ Editor assembly adds deferred command dispatch, completion policies, builtins, a
 
 | Folder | Contents |
 |--------|----------|
-| `Http/` | `EditorHttpSupervisor`, `EditorHttpLocalCache`, `EditorHttpHost`, `EditorMainThreadHttp`, `EditorHttpSession`, `EditorHttpHealth`, `EditorPlayHttpBootstrap` |
-| `Dispatch/` | `EditorCommandHost`, `EditorCommandExecutor`, `EditorCommandStore`, `CommandStateManager` |
+| `Http/` | `EditorConnectorServer`, `EditorConnectorBootstrap`, `EditorHttpLocalCache`, `EditorInstanceFile`, `EditorHttpSession`, `EditorPlayHttpBootstrap` |
+| `Dispatch/` | `EditorInvokeHost`, `EditorJobStore`, `EditorJobStateManager` |
 | `Commands/` | Builtin Editor commands (`play`, `compile`, `screenshot`, …) |
 | `Completion/` | Deferred completion policies (`enter_play`, `exit_play`, `compilation`) |
 | `Services/` | `EditorManageService`, `AssetRefreshService`, `UnityConsoleReader`, … |
@@ -37,9 +36,10 @@ Editor assembly adds deferred command dispatch, completion policies, builtins, a
 
 | Folder | Contents |
 |--------|----------|
-| `Http/` | `PlayModeHttpEndpoint`, `PlayModeHttpHosts`, `PlayModeCommandBridge`, `PlayModeCommandHost`, `PlayModeCommandExecutor` |
+| `Http/` | `PlayConnectorServer`, `PlayModeHttpHosts`, `PlayModeInvokeHost` |
+| `Connector/Http/` | `ConnectorServerFactory`, `ConnectorServerCore`, `ConnectorMainThreadScheduler`, `ConnectorRequestDispatcher` |
 | `Commands/` | Runtime builtins (`echo`, log helpers, tests) |
-| `State/` | `RuntimeCommandStateManager`, `RuntimeCommandStore` |
+| `State/` | `RuntimeJobStateManager`, `RuntimeJobStore` |
 | `Params/` | Runtime command parameter DTOs |
 | `Bootstrap/` | `DevPlayerBootstrap` |
 | `UI/` | `RuntimeCliConsole` (optional dev UI) |
@@ -48,9 +48,8 @@ Editor assembly adds deferred command dispatch, completion policies, builtins, a
 
 | Assembly | Platform | Contents |
 |----------|----------|----------|
-| `UnityCliConnector.Core` | all | Protocol, `CommandDiscovery`, `CommandExecutor`, `CommandStateCore`, `ConnectorJson` |
-| `UnityCliConnector.Editor` | Editor | `EditorHttpHost` (Edit Mode), `EditorPlayHttpBootstrap` (Play → `EditorPlayHttpHost`), `CommandStateManager`, builtins |
-| `UnityCliConnector.Runtime` | Editor + Development Build player | Play-mode HTTP host stack, runtime command store/state, runtime builtins, `DevPlayerBootstrap` |
+| `UnityCliConnector.Runtime` | Editor + Development Build (`UNITY_EDITOR \|\| DEVELOPMENT_BUILD`) | `Host` / `Http` / `Invoke` / `Job`, connector HTTP stack, `CliCommandDiscovery`, play hosts, `DevPlayerBootstrap` |
+| `UnityCliConnector.Editor` | Editor | `EditorConnectorServer` / `EditorConnectorBootstrap`, `EditorPlayHttpBootstrap`, `EditorJobStateManager`, Editor builtins |
 
 ## HTTP API (Editor)
 
@@ -71,19 +70,21 @@ All three can run on one PC at the same time without port clashes. CLI: named pr
 
 ## Runtime / Play-mode stack
 
-Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as the Editor host. Runtime logic is now isolated in `UnityCliConnector.Runtime` (sibling to `Editor`).
+Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpListenerHost` as the Editor host (`Runtime/Connector/Http` + `Runtime/Http`).
 
 ### Components
 
 | Type | Role |
 |------|------|
-| `ConnectorHttpEndpoint` (Core) | Shared listener: `TryStart` / `Stop` / `TryProbeHealth`; used by Editor supervisor and play-mode stacks |
-| `MainThreadHttpWork` (Core) | Shared drain for `POST /command`, `POST /list`, `GET /commands/{id}` on main thread |
-| `PlayModeHttpStack` | Wires `PlayModeCommandHost` + `PlayModeCommandBridge` + `ConnectorHttpEndpoint` for one port |
+| `ConnectorHttpEndpoint` | Shared listener: `TryStart` / `Stop` / `TryProbeHealth`; used by Editor and play-mode servers |
+| `ConnectorServerFactory` / `ConnectorServerCore` | Wires `IInvokeHost` + `ConnectorMainThreadScheduler` + `ConnectorHttpEndpoint` |
+| `ConnectorMainThreadScheduler` | Single-flight `POST /command` (`503` busy); optional `503` reloading during domain reload |
+| `MainThreadHttpWork` | Shared drain for `POST /command`, `POST /list`, `GET /commands/{id}` on main thread |
+| `IConnectorServer` | Unified lifecycle (`Start` / `Stop` / `IsListening`) for Editor and Play |
+| `PlayConnectorServer` | Play-mode server (`editor_play`, `player`); main-thread drain via `BridgeDriver` |
 | `PlayModeHttpHosts.EditorPlayHttpHost` | `host=editor_play`, port `ResolveEditorPlayPort()` |
 | `PlayModeHttpHosts.PlayerHttpHost` | `host=player`, port `ResolvePlayerPort()` |
-| `PlayModeCommandHost` | `ICommandHost`; `/health` host string; routes via unified `CommandPipeline` |
-| `PlayModeCommandBridge` | `ICommandScheduler`; queues POST `/command` on a hidden `GameObject` `Update` (main thread) |
+| `PlayModeInvokeHost` | `IInvokeHost`; `/health` host string; routes via unified `InvokePipeline` |
 | `EditorPlayHttpBootstrap` | `[InitializeOnLoad]` — start/stop `EditorPlayHttpHost` on Play Mode transitions |
 | `DevPlayerBootstrap` | `[RuntimeInitializeOnLoadMethod]` — `PlayerHttpHost.Start()` in Development Build players |
 | `ConnectorHttpLifecycle` | Shared start/stop for Editor and play-mode listeners |
@@ -93,17 +94,18 @@ Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as 
 
 **Editor HTTP (`editor`, :6547):**
 
-1. `EditorHttpSupervisor` owns the listener: start/stop, health probe, watchdog, catalog warmup.
+1. `EditorConnectorServer` (`IConnectorServer`) owns the listener; `EditorConnectorBootstrap` handles start/stop, health probe, watchdog, catalog warmup.
 2. `EditorHttpLocalCache` persists `~/.unity-cmd/editor-http.json` (`pid`, `session_id`, `listener_id`, `status`) so each domain reload can release orphans and only one server binds the port.
 3. Stays up during Play; `beforeAssemblyReload` stops cleanly and marks cache `stopped`; `afterAssemblyReload` / Play / watchdog call `RequestEnsureRunning`.
-4. `GET /health` returns `session_id`, `generation`, `ready`, `blocking_reasons`.
-5. `POST /list`, `POST /command`, `GET /commands/{id}` run on the Editor main thread via `EditorMainThreadHttp`.
+4. `GET /health` returns `session_id`, `generation`, `listener_running`, `connector_state`, `play_mode`, `commands_ready` (alias `ready`), and `blocking_reasons` (connector-only: `reloading` / `compiling`; Play Mode is not a blocker).
+5. `POST /list`, `POST /command`, `GET /commands/{id}` run on the Editor main thread via `ConnectorMainThreadScheduler` (single-flight; concurrent commands get `503` busy).
+6. **`canAcceptCommand`** (Editor) checks `ListenerActive` only — not full `/health.ready`. During domain reload the scheduler returns `503` + `error=reloading`; deferred commands rely on CLI `allow_connection_retry` to retry until the shared timeout budget expires.
 
 **Editor Play (`editor_play`):**
 
 1. `EditorApplication` enters Play → `EditorPlayHttpBootstrap` calls `EditorPlayHttpHost.Start()`.
-2. `PlayModeHttpStack` starts `ConnectorHttpEndpoint` and `PlayModeCommandBridge.EnsureStarted()`.
-3. Exiting Play → `EditorPlayHttpHost.Stop()`; listener thread shuts down without logging benign abort errors (`HttpServer` treats `ThreadAbortException` / listener stop as normal).
+2. `PlayConnectorServer` starts `ConnectorHttpEndpoint` and `BridgeDriver` for main-thread drain.
+3. Exiting Play → `EditorPlayHttpHost.Stop()`; listener thread shuts down without logging benign abort errors when the listener stops normally.
 
 **Dev player (`player`):**
 
@@ -113,10 +115,10 @@ Play-mode HTTP reuses the same `ConnectorRequestDispatcher` and `HttpServer` as 
 ### Scope routing on play-mode hosts
 
 ```text
-ConnectorHostKind.IsPlayModeHost(hostKind)  →  editor_play | player
+HostKind.IsPlayModeHost(hostKind)  →  editor_play | player
 ```
 
-| Handler `CommandScope` | `editor` :6547 | `editor_play` :6794 | `player` :6795 |
+| Handler `CommandHostScope` | `editor` :6547 | `editor_play` :6794 | `player` :6795 |
 |------------------------|----------------|---------------------|----------------|
 | `Editor` | Yes | No | No |
 | `Runtime` | No | Yes | Yes |
@@ -126,8 +128,9 @@ Profiler, screenshot, and `state` are **Editor** scope — use profile **`editor
 
 ### Play-mode HTTP
 
-- **Deferred commands supported:** `POST /command` may return `202`; `GET /commands/{id}` via `RuntimeCommandStore`.
-- **Main thread:** Handlers run on the play loop via `BridgeDriver.Update`; avoid blocking.
+- **Deferred commands supported:** `POST /command` may return `202`; `GET /commands/{id}` via `RuntimeJobStore`.
+- **Main thread:** Handlers run on the play loop via `PlayConnectorServer` `BridgeDriver.Update`; avoid blocking.
+- **Single-flight:** Concurrent `POST /command` on the same host returns `503` + `error=busy`.
 - **Screenshot in Play:** `screenshot` (`Scope = editor`) — use profile **`editor`** (:6547) even while playing; `view=game` captures Game view; `view=scene` needs Scene view.
 - **Profiler in Play:** Use `editor` profile on :6547 for edit-mode profiler; in-play hierarchy often uses `editor-play` if command is `runtime`/`any` scope only.
 
@@ -164,11 +167,11 @@ Command accepted: `202` + `{ command_id, request_id }`.
 
 ## Command discovery
 
-- Command class with `ICommandDescriptorProvider.Descriptor` (typically `new CommandDescriptor<TParams>(...)` or `new DeferredCommandDescriptor<TParams>(...)`).
-- Execution entry is unified as `Run(...)`; runtime callbacks are injected through `CommandBase`.
-- `CommandDiscovery` scans loaded assemblies at domain load; it builds handlers from command interfaces and instantiates command objects per execution.
-- Param type: `Descriptor.ParamType` or inferred from `Run(...)` parameter list.
-- `CommandCompletionCatalog.GetCompletionKind`: deferred commands use `DeferredCommandDescriptor.Completion`; override `refresh` + `compile=true` → `compilation`.
+- Command class implements `ICliInvokeDescriptorProvider` (`CliCommand` / `CliCommand<T>` with `InvokeDescriptor` or `DeferredInvokeDescriptor<TParams>`).
+- Execution entry is `Run()` / `Run(TParams)`; runtime callbacks via `BindRuntime` → `InvokeContext`.
+- `CliCommandDiscovery` scans loaded assemblies; skips abstract types; builds `IInvokeHandler` per concrete command.
+- Param type: `Descriptor.ParamType` or `CliCommand<TParams>`.
+- `InvokeCompletionCatalog.GetCompletionKind`: deferred commands use `DeferredInvokeDescriptor.Completion`. `refresh` is immediate in catalog; `compile=true` upgrades the job to `compilation` at runtime.
 
 ## Command parameters (`CliParam`)
 
@@ -189,20 +192,20 @@ Builtin param classes: `Editor/Params/EditorCommandParams.cs`, `Runtime/Params/E
 
 ## Deferred lifecycle
 
-**Editor host (`CommandStateManager`):**
+**Editor host (`EditorJobStateManager`):**
 
-1. `CommandPipeline` creates command status via `CommandStateManager`.
+1. `InvokePipeline` creates command status via `EditorJobStateManager`.
 2. `compile` / `refresh --compile` call `ScriptCompilationService` (Unity pipeline events; see below); play/stop run immediately.
 3. `EditorApplication.update` → completion policy tick (fallback when compilation service did not finish).
 4. Terminal: `succeeded` | `failed` | `orphaned` (no progress 20s).
 5. **No handler redispatch** after domain reload.
 
-**Play / player hosts (`RuntimeCommandStateManager`):**
+**Play / player hosts (`RuntimeJobStateManager`):**
 
-1. `PlayModeCommandHost` → `CommandPipeline` → `RuntimeCommandStateManager.Create(host, …)`.
-2. `PlayModeCommandExecutor.ExecuteCommand` runs the command on the play main thread.
-3. `PlayModeCommandBridge.Drain` ticks `RuntimeCommandStateManager` each frame; command status persists per host in `PlayerPrefs`.
-4. `GET /commands/{id}` via `RuntimeCommandStore` + shared `CommandResponseBuilder`.
+1. `PlayModeInvokeHost` → `InvokePipeline` → `RuntimeJobStateManager.Create(host, …)`.
+2. `InvokeExecutor.Execute` on the play main thread (via `PlayModeInvokeHost`).
+3. `PlayConnectorServer` `BridgeDriver` drains the scheduler each frame; `RuntimeJobStateManager` ticks per host; command status persists in `PlayerPrefs`.
+4. `GET /commands/{id}` via `RuntimeJobStore` + `JobResponseBuilder`.
 
 ### Completion policies
 
@@ -213,7 +216,7 @@ Builtin param classes: `Editor/Params/EditorCommandParams.cs`, `Runtime/Params/E
 | `exit_play` | Editor | `!EditorApplication.isPlaying` |
 | `started` (`signal`) | Editor / Play / player | command decides completion via `ctx.CompleteSuccess/CompleteFail` or `ctx.RunBackground` (no extra policy class needed) |
 
-## Host routing (`CommandAvailability`)
+## Host routing (`InvokeAvailability`)
 
 | HTTP host | Allowed scopes |
 |-----------|------------------|
@@ -233,7 +236,7 @@ CLI (`unity-cmd/src/client/connection.js`): profile file only — no port scanni
 
 **LAN:** `UNITY_CMD_BIND=lan` or `UNITY_CMD_LAN=1` on Unity; remote machine: `unity-cmd profile create phone --host <ip> --port <p> --host-kind editor_play`.
 
-**Compile / domain reload:** Editor HTTP stops and restarts (including brief gaps on enter/exit Play); CLI `allow_connection_retry` on deferred commands retries until timeout. In-flight command status is lost (poll returns `command_not_found`); re-issue command after reload.
+**Compile / domain reload:** Editor HTTP stops and restarts (including brief gaps on enter/exit Play). Instance heartbeat stays `reloading` with `listener_running: false` until the new listener + catalog warmup complete; CLI `waitForConnectorReady` checks state via the unified readiness abstraction (instance file + `editor-http.json` + `/health` `session_id`/`generation` for editor, direct `/health` for play/player). CLI `allow_connection_retry` on deferred commands retries until timeout. Pending deferred jobs are flushed to `EditorJobLedger` before reload; `GET /commands/{id}` resolves from memory or ledger after restart (handlers are not redispatched).
 
 **HTTP (unified):** `ConnectorRequestDispatcher` — `/health`, `POST /list`, `GET /commands/{id}`, `POST /command` via `IMainThreadHttpScheduler` (Editor / play-mode bridges).
 
@@ -247,7 +250,7 @@ CLI (`unity-cmd/src/client/connection.js`): profile file only — no port scanni
 | `compile` | `recompile`, `reload` | yes | editor | `compilation`, 30s default |
 | `play` | — | yes | editor | `enter_play`, 60s |
 | `stop` | — | yes | editor | `exit_play`, 60s |
-| `refresh` | — | if `compile=true` | editor | `AssetRefreshService.Refresh(RefreshParams)` |
+| `refresh` | — | immediate; `compile=true` → compilation job | editor | `AssetRefreshService.Refresh(RefreshParams)` |
 | `console` | — | no | editor | LogEntries reflection |
 | `menu` | — | no | editor | `ExecuteMenuItem` |
 | `screenshot` | — | no | editor | Scene/Game PNG; Editor host only |
@@ -260,7 +263,7 @@ CLI (`unity-cmd/src/client/connection.js`): profile file only — no port scanni
 
 ### `state`
 
-No parameters. Returns `is_playing`, `is_compiling`, `ready_for_tools`, `blocking_reasons`, `active_command`, `connector_build`, `recent_console` (last N entries).
+No parameters. Returns `connector_state`, `play_mode`, `commands_ready`, `is_playing`, `is_paused`, `is_compiling`, `ready_for_tools`, `blocking_reasons` (connector-only), `active_command`, `connector_build`, `recent_console` (last N entries).
 
 ### `console`
 
@@ -338,7 +341,7 @@ No parameters. Returns `is_playing`, `is_compiling`, `ready_for_tools`, `blockin
 
 ## Main-thread execution
 
-Editor commands run on the main thread via `EditorMainThreadHttp` (queued from HTTP); worker threads never call Unity APIs or `CommandDiscovery`.
+Editor commands run on the main thread via `ConnectorMainThreadScheduler` (queued from HTTP); worker threads never call Unity APIs or `CliCommandDiscovery`.
 
 ## Services (Editor)
 
@@ -363,7 +366,9 @@ Set `UNITY_PROJECT_PATH` for external test project reference.
 ## Extending
 
 ```csharp
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Cli;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
 
 public sealed class MyToolParams
 {
@@ -371,27 +376,24 @@ public sealed class MyToolParams
     public string Name { get; set; }
 }
 
-public class MyToolCommand : CommandBase, ICommand<MyToolParams>, ICommandDescriptorProvider
+public sealed class MyToolCommand : CliCommand<MyToolParams>
 {
-    public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<MyToolParams>(
-        "my.tool", CommandScope.Editor, "…",
-        defaultTimeoutMs: 30000);
+    public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<MyToolParams>(
+        "my.tool", CommandHostScope.Editor, "…", defaultTimeoutMs: 30000);
 
-    public void Run(MyToolParams p)
-    {
-        // kick off async work
-        MarkRunning();
-    }
+    public override void Run(MyToolParams p) => MarkRunning();
 }
 ```
 
 ### Task-based deferred template (recommended)
 
-For most async commands, use default `started` completion and report from `CommandContext` directly (no custom completion policy class).
+For most async commands, use default `started` completion and report from `InvokeContext` callbacks (`CompleteSuccess` / `CompleteFail`).
 
 ```csharp
 using System.Threading;
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Cli;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
 
 public sealed class SlowHashParams
 {
@@ -399,20 +401,20 @@ public sealed class SlowHashParams
     public string Input { get; set; }
 }
 
-public sealed class SlowHashCommand : CommandBase, ICommand<SlowHashParams>, ICommandDescriptorProvider
+public sealed class SlowHashCommand : CliCommand<SlowHashParams>
 {
-    public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<SlowHashParams>(
+    public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<SlowHashParams>(
         "slow.hash",
-        CommandScope.Runtime,
+        CommandHostScope.Runtime,
         "Compute hash in background Task",
         defaultTimeoutMs: 15000);
 
-    public void Run(SlowHashParams p)
+    public override void Run(SlowHashParams p)
     {
         MarkRunning();
         _ = System.Threading.Tasks.Task.Run(() =>
         {
-            Thread.Sleep(800); // simulate expensive work
+            Thread.Sleep(800);
             var hash = p.Input?.GetHashCode() ?? 0;
             CompleteSuccess(new { hash, input = p.Input });
         });

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-通过 HTTP 向 [unity-connector](../unity-connector/) 发送命令的 Node.js 命令行工具。
+通过 HTTP 向 [unity-connector](../com.air.unity-connector/) 发送命令的 Node.js 命令行工具。
 
 **版本：** 0.1.0
 
@@ -54,6 +54,8 @@ unity-cmd --profile editor help
 | `editor` | 6547 | Editor 打开（编译、进出场 Play 等） |
 | `editor-play` | 6794 | Editor 播放中 |
 | `package-play` | 6795 | Development Build 运行中 |
+
+默认端口定义见 [`src/constants.js`](src/constants.js)（`doc:check` 会校验 README 与之一致）。
 
 `play` / `stop` 始终使用 profile **`editor`**。
 

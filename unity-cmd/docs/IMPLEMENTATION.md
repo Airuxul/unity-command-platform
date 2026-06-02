@@ -8,23 +8,27 @@ Thin HTTP client and argv front-end. No Unity business logic; all commands come 
 
 ## Entry point
 
-`bin/unity-cmd.js` → `src/dispatch.js` with `process.argv` slice from index 2. No command prints local help.
+`bin/unity-cmd.js` → `src/cli.js` (`parseArgs`, `runCommand`) → `remote-command.js` / `profile.js` / `help.js`.
 
 ## Modules
 
 | Path | Responsibility |
 |------|----------------|
-| `src/timeout.js` | Default 20s; `UNITY_CMD_TIMEOUT_MS` |
-| `src/client/connection.js` | Profiles, `PING_MAX_ATTEMPTS` (3) / `PING_RETRY_INTERVAL_MS` (3000), `resolveTarget`, `waitForInstance` |
+| `src/constants.js` | Ports, timeouts, protocol strings, profile help formatters |
+| `src/runtime.js` | `resolveTimeoutMs`, `createCommandBudget`, `checkMinConnectorBuild` |
+| `src/cli.js` | `parseArgs` (`--key=value`, `--timeout`, `--help`); command routing |
+| `src/remote-command.js` | `ping`, `list`, remote command execution |
+| `src/client/connection.js` | Profiles, `resolveTarget`, host-kind helpers |
+| `src/client/connector-readiness.js` | Instance heartbeat, `waitForConnectorReady`, `waitForProfileReady` |
+| `src/client/editor-http-cache.js` | `~/.unity-cmd/editor-http.json` session coordination |
 | `src/client/http.js` | `fetch` + `AbortSignal` timeout |
 | `src/client/command-status.js` | Poll `GET /commands/{id}` until terminal status |
-| `src/client/command.js` | `ping` → `GET /health`; `fetchCatalog` → `POST /list`; `sendCommand` → `POST /command` |
+| `src/client/command.js` | `ping`, `fetchCatalog`, `sendCommand` |
 | `src/profile.js` | `profile list|show|create|set|delete` |
-| `src/catalog.js` | Cache, alias resolve, scope checks, `connector_build` + `catalog_version` invalidation |
-| `src/params.js` | Coerce flags (`compile`, `clear`, `force`) for Unity JSON bodies |
+| `src/catalog.js` | Cache, alias resolve, scope checks, cache invalidation |
+| `src/params.js` | Coerce flags for Unity JSON bodies |
 | `src/errors.js` | `error_code`, `hint` on failures |
-| `src/help.js` | Local / offline / live help (parameters from catalog) |
-| `src/dispatch.js` | Route meta + remote commands |
+| `src/help.js` | Local / offline / live help |
 
 ## Local meta commands
 
@@ -44,7 +48,7 @@ Remote commands require `--profile <name>` or `UNITY_CMD_PROFILE`.
   "ok": true,
   "profile": "editor",
   "catalog_version": "4a6528daab10",
-  "connector_build": 17,
+  "connector_build": 39,
   "commands": [
     {
       "name": "console",
@@ -65,9 +69,11 @@ Flag: `--refresh-catalog` forces network fetch and rewrites cache file.
 - `profile create` pings `/health` by default (`--no-verify` to skip)
 - `resolveTarget({ profile })` loads file, verifies `/health` `host` matches `connector_host`
 
-Default ports: editor **6547**, editor_play **6794**, player **6795**.
+Default ports: editor **6547**, editor_play **6794**, player **6795** (canonical source: `src/constants.js`; `doc:check` verifies README).
 
 Integration mapping (`PROFILE_BY_HOST_KIND`): `editor_play` → profile `editor-play`, `player` → `package-play`.
+
+**Minimum connector build:** `MIN_CONNECTOR_BUILD` in `constants.js` (must match `ConnectorBuild.Id`). Older builds are rejected with `CONNECTOR_OUTDATED`.
 
 ## Catalog cache
 
@@ -85,48 +91,19 @@ Integration mapping (`PROFILE_BY_HOST_KIND`): `editor_play` → profile `editor-
 - Play hosts (`editor_play`, `player`): `runtime` + `any` only
 - Editor host: `editor` + `any` only
 
-## `resolveRemoteCommand`
-
-1. Map argv command through `alias_to_command`
-2. Look up `commands_by_name[canonical]`
-3. `refresh` + `compile=true` → extend timeout to compile default
-4. Return `{ command, allowConnectionRetry, minTimeoutMs }`
-
 ## Remote command dispatch
 
-1. `requireProfile` → `resolveTarget`
-2. `loadCatalog` → `resolveRemoteCommand` → scope check
-3. `POST /command`; `202` → `pollCommandStatus`
-4. `printJson`; exit `0` / `1`
+1. `requireProfile` → `createCommandBudget(20s)` → `resolveTarget` / `loadCatalog` share remaining budget
+2. All host kinds: `waitForConnectorReady` before `sendCommand` (Play Mode is orthogonal to connector readiness)
+3. `sendCommand` → `POST /command`; deferred commands poll `GET /commands/{id}` until terminal status
 
-## Help formatting
+## Integration tests
 
-`formatProfileHelp` prints each command, then indented lines from `entry.params` (generated on the Unity side from `[CliParam]` metadata).
-
-When the connector is online, `runHelp` calls `loadCatalog(..., { forceRefresh: true })` so parameter lines are never served from a stale cache file.
-
-## Agent cheat sheet
-
-| Intent | Profile | Port |
-|--------|---------|------|
-| Compile, console, play/stop, profiler (edit) | `editor` | 6547 |
-| Runtime in Editor Play | `editor-play` | 6794 |
-| Dev Player build | `package-play` | 6795 |
-
-`play` / `stop` always use profile **`editor`**.
-
-## Integration runner
-
-| Scenario | `UNITY_CMD_PROFILE` | File |
-|----------|---------------------|------|
-| `editor-lifecycle` (default) | `editor` | `scenarios/editor-lifecycle.json` |
+| Scenario | Profile | File |
+|----------|---------|------|
+| `editor-lifecycle` | `editor` | `scenarios/editor-lifecycle.json` |
 | `player-runtime` | `package-play` | `scenarios/player-runtime.json` |
 
-Steps may set `"hostKind": "editor_play"` to select profile via `profileNameForHostKind`.  
 Step types: `sleepMs`, `waitProfile`, `assertFile`, `expectFailure`, `expectCatalog`, `expectConnectorBuild` (see `MIN_CONNECTOR_BUILD` in `src/constants.js`).
-
-## Tests
-
-`npm run test:unit` — no Unity required.
 
 `npm run test:integration` — needs profiles + running connector; skips if unreachable.

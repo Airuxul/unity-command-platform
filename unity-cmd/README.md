@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Node.js CLI that sends commands to [unity-connector](../unity-connector/) over HTTP.
+Node.js CLI that sends commands to [unity-connector](../com.air.unity-connector/) over HTTP.
 
 **Version:** 0.1.0
 
@@ -69,6 +69,8 @@ Commands and aliases come from Unity (`POST /list`), cached under `~/.unity-cmd/
 | `editor-play` | 6794 | Editor in Play Mode |
 | `package-play` | 6795 | Development Build running |
 
+Default ports are defined in [`src/constants.js`](src/constants.js) (`doc:check` keeps README in sync).
+
 `play` / `stop` always use profile **`editor`**.
 
 Full examples: [../README.md#commands-per-instance](../README.md#commands-per-instance).
@@ -93,7 +95,7 @@ Full examples: [../README.md#commands-per-instance](../README.md#commands-per-in
 
 ## Integration tests
 
-1. Install `unity-connector` and open the Unity project.
+1. Install `com.air.unity-connector` and open the Unity project.
 2. Create profiles (`editor`, `editor-play`, `package-play`).
 3. `set UNITY_CMD_PROFILE=editor` and `npm run test:integration`.
 
@@ -106,4 +108,4 @@ Full examples: [../README.md#commands-per-instance](../README.md#commands-per-in
 
 - [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)
 - [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
-- [../unity-connector/README.md](../unity-connector/README.md)
+- [../com.air.unity-connector/README.md](../com.air.unity-connector/README.md)

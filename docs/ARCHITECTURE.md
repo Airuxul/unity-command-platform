@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This monorepo connects a **Node CLI** (`unity-cmd`) to a **Unity UPM package** (`unity-connector`) over loopback HTTP. Unity owns the command catalog; the CLI resolves names, timeouts, and deferred command polling.
+This monorepo connects a **Node CLI** (`unity-cmd`) to a **Unity UPM package** (`com.air.unity-connector`) over loopback HTTP. Unity owns the command catalog; the CLI resolves names, timeouts, and deferred command polling.
 
 ## Repository layout
 
@@ -19,7 +19,7 @@ unity-cli/
 │   ├── README.md
 │   ├── README.zh-CN.md
 │   └── docs/IMPLEMENTATION.md
-└── unity-connector/
+└── com.air.unity-connector/
     ├── README.md
     ├── README.zh-CN.md
     └── docs/IMPLEMENTATION.md
@@ -29,14 +29,14 @@ unity-cli/
 
 | Goal | Implementation |
 |------|----------------|
-| Declarative commands | Instance class + `ICommandDescriptorProvider.Descriptor` + single `Run(...)` entry |
+| Declarative commands | `CliCommand` / `CliCommand<T>` + `InvokeDescriptor` + `Run(...)` |
 | Typed CLI parameters | `[CliParam]` on param-class properties; bound via Newtonsoft.Json (`CliParamBinder`) |
-| Discovery | `CommandDiscovery` instantiates commands; `FindForHost` resolves same-name handlers by scope |
-| Shared HTTP | `HttpServer`, `ConnectorRequestDispatcher`, `ConnectorJson`, `CommandPipeline` |
-| Unified command pipeline | `ICommandHost` → `EditorCommandHost` / `PlayModeCommandHost`; `CommandPipeline` + `CommandExecutor` shared |
-| Command state core | `CommandStateCore` tick loop; `CommandContext` + `ICommandNotifier`; Editor policies in `Editor/Completion/` |
-| Completion metadata | `CommandCompletionCatalog` maps command → completion kind |
-| Unity-owned catalog | `CommandCatalog.BuildResponse()` → `POST /list` |
+| Discovery | `CliCommandDiscovery` instantiates commands; `FindForHost` resolves same-name handlers by scope |
+| Shared HTTP | `ConnectorHttpEndpoint`, `ConnectorRequestDispatcher`, `JsonSerialization`, `InvokePipeline` |
+| Unified command pipeline | `IInvokeHost` → `EditorInvokeHost` / `PlayModeInvokeHost`; `InvokePipeline` + `InvokeExecutor` |
+| Job state | `JobStateCore` tick loop; `InvokeJobNotifier`; Editor policies in `Editor/Completion/` |
+| Completion metadata | `InvokeCompletionCatalog` maps command → completion kind |
+| Unity-owned catalog | `InvokeCatalog.BuildResponse()` → `POST /list` |
 | CLI catalog cache | `unity-cmd/src/catalog.js` → `~/.unity-cmd/cache/`; invalidated by `connector_build` + `catalog_version` on `/health` |
 | Help shows parameters | `POST /list` → `commands[].params[]`; `unity-cmd help` always refetches live catalog |
 | No hardcoded CLI command table | Aliases from Unity `POST /list` only |
@@ -47,14 +47,15 @@ unity-cli/
 
 ```text
 unity-cmd argv
-  → dispatch.js
-       ping | list | help     → local (list still calls Unity for catalog)
-       other command          → loadCatalog (POST /list, file cache)
-                            → resolveRemoteCommand (alias, timeout, retry)
-                            → POST /command
+  → cli.js (parseArgs, runCommand)
+       → remote-command.js
+            ping | list | help     → local (list still calls Unity for catalog)
+            other command          → loadCatalog (POST /list, file cache)
+                                 → resolveRemoteCommand (alias, timeout, retry)
+                                 → POST /command
   → Unity ConnectorRequestDispatcher
-       → ICommandHost.HandleCommand
-            → CommandPipeline
+       → IInvokeHost.HandleCommand
+            → InvokePipeline
                  200 + data     sync
                  202 + command_id   async
   → CLI poll command status (GET /commands/{id}) if 202
@@ -77,7 +78,7 @@ No env-based host auto-discovery; each HTTP endpoint is a named profile.
 | `editor_play` (:6794) | No | Yes | Yes |
 | `player` (:6795) | No | Yes | Yes |
 
-`CommandScope.Runtime` on `Descriptor` is the **command scope**, not a profile name. Runtime commands go to `editor_play` or `player` profiles.
+`CommandHostScope.Runtime` on `Descriptor` is the **command scope**, not a profile name. Runtime commands go to `editor_play` or `player` profiles.
 
 ## Runtime / Play-mode HTTP
 
@@ -85,7 +86,7 @@ No env-based host auto-discovery; each HTTP endpoint is a named profile.
 
 | `GET /health` → `host` | Port | When listening | Assembly / bootstrap |
 |------------------------|------|----------------|----------------------|
-| `editor` | 6547 | Editor open (always in Edit Mode) | `EditorHttpHost` |
+| `editor` | 6547 | Editor open (always in Edit Mode) | `EditorConnectorServer` / `EditorConnectorBootstrap` |
 | `editor_play` | 6794 | Editor **Play Mode** only | `EditorPlayHttpBootstrap` → `EditorPlayHttpHost` |
 | `player` | 6795 | **Development Build** player running | `DevPlayerBootstrap` → `PlayerHttpHost` |
 
@@ -93,14 +94,14 @@ All three may be up at once (e.g. Editor + Play + local Dev build). Ports are fi
 
 ```text
                     ┌─────────────────────────────────────┐
-  unity-cmd         │  Editor :6547 (EditorCommandHost)   │  profile editor
+  unity-cmd         │  Editor :6547 (EditorInvokeHost)   │  profile editor
   --profile ───────?│  editor_play :6794 (PlayMode…)      │  profile editor-play
                     │  player :6795 (PlayMode…)           │  profile package-play
                     └─────────────────────────────────────┘
                               │
-                    PlayModeHttpEndpoint
-                    → PlayModeCommandBridge (main-thread queue)
-                    → PlayModeCommandHost → CommandRouter
+                    ConnectorHttpEndpoint
+                    → ConnectorMainThreadScheduler (single-flight)
+                    → PlayModeInvokeHost → InvokePipeline
 ```
 
 **During Editor Play:** use profile `editor-play` for `echo` and in-play profiler. Use profile `editor` for `play` / `stop` / `compile`, screenshots, and edit-mode profiler.
@@ -109,14 +110,16 @@ All three may be up at once (e.g. Editor + Play + local Dev build). Ports are fi
 
 ### Deferred commands and catalog
 
-- **Deferred command status** (`202` + `GET /commands/{id}`): All three HTTP hosts. Editor uses `CommandStateManager` (Editor completion policies). Play-mode hosts (`editor_play`, `player`) use `RuntimeCommandStateManager` + `RuntimeCommandStore` (PlayerPrefs per host).
-- **Sync commands** on play hosts run on the play main thread via `PlayModeCommandBridge`.
-- **Catalog** (`POST /list`): Same discovery on all hosts; player lists only commands from assemblies shipped in that build (typically Core + Dev builtins, not full Editor builtins).
+- **Deferred command status** (`202` + `GET /commands/{id}`): All three HTTP hosts. Editor uses `EditorJobStateManager` (Editor completion policies). Play-mode hosts (`editor_play`, `player`) use `RuntimeJobStateManager` + `RuntimeJobStore` (PlayerPrefs per host).
+- **Sync commands** on play hosts run on the play main thread via `PlayConnectorServer` (`BridgeDriver`).
+- **Catalog** (`POST /list`): Same discovery on all hosts; player lists only commands from assemblies shipped in that build (Runtime builtins, not full Editor builtins).
 
 ### Extending Runtime behavior
 
 ```csharp
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Cli;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
 
 public sealed class MyPlayToolParams
 {
@@ -124,15 +127,13 @@ public sealed class MyPlayToolParams
     public string Label { get; set; }
 }
 
-public class MyPlayToolCommand : CommandBase, ICommand<MyPlayToolParams>
+public sealed class MyPlayToolCommand : CliCommand<MyPlayToolParams>
 {
-    public CommandDescriptor Descriptor { get; } = new CommandDescriptor<MyPlayToolParams>(
-        "my.play.tool", CommandScope.Runtime, "...");
+    public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<MyPlayToolParams>(
+        "my.play.tool", CommandHostScope.Runtime, "...");
 
-    public void Run(MyPlayToolParams p)
-    {
+    public override void Run(MyPlayToolParams p) =>
         CompleteSuccess(new { label = p.Label });
-    }
 }
 ```
 
@@ -156,6 +157,18 @@ unity-cmd --profile package-play echo
 
 See [../README.md#commands-per-instance](../README.md#commands-per-instance) for the full command list per host.
 
+## Editor readiness (domain reload)
+
+Before `POST /command` on the `editor` profile, `unity-cmd` waits until all of the following agree:
+
+1. `~/.unity-cmd/instances/{hash}.json` — heartbeat `state`, `ready`, `listener_running`, advancing `timestamp`, `session_id`, `generation`
+2. `~/.unity-cmd/editor-http.json` — no stale `running` entry for another session on the same port
+3. `GET /health` — `ready`, `listener_running`, matching `session_id` / `generation`
+
+`EditorConnectorBootstrap` stops the listener on `beforeAssemblyReload`, flushes deferred jobs to `EditorJobLedger`, restarts on `afterAssemblyReload`, and keeps instance heartbeat in `reloading` until catalog warmup completes. `GET /commands/{id}` can resolve pending jobs from the ledger after reload; handlers are not redispatched.
+
+Integration tests use `waitForProfileReady()` (not health-only polling).
+
 ## Catalog contract (`POST /list`)
 
 Response fields used by CLI:
@@ -173,7 +186,7 @@ Response fields used by CLI:
 | `compilation` | `!EditorApplication.isCompiling` (Editor host) |
 | `enter_play` | `EditorApplication.isPlaying` (Editor host) |
 | `exit_play` | `!EditorApplication.isPlaying` (Editor host) |
-| `started` | Command completes explicitly via `CommandBase.CompleteSuccess/CompleteFail` |
+| `started` | Command completes explicitly via `CliCommand.CompleteSuccess/CompleteFail` |
 
 Editor command status survives in `SessionState` across domain reload where applicable; runtime command status persists per host in `PlayerPrefs`. Handlers are **not** redispatched after reload.
 
@@ -181,21 +194,19 @@ Editor command status survives in `SessionState` across domain reload where appl
 
 | Assembly | Role |
 |----------|------|
-| **Core** | Protocol, catalog, `ConnectorRequestDispatcher`, play-mode host |
-| **Editor** | Editor HTTP, deferred completion policies, builtins, `EditorPlayHttpBootstrap` |
-| **Dev** | Development Build bootstrap only (Release excludes assembly) |
+| **Runtime** (`UnityCliConnector.Runtime`) | Protocol (`Host`/`Http`/`Invoke`/`Job`), connector HTTP stack, `CliCommandDiscovery`, play hosts, player bootstrap (`DEVELOPMENT_BUILD`) |
+| **Editor** (`UnityCliConnector.Editor`) | Editor HTTP, deferred completion policies, Editor builtins, `EditorPlayHttpBootstrap` |
 
 ## Extending
 
 1. Add param class with `[CliParam]` properties (optional key → camelCase property name).
-2. Add command class: inherit `CommandBase`, implement `ICommand` / `ICommand<T>`, and expose `ICommandDescriptorProvider.Descriptor`.
-3. For deferred commands: `DeferredCommandDescriptor` with `Completion` from `CommandCompletionCatalog` constants.
+2. Add command class: inherit `CliCommand` or `CliCommand<T>`, and expose `Descriptor`.
+3. For deferred commands: `DeferredInvokeDescriptor` with `Completion` from `InvokeCompletionCatalog` constants.
 4. Bump `ConnectorBuild.Id`, then `unity-cmd --profile editor compile` or `refresh --compile true`.
 5. Change `unity-cmd` only for new **local meta** commands (`help`, `profile` are local; `ping`/`list` need a profile).
 
 ## Known limitations
 
-- **Profiler averaged mode** (`--frames`, `--from`/`--to`): may throw cast error in `ProfilerHierarchyService`; use `--frame <n>` until fixed.
 - **Editor host (:6547) during Play:** `editor`-scoped tools (`profiler`, `screenshot`, `state`, …) remain on profile **`editor`**. Use **`editor-play`** for `echo` and other runtime-scoped commands.
 - **Player host:** No Editor APIs; Editor-scoped builtins are not listed on `player` unless you add Runtime/Any handlers in shipped assemblies.
 - **Integration tests** do not launch Unity; they attach to an already-open Editor (and optionally a Dev player for `player-runtime`).

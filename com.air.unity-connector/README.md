@@ -4,9 +4,9 @@
 
 Unity Editor / Player HTTP bridge for [unity-cmd](../unity-cmd/).
 
-**Version:** 0.1.7  
-**UPM name:** `unity-connector`  
-**Dependency:** `com.unity.nuget.newtonsoft-json` (parameter binding)
+**Version:** 1.1.0  
+**UPM name:** `com.air.unity-connector`  
+**Dependencies:** `com.air.unity-game-core`, `com.unity.nuget.newtonsoft-json`
 
 ## Install (local path)
 
@@ -15,12 +15,21 @@ In your Unity project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "unity-connector": "file:../CustomPackages/packages/unity-cli/unity-connector"
+    "com.air.unity-connector": "file:../CustomPackages/packages/unity-cli/com.air.unity-connector"
   }
 }
 ```
 
 Open the project in the Editor. Default URLs: Editor `http://127.0.0.1:6547/`, Editor Play `6794`, Dev player `6795`.
+
+## Security
+
+| Topic | Behavior |
+|-------|----------|
+| Bind address | Default loopback (`127.0.0.1`). Set `UNITY_CMD_BIND=lan` only on trusted networks. |
+| Auth token | Optional shared secret: Unity `UNITY_CMD_TOKEN` / CLI `UNITY_CMD_TOKEN` env or profile field. Requests must send header `X-Unity-Cmd-Token` (or `Authorization: Bearer …` when enabled). |
+| Single-flight | Concurrent `POST /command` on one host returns `503` + `error_code=SERVER_BUSY`. |
+| Domain reload | Editor returns `503` + `error_code=DOMAIN_RELOADING`; CLI retries; job status survives via `EditorJobLedger`. |
 
 ## Built-in commands
 
@@ -53,7 +62,7 @@ Run `unity-cmd --profile editor help` to see per-command parameter lines from th
 | `editor_play` | 6794 | Editor Play Mode |
 | `player` | 6795 | Development Build player |
 
-**Implementation:** `PlayModeHttpEndpoint` + `PlayModeCommandBridge` (`Runtime` assembly), `EditorPlayHttpBootstrap` (Editor), `DevPlayerBootstrap` (`Runtime` assembly with `DEVELOPMENT_BUILD` constraint).
+**Implementation:** `PlayConnectorServer` + `ConnectorMainThreadScheduler` (`Runtime` assembly), `EditorConnectorServer` (Editor), `EditorPlayHttpBootstrap`, `DevPlayerBootstrap` (`DEVELOPMENT_BUILD`).
 
 | Command scope | `editor` :6547 | `editor_play` :6794 | `player` :6795 |
 |---------------|----------------|---------------------|----------------|
@@ -96,8 +105,9 @@ CLI: `unity-cmd --profile package-play ping` / `unity-cmd --profile package-play
 ## Extend a command
 
 ```csharp
-using UnityCliConnector;
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Cli;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
 
 public sealed class MyToolParams
 {
@@ -105,21 +115,17 @@ public sealed class MyToolParams
     public string AssetPath { get; set; }
 }
 
-public class MyToolCommand : CommandBase, ICommand<MyToolParams>
+public sealed class MyToolCommand : CliCommand<MyToolParams>
 {
-    public CommandDescriptor Descriptor { get; } = new CommandDescriptor<MyToolParams>(
-        "my.tool",
-        CommandScope.Editor,
-        "My example tool");
+    public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<MyToolParams>(
+        "my.tool", CommandHostScope.Editor, "My example tool");
 
-    public void Run(MyToolParams p)
-    {
+    public override void Run(MyToolParams p) =>
         CompleteSuccess(new { path = p.AssetPath });
-    }
 }
 ```
 
-For deferred commands, use `DeferredCommandDescriptor` and call `MarkRunning()` then `CompleteSuccess/CompleteFail` later. For immediate commands, call `CompleteSuccess/CompleteFail` inside `Run(...)`. See [docs/MAINTENANCE.md](../docs/MAINTENANCE.md).
+For deferred commands, use `DeferredInvokeDescriptor` and call `MarkRunning()` then `CompleteSuccess` / `CompleteFail` later. See [docs/MAINTENANCE.md](../docs/MAINTENANCE.md).
 
 Bump `ConnectorBuild.Id`, then `unity-cmd --profile editor compile` and `help`.
 

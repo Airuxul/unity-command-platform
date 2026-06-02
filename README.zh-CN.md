@@ -7,20 +7,22 @@
 | 子项目 | 职责 |
 |--------|------|
 | [unity-cmd](unity-cmd/) | Node.js CLI |
-| [unity-connector](unity-connector/) | Unity UPM 桥接（HTTP + 命令） |
+| [com.air.unity-connector](com.air.unity-connector/) | Unity UPM 桥接（HTTP + 命令） |
 
 ## 工作原理
 
 ```text
 unity-cmd  →  --profile  →  GET /health  →  POST /command、/jobs
-              unity-connector（Editor :6547 / Play :6794 / Player :6795）
+              com.air.unity-connector（Editor :6547 / Play :6794 / Player :6795）
 ```
 
 - 命令目录由 Unity 提供（`POST /list`），CLI 解析别名并按工程缓存。
 - 长任务（`compile`、`play` 等）返回 **HTTP 202**，CLI 轮询 `GET /commands/{id}`。
 - 失败输出 JSON：`ok`、`error_code`、可选 `hint`。
 
-内置：进出场、控制台、exec、profiler、截图、菜单、重序列化等。扩展见 [unity-connector/README.zh-CN.md](unity-connector/README.zh-CN.md)。
+内置：进出场、控制台、exec、profiler、截图、菜单、重序列化等。扩展见 [com.air.unity-connector/README.zh-CN.md](com.air.unity-connector/README.zh-CN.md)。
+
+Editor 命令发送前会等待 `~/.unity-cmd/instances/*.json` 心跳、`editor-http.json` 与 `/health`（`session_id` / `generation`），避免域重载后连到旧 listener。
 
 ## 快速开始
 
@@ -35,10 +37,10 @@ unity-cmd --profile editor screenshot --view game --output_path Screenshots/game
 unity-cmd --profile editor stop
 ```
 
-Connector 安装与打开工程：[unity-connector/README.zh-CN.md](unity-connector/README.zh-CN.md)。  
+Connector 安装与打开工程：[com.air.unity-connector/README.zh-CN.md](com.air.unity-connector/README.zh-CN.md)。  
 CLI 参数与 npm 脚本：[unity-cmd/README.zh-CN.md](unity-cmd/README.zh-CN.md)。
 
-修改 connector 源码后：`unity-cmd --profile editor compile`（别名 `recompile`）或 `unity-cmd --profile editor refresh --compile true --timeout 30000`。
+修改 connector 源码后：`unity-cmd --profile editor compile`（别名 `recompile`）。默认超时 **20s**，除非必要不要加大。
 
 端口固定：**Editor `6547`**、**Editor Play `6794`**、**Player `6795`**，三端可同时运行互不冲突。
 
@@ -112,7 +114,7 @@ docs/unity-cmd-skill/           # Git 中的源（复制到 .cursor/skills/unity
 
 ```bash
 unity-cmd --profile editor ping
-unity-cmd --profile editor compile --timeout 60000
+unity-cmd --profile editor compile
 unity-cmd --profile editor console --type error,warning --lines 30
 ```
 
@@ -126,7 +128,7 @@ unity-cmd --profile editor console --type error,warning --lines 30
 
 ```bash
 unity-cmd --profile editor ping
-unity-cmd --profile editor play --timeout 90000
+unity-cmd --profile editor play
 unity-cmd --profile editor screenshot --view game --output_path Screenshots/agent-play.png
 unity-cmd --profile editor stop
 ```
@@ -173,7 +175,7 @@ unity-cmd profile list
 ### 1. Editor — 编辑模式（profile `editor`，端口 **6547**）
 
 **时机：** Unity Editor 已打开。  
-**前提：** 工程已装 `unity-connector`；Console 出现 `http://127.0.0.1:6547/`。
+**前提：** 工程已装 `com.air.unity-connector`；Console 出现 `http://127.0.0.1:6547/`。
 
 ```bat
 unity-cmd --profile editor ping
@@ -238,33 +240,7 @@ npm run test:integration
 | `editor-play` | `editor_play` | 6794 | Editor 播放中 |
 | `package-play` | `player` | 6795 | Development Build |
 
-详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#runtime--play-mode-http)、[unity-cmd/README.zh-CN.md](unity-cmd/README.zh-CN.md#各实例命令)、[unity-connector/docs/IMPLEMENTATION.md](unity-connector/docs/IMPLEMENTATION.md#runtime--play-mode-stack)。
-
-## 与 [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) 的差异
-
-理念相近：都走本机 HTTP（不依赖 MCP）来驱动 Unity。**本仓库不是其 Fork**，而是从 CLI 交互、协议形态到扩展机制均独立设计与实现。
-
-| | [youngwoocho02/unity-cli](https://github.com/youngwoocho02/unity-cli) | 本仓库 |
-|---|------------------------------------------------------------------------|--------|
-| CLI | Go 单二进制、`install.sh` | Node `unity-cmd`、`npm install` |
-| 实例发现 | `~/.unity-cli/instances/` 心跳文件 | profile + `/health`（无心跳文件） |
-| 命令写法 | `unity-cli editor play` | `unity-cmd play` |
-| 发现 | 请求时反射；`list` 含参数 schema | `POST /list` 目录 + CLI 缓存 |
-| 长任务 | 同步 HTTP + `--wait` | **202 延迟命令状态** + 轮询 |
-| Runtime / 播放模式 | **仅 Editor 编辑模式** — 播放中无 HTTP，无包体端点 | **`editor_play` :6794** + **`player` :6795**；`CommandScope.Runtime`、播放中 Profiler/截图 |
-| 状态 | `unity-cli status` | `ping`、`state` |
-| 扩展 | `[UnityCliTool]` + `HandleCommand(JObject)` | `Descriptor` + 单一 `Run(...)` 命令类 + `[CliParam]` |
-| 输出 | `success` / `message` | `ok`、`data`、`error_code`、`hint` |
-| 其他 | 内置 `test`、`update` | 无（测试走 Unity/CI） |
-| 编译延迟超时 | 120s | 30s（`compile` 默认） |
-
-| 上游 | 本仓库 |
-|------|--------|
-| `unity-cli status` | `unity-cmd ping` |
-| `unity-cli editor play` | `unity-cmd play` |
-| `unity-cli exec "code"` | `unity-cmd exec --code "code"` |
-| `unity-cli profiler hierarchy` | `unity-cmd profiler --action hierarchy` |
-| `unity-cli editor refresh --compile` | `unity-cmd refresh --compile true` |
+详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#runtime--play-mode-http)、[unity-cmd/README.zh-CN.md](unity-cmd/README.zh-CN.md#各实例命令)、[com.air.unity-connector/docs/IMPLEMENTATION.md](com.air.unity-connector/docs/IMPLEMENTATION.md#runtime--play-mode-stack)。
 
 ## 环境变量
 
@@ -299,4 +275,4 @@ npm run test:integration    # 需已打开 Editor；无实例则跳过
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构与请求流 |
 | [docs/AGENTS.md](docs/AGENTS.md) | 自动化速查 |
 | [unity-cmd/docs/IMPLEMENTATION.md](unity-cmd/docs/IMPLEMENTATION.md) | CLI 实现 |
-| [unity-connector/docs/IMPLEMENTATION.md](unity-connector/docs/IMPLEMENTATION.md) | HTTP API 与参数 |
+| [com.air.unity-connector/docs/IMPLEMENTATION.md](com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API 与参数 |

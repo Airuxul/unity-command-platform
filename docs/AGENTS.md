@@ -11,17 +11,17 @@
 | [unity-cmd-skill/SKILL.md](unity-cmd-skill/SKILL.md) | **Primary** — Cursor Skill source + 3-step cache workflow |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design, request flow, assemblies, extension rules |
 | [../unity-cmd/docs/IMPLEMENTATION.md](../unity-cmd/docs/IMPLEMENTATION.md) | CLI modules, profiles, catalog cache, errors, polling |
-| [../unity-connector/docs/IMPLEMENTATION.md](../unity-connector/docs/IMPLEMENTATION.md) | HTTP API, deferred commands, parameters, play-mode rules |
+| [../com.air.unity-connector/docs/IMPLEMENTATION.md](../com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API, deferred commands, parameters, play-mode rules |
 | [MAINTENANCE.md](MAINTENANCE.md) | Command patterns, build bumps, extending connector |
 
 ## Quick facts
 
-- **Monorepo:** `unity-cmd` (Node CLI) + `unity-connector` (Unity UPM).
+- **Monorepo:** `unity-cmd` (Node CLI) + `com.air.unity-connector` (Unity UPM).
 - **No root `package.json`:** run npm scripts from `unity-cmd/`.
 - **Command source of truth:** Unity `POST /list` → cached at `~/.unity-cmd/cache/catalog-<host>:<port>.json`.
 - **Endpoints:** saved profiles in `~/.unity-cmd/profiles/*.json`; use `--profile` or `UNITY_CMD_PROFILE`. Verified with `GET /health`.
 - **Local CLI-only:** `help`, `profile` (no profile). Remote: `ping`, `list`, connector commands (profile required).
-- **After connector C# changes:** `unity-cmd --profile editor compile` (or `recompile`) or `refresh --compile true --timeout 30000`.
+- **After connector C# changes:** `unity-cmd --profile editor compile` (or `recompile`). Default timeout is 20s; avoid raising it unless the user asks.
 - **Help / params:** `unity-cmd --profile editor help` refetches catalog and prints `commands[].params` under each command.
 - **Three endpoints (same PC):** `editor` :6547, `editor_play` :6794, `player` :6795. Port overrides are **Unity-side env vars**; CLI uses profile files.
 
@@ -59,7 +59,7 @@ Full lists: [../README.md#commands-per-instance](../README.md#commands-per-insta
 | `editor-play` (:6794) | No | Yes |
 | `package-play` (:6795) | No | Yes |
 
-`CommandScope.Runtime` on the command `Descriptor` is the **scope**, not a profile name.
+`CommandHostScope.Runtime` on the command `Descriptor` is the **scope**, not a profile name.
 
 Same command name (`echo`) can exist twice (Editor + Runtime handlers); routing uses host + scope, not separate CLI names.
 
@@ -100,3 +100,10 @@ Deferred command status (`202` + `GET /commands/{id}`) works on **all three host
 | `npm run test:integration` | Yes (skips if unreachable) |
 
 Set `UNITY_CMD_PROFILE=editor` or `package-play` per scenario.
+
+## Security (agent)
+
+- **Loopback only:** connector binds `127.0.0.1` by default; do not expose Editor HTTP to LAN without explicit configuration.
+- **No auth on HTTP:** anyone who can reach the port can run Editor commands — keep ports local and profiles on a trusted machine.
+- **Dangerous commands:** `exec`, `menu`, and `manage` can mutate project state; confirm intent before running in production projects.
+- **Profiles:** stored under `~/.unity-cmd/profiles/`; treat as sensitive if they point at shared hosts.

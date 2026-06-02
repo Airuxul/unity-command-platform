@@ -4,10 +4,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
-using UnityCliConnector.Http;
-using UnityCliConnector.Network;
+using Air.UnityConnector.Http;
+using Air.UnityConnector.Host;
+using Air.UnityGameCore.Runtime.Serialization;
 
-namespace UnityCliConnector
+namespace Air.UnityConnector
 {
     /// <summary>
     /// Disk cache (~/.unity-cmd/editor-http.json) for a single Editor HTTP listener per machine/port.
@@ -209,7 +210,8 @@ namespace UnityCliConnector
                     return null;
 
                 var json = File.ReadAllText(path);
-                var data = ConnectorJson.ParseObject(json);
+                ConnectorSerialization.EnsureRegistered();
+                var data = JsonSerialization.ParseObject(json);
                 if (data.Count == 0)
                     return null;
 
@@ -218,7 +220,7 @@ namespace UnityCliConnector
                     Pid = ReadInt(data, "pid"),
                     SessionId = ReadString(data, "session_id"),
                     Generation = ReadInt(data, "generation"),
-                    Port = ReadInt(data, "port", ConnectorNetwork.ResolveEditorPort()),
+                    Port = ReadInt(data, "port", HostNetwork.ResolveEditorPort()),
                     ConnectorBuild = ReadInt(data, "connector_build"),
                     ListenerId = ReadString(data, "listener_id"),
                     Status = ReadString(data, "status"),
@@ -237,7 +239,8 @@ namespace UnityCliConnector
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
-            var json = ConnectorJson.Serialize(payload);
+            ConnectorSerialization.EnsureRegistered();
+            var json = JsonSerialization.Serialize(payload);
             File.WriteAllText(CachePath, json);
         }
 
@@ -262,7 +265,7 @@ namespace UnityCliConnector
             if (!HttpProbe.TryGetHealth("127.0.0.1", port, 800, out var body))
                 return false;
 
-            return HttpProbe.TryValidateHealth(body, ConnectorHostKind.Editor, connectorBuild, sessionId);
+            return HttpProbe.TryValidateHealth(body, HostKind.Editor, connectorBuild, sessionId);
         }
 
         private static void WaitForPortRelease(int port, int timeoutMs)

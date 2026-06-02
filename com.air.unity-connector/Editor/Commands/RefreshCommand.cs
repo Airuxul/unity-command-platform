@@ -1,30 +1,34 @@
 using System.Collections.Generic;
-using UnityCliConnector.Commands;
-using UnityCliConnector.Editor.Services;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    /// <summary>Unified command: immediate complete for refresh-only, deferred for compile=true.</summary>
-    public class RefreshCommand : CommandBase, ICommand<RefreshParams>, ICommandDescriptorProvider
+    /// <summary>Immediate refresh by default; compile=true upgrades job completion to compilation.</summary>
+    public class RefreshCommand : CliCommand<RefreshParams>
     {
-        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<RefreshParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<RefreshParams>(
             CommandNames.Refresh,
-            CommandScope.Editor,
-            "Refresh AssetDatabase; compile=true uses compilation completion",
-            completion: CommandCompletionCatalog.CompletionCompilation);
+            CommandHostScope.Editor,
+            "Refresh AssetDatabase; use compile=true to request script compilation",
+            defaultTimeoutMs: 20000);
 
-        public void Run(RefreshParams p)
+        public override void Run(RefreshParams p)
         {
             try
             {
                 var data = AssetRefreshService.Refresh(p);
                 if (!p.Compile)
                 {
-                    CompleteSuccess(CommandResult.Ok("refresh completed", data));
+                    CompleteSuccess(InvokeResult.Ok("refresh completed", data));
                     return;
                 }
 
+                EditorJobStateManager.SetCompletionKind(
+                    CommandId,
+                    InvokeCompletionCatalog.CompletionCompilation);
                 ScriptCompilationService.RequestWithCompletion(
                     CommandId,
                     result => CompleteSuccess(MergeRefreshResult(result, data)),
@@ -38,7 +42,7 @@ namespace UnityCliConnector.Commands
 
         private static object MergeRefreshResult(object compileResult, Dictionary<string, object> refreshData)
         {
-            if (compileResult is not CommandResult compile || refreshData == null)
+            if (compileResult is not InvokeResult compile || refreshData == null)
                 return compileResult;
 
             var payload = compile.Payload as Dictionary<string, object> ?? new Dictionary<string, object>();
@@ -46,7 +50,7 @@ namespace UnityCliConnector.Commands
                 payload[pair.Key] = pair.Value;
             payload["compile_requested"] = true;
 
-            return CommandResult.Ok(compile.Message, payload);
+            return InvokeResult.Ok(compile.Message, payload);
         }
     }
 }

@@ -1,21 +1,23 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class ReserializeCommand : CommandBase, ICommand<ReserializeParams>, ICommandDescriptorProvider
+    public class ReserializeCommand : CliCommand<ReserializeParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ReserializeParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ReserializeParams>(
             CommandNames.Reserialize,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Force reserialize assets (whole project or paths)");
 
-        public void Run(ReserializeParams p)
+        public override void Run(ReserializeParams p)
         {
             try
             {
-                var data = Editor.Services.ReserializeService.Reserialize(p);
-                CompleteSuccess(CommandResult.Ok("reserialize completed", data));
+                var data = ReserializeService.Reserialize(p);
+                CompleteSuccess(InvokeResult.Ok("reserialize completed", data));
             }
             catch (System.Exception ex)
             {

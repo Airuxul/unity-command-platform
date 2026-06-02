@@ -1,6 +1,6 @@
 {
   "name": "com.air.unity-connector",
-  "version": "0.1.7",
+  "version": "2.3.0",
   "displayName": "Unity CLI Connector",
   "description": "HTTP command bridge for unity-cmd CLI",
   "unity": "2021.3",
@@ -8,6 +8,8 @@
     "name": "airuxul"
   },
   "dependencies": {
+    "com.air.game-core": "3.1.0",
+    "com.air.unity-game-core": "4.0.0",
     "com.unity.nuget.newtonsoft-json": "3.2.1"
   }
 }

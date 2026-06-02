@@ -1,21 +1,23 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class ExecCommand : CommandBase, ICommand<ExecParams>, ICommandDescriptorProvider
+    public class ExecCommand : CliCommand<ExecParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ExecParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ExecParams>(
             CommandNames.Exec,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Compile and execute arbitrary C# in Editor context");
 
-        public void Run(ExecParams p)
+        public override void Run(ExecParams p)
         {
             try
             {
-                var data = Editor.Services.CsharpExecutor.Execute(p);
-                CompleteSuccess(CommandResult.Ok("exec completed", data));
+                var data = CsharpExecutor.Execute(p);
+                CompleteSuccess(InvokeResult.Ok("exec completed", data));
             }
             catch (System.Exception ex)
             {

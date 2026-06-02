@@ -1,18 +1,27 @@
-{
-  "name": "UnityCliConnector.Runtime",
-  "rootNamespace": "UnityCliConnector",
-  "references": [
-    "UnityCliConnector.Core"
-  ],
-  "includePlatforms": [],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": true,
-  "defineConstraints": [
-    "UNITY_EDITOR || DEVELOPMENT_BUILD"
-  ],
-  "versionDefines": [],
-  "noEngineReferences": false
+﻿{
+    "name":  "com.air.UnityConnector.Runtime",
+    "rootNamespace":  "Air.UnityConnector",
+    "references":  [
+                       "com.air.GameCore",
+                       "com.air.UnityGameCore.Runtime"
+                   ],
+    "includePlatforms":  [
+
+                         ],
+    "excludePlatforms":  [
+
+                         ],
+    "allowUnsafeCode":  false,
+    "overrideReferences":  false,
+    "precompiledReferences":  [
+
+                              ],
+    "autoReferenced":  true,
+    "defineConstraints":  [
+                              "UNITY_EDITOR || DEVELOPMENT_BUILD"
+                          ],
+    "versionDefines":  [
+
+                       ],
+    "noEngineReferences":  false
 }

@@ -1,22 +1,25 @@
+using Air.UnityConnector.Invoke;
 using NUnit.Framework;
+using Air.UnityConnector.Commands;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Tests
+namespace Air.UnityConnector.Tests
 {
     public class CommandDiscoveryTests
     {
         [Test]
         public void DiscoversBuiltinPing()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Ping);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Ping);
             Assert.IsNotNull(handler);
         }
 
         [Test]
         public void DiscoversBuiltinConsole()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Console);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Console);
             Assert.IsNotNull(handler);
             Assert.IsEmpty(handler.Completion);
         }
@@ -24,35 +27,35 @@ namespace UnityCliConnector.Tests
         [Test]
         public void DiscoversCompileAliases()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Compile);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Compile);
             CollectionAssert.Contains(handler.Aliases, "recompile");
         }
 
         [Test]
         public void DiscoversCompileAsDeferred()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Compile);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Compile);
             Assert.IsNotNull(handler);
-            Assert.AreEqual(CommandCompletionCatalog.CompletionCompilation, handler.Completion);
-            Assert.IsTrue(CommandCompletionCatalog.IsDeferredCommand(CommandNames.Compile));
+            Assert.AreEqual(InvokeCompletionCatalog.CompletionCompilation, handler.Completion);
+            Assert.IsTrue(InvokeCompletionCatalog.IsDeferredCommand(CommandNames.Compile));
         }
 
         [Test]
         public void ScreenshotScopeIsEditor()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Screenshot);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Screenshot);
             Assert.IsNotNull(handler);
-            Assert.AreEqual(CommandScope.Editor, handler.Scope);
+            Assert.AreEqual(CommandHostScope.Editor, handler.Scope);
         }
 
         [Test]
         public void ConsoleCommandExposesParamDescriptions()
         {
-            CommandDiscovery.Invalidate();
-            var handler = CommandDiscovery.Find(CommandNames.Console);
+            CliCommandDiscovery.Invalidate();
+            var handler = CliCommandDiscovery.Find(CommandNames.Console);
             Assert.IsNotNull(handler);
             Assert.Greater(handler.ParamDescriptions.Length, 0);
             Assert.That(handler.ParamDescriptions[0], Does.StartWith("--"));

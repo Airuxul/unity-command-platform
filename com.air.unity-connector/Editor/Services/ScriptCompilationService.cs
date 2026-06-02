@@ -1,28 +1,37 @@
 using System;
-using System.Collections.Generic;
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Invoke;
 using UnityEditor;
 using UnityEditor.Compilation;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     /// <summary>
-    /// Requests script compilation and completes via <see cref="CompilationPipeline"/>
-    /// events available in Unity 2021.3+ (plugin minimum).
-    /// Unity does not expose a pre-check for whether compilation is needed; see
-    /// <see cref="RequestWithCompletion"/> remarks.
+    /// Requests script compilation. Completion is owned by <see cref="EditorJobStateManager"/>
+    /// (<see cref="Air.UnityConnector.Completion.CompilationPolicy"/>), including after domain reload.
     /// </summary>
     public static class ScriptCompilationService
     {
-        private const int IdleCheckFrames = 3;
-        private static readonly Dictionary<string, Watch> Watches = new();
+        private static string _activeCommandId;
+        private static object _compilationContext;
 
-        /// <summary>
-        /// There is no public API to ask "will scripts compile?" before requesting.
-        /// <see cref="CompilationPipeline.RequestScriptCompilation"/> decides internally;
-        /// this method observes <c>compilationStarted</c>/<c>compilationFinished</c> or,
-        /// when no cycle starts, completes after a short idle window.
-        /// </summary>
+        static ScriptCompilationService()
+        {
+            CompilationPipeline.compilationStarted += OnCompilationStarted;
+            CompilationPipeline.compilationFinished += OnCompilationFinished;
+        }
+
+        public static bool OwnsActiveCommand(string commandId) =>
+            !string.IsNullOrEmpty(commandId)
+            && string.Equals(_activeCommandId, commandId, StringComparison.Ordinal);
+
+        internal static void SetActiveCommandForTests(string commandId) => _activeCommandId = commandId;
+
+        internal static void ClearActiveCommandForTests()
+        {
+            _activeCommandId = null;
+            _compilationContext = null;
+        }
+
         public static void RequestWithCompletion(
             string commandId,
             Action<object> completeSuccess,
@@ -33,127 +42,45 @@ namespace UnityCliConnector.Editor.Services
             if (completeSuccess == null)
                 throw new ArgumentNullException(nameof(completeSuccess));
 
-            RemoveWatch(commandId);
-
-            var watch = new Watch(commandId, completeSuccess, completeFail);
-            Watches[commandId] = watch;
-            watch.Subscribe();
+            _activeCommandId = commandId;
+            _compilationContext = null;
+            EditorJobStateManager.MarkRunning(commandId);
             CompilationPipeline.RequestScriptCompilation();
-            EditorApplication.delayCall += watch.OnIdleCheckFrame;
         }
 
-        private static void RemoveWatch(string commandId)
+        static void OnCompilationStarted(object context)
         {
-            if (!Watches.TryGetValue(commandId, out var watch))
+            if (string.IsNullOrEmpty(_activeCommandId))
                 return;
-            watch.Dispose();
-            Watches.Remove(commandId);
+
+            _compilationContext = context;
         }
 
-        private sealed class Watch
+        static void OnCompilationFinished(object context)
         {
-            private readonly string _commandId;
-            private readonly Action<object> _completeSuccess;
-            private readonly Action<string> _completeFail;
+            if (string.IsNullOrEmpty(_activeCommandId))
+                return;
 
-            private bool _completed;
-            private bool _armed = true;
-            private bool _sawCompilationStarted;
-            private object _compilationContext;
-            private int _idleFrames;
+            if (_compilationContext != null && !ReferenceEquals(context, _compilationContext))
+                return;
 
-            public Watch(string commandId, Action<object> completeSuccess, Action<string> completeFail)
+            var commandId = _activeCommandId;
+            _activeCommandId = null;
+            _compilationContext = null;
+
+            try
             {
-                _commandId = commandId;
-                _completeSuccess = completeSuccess;
-                _completeFail = completeFail;
+                EditorJobStateManager.Succeed(commandId, InvokeResult.Ok(
+                    "compile completed",
+                    new System.Collections.Generic.Dictionary<string, object>
+                    {
+                        ["compiled"] = true,
+                        ["note"] = "compilation_finished",
+                    }));
             }
-
-            public void Subscribe()
+            catch (Exception ex)
             {
-                CompilationPipeline.compilationStarted += OnCompilationStarted;
-                CompilationPipeline.compilationFinished += OnCompilationFinished;
-            }
-
-            public void OnIdleCheckFrame()
-            {
-                if (_completed || !_armed)
-                    return;
-
-                _idleFrames++;
-                if (_idleFrames < IdleCheckFrames)
-                {
-                    EditorApplication.delayCall += OnIdleCheckFrame;
-                    return;
-                }
-
-                if (_sawCompilationStarted)
-                {
-                    if (!EditorApplication.isCompiling)
-                        TryComplete("compilation_idle");
-                    else
-                        EditorApplication.delayCall += OnIdleCheckFrame;
-                    return;
-                }
-
-                if (!EditorApplication.isCompiling)
-                    TryComplete("no_compilation_needed");
-                else
-                    EditorApplication.delayCall += OnIdleCheckFrame;
-            }
-
-            private void OnCompilationStarted(object context)
-            {
-                if (!_armed || _completed)
-                    return;
-
-                _sawCompilationStarted = true;
-                _compilationContext = context;
-            }
-
-            private void OnCompilationFinished(object context)
-            {
-                if (!_armed || _completed || !_sawCompilationStarted)
-                    return;
-
-                if (!ReferenceEquals(context, _compilationContext))
-                    return;
-
-                TryComplete("compilation_finished");
-            }
-
-            public bool TryComplete(string note)
-            {
-                if (_completed)
-                    return false;
-
-                _completed = true;
-                _armed = false;
-                Dispose();
-
-                try
-                {
-                    _completeSuccess(CommandResult.Ok(
-                        "compile completed",
-                        new Dictionary<string, object>
-                        {
-                            ["compiled"] = true,
-                            ["note"] = note,
-                        }));
-                }
-                catch (Exception ex)
-                {
-                    _completeFail?.Invoke(ex.Message);
-                }
-
-                return true;
-            }
-
-            public void Dispose()
-            {
-                CompilationPipeline.compilationStarted -= OnCompilationStarted;
-                CompilationPipeline.compilationFinished -= OnCompilationFinished;
-                Watches.Remove(_commandId);
+                EditorJobStateManager.Fail(commandId, ex.Message);
             }
         }
     }

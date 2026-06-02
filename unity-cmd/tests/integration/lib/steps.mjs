@@ -2,10 +2,8 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  profileNameForHostKind,
-  waitForInstance,
-} from '../../../src/client/connection.js';
+import { profileNameForHostKind } from '../../../src/client/connection.js';
+import { waitForProfileReady } from '../../../src/client/connector-readiness.js';
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -69,7 +67,7 @@ export async function runStep(step, defaultProfile, timeoutMs) {
 
   if (step.waitProfile) {
     const timeout = step.timeoutMs ?? timeoutMs;
-    const target = await waitForInstance({
+    const target = await waitForProfileReady({
       profile: step.waitProfile,
       timeoutMs: timeout,
       logProgress: false,
@@ -80,6 +78,33 @@ export async function runStep(step, defaultProfile, timeoutMs) {
         started,
         `profile "${step.waitProfile}" not reachable within ${timeout}ms`,
       );
+    }
+    return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+  }
+
+  if (step.writeFile) {
+    const filePath = expandEnv(step.writeFile.path);
+    if (!filePath) return fail(step.name, started, 'writeFile.path is required');
+    try {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, step.writeFile.content ?? '', 'utf8');
+    } catch (err) {
+      return fail(step.name, started, `writeFile failed: ${err.message}`);
+    }
+    return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
+  }
+
+  if (step.deleteFile) {
+    const filePath = expandEnv(step.deleteFile.path);
+    if (!filePath) return fail(step.name, started, 'deleteFile.path is required');
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.rmSync(filePath, { force: true });
+        const metaPath = `${filePath}.meta`;
+        if (fs.existsSync(metaPath)) fs.rmSync(metaPath, { force: true });
+      }
+    } catch (err) {
+      return fail(step.name, started, `deleteFile failed: ${err.message}`);
     }
     return { name: step.name, status: 'passed', elapsedMs: Date.now() - started };
   }

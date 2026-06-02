@@ -1,9 +1,9 @@
-using System.Collections.Generic;
-using UnityCliConnector.Params;
+﻿using System.Collections.Generic;
+using Air.UnityConnector.Params;
 using UnityEditor;
 using UnityEngine.SceneManagement;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     public static class AssetRefreshService
     {

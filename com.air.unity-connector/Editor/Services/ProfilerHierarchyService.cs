@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
 using UnityEditor.Profiling;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     public static class ProfilerHierarchyService
     {
@@ -158,7 +158,7 @@ namespace UnityCliConnector.Editor.Services
             if (depth <= 0) depth = 999;
 
             var sortColumn = GetSortColumn(sortBy);
-            var accumulated = new Dictionary<string, (float totalMs, float selfMs, long calls, int count)>();
+            var accumulated = new Dictionary<string, ProfilerSampleAccumulator>(StringComparer.Ordinal);
 
             for (var frameIndex = fromFrame; frameIndex <= toFrame; frameIndex++)
             {
@@ -173,9 +173,6 @@ namespace UnityCliConnector.Editor.Services
                     continue;
 
                 var rootId = frameData.GetRootItemID();
-                var rootChildIds = new List<int>();
-                frameData.GetItemChildren(rootId, rootChildIds);
-
                 var parentId = rootId;
                 if (!string.IsNullOrEmpty(rootName))
                 {
@@ -184,22 +181,24 @@ namespace UnityCliConnector.Editor.Services
                         parentId = found;
                 }
 
-                CollectFlat(frameData, parentId, depth, accumulated);
+                var frameSamples = new Dictionary<string, ProfilerSampleAccumulator>(StringComparer.Ordinal);
+                CollectFlat(frameData, parentId, depth, frameSamples);
+                MergeFrameSamples(accumulated, frameSamples);
             }
 
             var items = accumulated
-                .Select(kv => new Dictionary<string, object>
+                .Where(kv => kv.Value.FrameCount > 0)
+                .Select(kv =>
                 {
-                    ["name"] = kv.Key,
-                    ["avg_total_ms"] = Math.Round(kv.Value.totalMs / kv.Value.count, 3),
-                    ["avg_self_ms"] = Math.Round(kv.Value.selfMs / kv.Value.count, 3),
-                    ["avg_calls"] = Math.Round((double)kv.Value.calls / kv.Value.count, 1),
-                    ["appeared_in"] = kv.Value.count,
+                    var row = kv.Value.ToRow();
+                    row.Name = kv.Key;
+                    return row;
                 })
-                .Where(x => Convert.ToDouble(x["avg_total_ms"]) >= minTime)
-                .OrderByDescending(x =>
-                    sortBy == "self" ? Convert.ToDouble(x["avg_self_ms"]) : Convert.ToDouble(x["avg_total_ms"]))
+                .Where(row => row.AvgTotalMs >= minTime)
+                .OrderByDescending(row =>
+                    sortBy == "self" ? row.AvgSelfMs : sortBy == "calls" ? row.AvgCalls : row.AvgTotalMs)
                 .Take(maxItems)
+                .Select(row => row.ToDictionary())
                 .ToList();
 
             return new Dictionary<string, object>
@@ -218,7 +217,7 @@ namespace UnityCliConnector.Editor.Services
             HierarchyFrameDataView frameData,
             int parentId,
             int remainingDepth,
-            Dictionary<string, (float totalMs, float selfMs, long calls, int count)> acc)
+            Dictionary<string, ProfilerSampleAccumulator> acc)
         {
             var childIds = new List<int>();
             frameData.GetItemChildren(parentId, childIds);
@@ -226,18 +225,105 @@ namespace UnityCliConnector.Editor.Services
             foreach (var childId in childIds)
             {
                 var name = frameData.GetItemName(childId);
-                var totalMs = frameData.GetItemColumnDataAsFloat(childId, HierarchyFrameDataView.columnTotalTime);
-                var selfMs = frameData.GetItemColumnDataAsFloat(childId, HierarchyFrameDataView.columnSelfTime);
-                var calls = (long)frameData.GetItemColumnDataAsFloat(childId, HierarchyFrameDataView.columnCalls);
+                if (!acc.TryGetValue(name, out var sample))
+                {
+                    sample = new ProfilerSampleAccumulator();
+                    acc[name] = sample;
+                }
 
-                if (acc.TryGetValue(name, out var existing))
-                    acc[name] = (existing.totalMs + totalMs, existing.selfMs + selfMs, existing.calls + calls, existing.count + 1);
-                else
-                    acc[name] = (totalMs, selfMs, calls, 1);
+                sample.Add(
+                    ReadColumnMs(frameData, childId, HierarchyFrameDataView.columnTotalTime),
+                    ReadColumnMs(frameData, childId, HierarchyFrameDataView.columnSelfTime),
+                    ReadColumnCalls(frameData, childId));
 
                 if (remainingDepth > 1)
                     CollectFlat(frameData, childId, remainingDepth - 1, acc);
             }
+        }
+
+        private static void MergeFrameSamples(
+            Dictionary<string, ProfilerSampleAccumulator> totals,
+            Dictionary<string, ProfilerSampleAccumulator> frame)
+        {
+            foreach (var pair in frame)
+            {
+                if (!totals.TryGetValue(pair.Key, out var total))
+                {
+                    total = new ProfilerSampleAccumulator();
+                    totals[pair.Key] = total;
+                }
+
+                total.MergeFrame(pair.Value);
+            }
+        }
+
+        private static float ReadColumnMs(HierarchyFrameDataView frameData, int itemId, int column)
+        {
+            var value = frameData.GetItemColumnDataAsFloat(itemId, column);
+            return float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
+        }
+
+        private static long ReadColumnCalls(HierarchyFrameDataView frameData, int itemId)
+        {
+            var value = frameData.GetItemColumnDataAsFloat(itemId, HierarchyFrameDataView.columnCalls);
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                return 0;
+            return (long)Math.Max(0, Math.Round(value));
+        }
+
+        private sealed class ProfilerSampleAccumulator
+        {
+            float _totalMs;
+            float _selfMs;
+            long _calls;
+            int _frameCount;
+
+            public int FrameCount => _frameCount;
+
+            public void Add(float totalMs, float selfMs, long calls)
+            {
+                _totalMs += totalMs;
+                _selfMs += selfMs;
+                _calls += calls;
+            }
+
+            public void MergeFrame(ProfilerSampleAccumulator frame)
+            {
+                _totalMs += frame._totalMs;
+                _selfMs += frame._selfMs;
+                _calls += frame._calls;
+                _frameCount++;
+            }
+
+            public ProfilerAveragedRow ToRow()
+            {
+                var frames = Math.Max(1, _frameCount);
+                return new ProfilerAveragedRow
+                {
+                    AvgTotalMs = Math.Round(_totalMs / frames, 3),
+                    AvgSelfMs = Math.Round(_selfMs / frames, 3),
+                    AvgCalls = Math.Round(_calls / (double)frames, 1),
+                    AppearedIn = _frameCount,
+                };
+            }
+        }
+
+        private struct ProfilerAveragedRow
+        {
+            public string Name;
+            public double AvgTotalMs;
+            public double AvgSelfMs;
+            public double AvgCalls;
+            public int AppearedIn;
+
+            public Dictionary<string, object> ToDictionary() => new()
+            {
+                ["name"] = Name,
+                ["avg_total_ms"] = AvgTotalMs,
+                ["avg_self_ms"] = AvgSelfMs,
+                ["avg_calls"] = AvgCalls,
+                ["appeared_in"] = AppearedIn,
+            };
         }
 
         private static int FindItemByName(HierarchyFrameDataView frameData, int parentId, string name)
@@ -294,7 +380,7 @@ namespace UnityCliConnector.Editor.Services
                 shown++;
 
                 var selfTime = frameData.GetItemColumnDataAsFloat(childId, HierarchyFrameDataView.columnSelfTime);
-                var calls = (int)frameData.GetItemColumnDataAsFloat(childId, HierarchyFrameDataView.columnCalls);
+                var calls = (int)Math.Min(int.MaxValue, ReadColumnCalls(frameData, childId));
 
                 var item = new Dictionary<string, object>
                 {

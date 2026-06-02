@@ -1,21 +1,23 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class ProfilerCommand : CommandBase, ICommand<ProfilerParams>, ICommandDescriptorProvider
+    public class ProfilerCommand : CliCommand<ProfilerParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ProfilerParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ProfilerParams>(
             CommandNames.Profiler,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Unity Profiler: hierarchy, enable, disable, status, clear");
 
-        public void Run(ProfilerParams p)
+        public override void Run(ProfilerParams p)
         {
             try
             {
-                var data = Editor.Services.ProfilerHierarchyService.Execute(p);
-                CompleteSuccess(CommandResult.Ok("profiler completed", data));
+                var data = ProfilerHierarchyService.Execute(p);
+                CompleteSuccess(InvokeResult.Ok("profiler completed", data));
             }
             catch (System.Exception ex)
             {

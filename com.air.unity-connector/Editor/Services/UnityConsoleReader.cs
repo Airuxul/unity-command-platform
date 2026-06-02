@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     /// <summary>Reads Unity Editor console via LogEntries reflection (Unity 2021.3+).</summary>
     public static class UnityConsoleReader

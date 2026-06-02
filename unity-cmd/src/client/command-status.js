@@ -1,5 +1,6 @@
 import { requestJson } from './http.js';
 import { sleep } from './connection.js';
+import { POST_COMMAND_CAP_MS, SEND_COMMAND_RETRY_INTERVAL_MS, CONNECTION_RETRY_MIN_MS } from '../constants.js';
 
 export async function pollCommandStatus(
   baseUrl,
@@ -12,16 +13,24 @@ export async function pollCommandStatus(
 
   while (Date.now() < deadline) {
     try {
+      const remainingMs = Math.max(CONNECTION_RETRY_MIN_MS, deadline - Date.now());
       const { status, data } = await requestJson(`${baseUrl}/commands/${commandId}`, {
-        timeoutMs: Math.min(5_000, timeoutMs),
+        timeoutMs: Math.min(POST_COMMAND_CAP_MS, remainingMs),
+        retryOnDisconnect: allowConnectionRetry,
       });
 
       if (status === 404) {
+        if (allowConnectionRetry && Date.now() < deadline) {
+          await sleep(SEND_COMMAND_RETRY_INTERVAL_MS);
+          continue;
+        }
         return {
           ok: false,
           error: 'command_not_found',
           error_code: 'COMMAND_NOT_FOUND',
-          hint: 'Retry after domain reload; command status was lost.',
+          hint: allowConnectionRetry
+            ? 'Command status not found yet (Editor may still be reloading). Retrying.'
+            : 'Command status not found. If the Editor domain reloaded, retry with connection retry enabled or re-issue the command.',
           data,
         };
       }

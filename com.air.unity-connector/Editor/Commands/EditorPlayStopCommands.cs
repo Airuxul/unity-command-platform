@@ -1,34 +1,35 @@
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Invoke;
 using UnityEditor;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class EditorPlayCommand : CommandBase, ICommand<PlayParams>, ICommandDescriptorProvider
+    public class EditorPlayCommand : CliCommand<PlayParams>
     {
-        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<PlayParams>(
+        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<PlayParams>(
             CommandNames.Play,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Enter Play Mode (deferred)",
-            CommandCompletionCatalog.CompletionEnterPlay,
-            defaultTimeoutMs: 60000);
+            InvokeCompletionCatalog.CompletionEnterPlay,
+            defaultTimeoutMs: 20000);
 
-        public void Run(PlayParams p)
+        public override void Run(PlayParams p)
         {
             EditorApplication.EnterPlaymode();
         }
     }
 
-    public class EditorStopCommand : CommandBase, ICommand<StopParams>, ICommandDescriptorProvider
+    public class EditorStopCommand : CliCommand<StopParams>
     {
-        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<StopParams>(
+        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<StopParams>(
             CommandNames.Stop,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Exit Play Mode (deferred)",
-            CommandCompletionCatalog.CompletionExitPlay,
-            defaultTimeoutMs: 60000);
+            InvokeCompletionCatalog.CompletionExitPlay,
+            defaultTimeoutMs: 20000);
 
-        public void Run(StopParams p)
+        public override void Run(StopParams p)
         {
             EditorApplication.ExitPlaymode();
         }

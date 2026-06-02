@@ -11,6 +11,12 @@ import {
 } from './client/connection.js';
 import { cliError, enrichFailure } from './errors.js';
 import { hostKindDescription } from './host-labels.js';
+import {
+  HOST_KIND,
+  formatDefaultPortsLine,
+  formatProfileCreateExample,
+  DEFAULT_PORT_BY_HOST_KIND,
+} from './constants.js';
 
 function parsePort(raw, hostKind) {
   const port = Number.parseInt(raw ?? '', 10);
@@ -40,13 +46,13 @@ export function printProfileUsage() {
   unity-cmd profile delete <name>
 
   host-kind: editor | editor_play | player
-  defaults:  editor 6547, editor_play 6794, player 6795
+  defaults:  ${formatDefaultPortsLine()}
 
 Examples:
-  unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor
-  unity-cmd profile create editor-play --port 6794 --host-kind editor_play
+  ${formatProfileCreateExample('editor')}
+  ${formatProfileCreateExample('editor-play', HOST_KIND.EditorPlay)}
   unity-cmd profile set editor --port 6548
-  unity-cmd profile set editor-play --host 192.168.1.10 --port 6794
+  unity-cmd profile set editor-play --host 192.168.1.10 --port ${DEFAULT_PORT_BY_HOST_KIND[HOST_KIND.EditorPlay]}
   unity-cmd profile show editor
   unity-cmd profile list
 
@@ -147,7 +153,7 @@ async function runProfileList(flags, timeoutMs) {
   if (profiles.length === 0) {
     console.log('No profiles. Create one, e.g.:');
     console.log(
-      '  unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor',
+      `  ${formatProfileCreateExample('editor')}`,
     );
     process.exit(0);
   }
@@ -287,7 +293,7 @@ function runProfileSet(name, flags) {
       console.error('');
       console.error('Examples:');
       console.error(`  unity-cmd profile set ${name} --port 6548`);
-      console.error(`  unity-cmd profile set ${name} --host-kind editor_play --port 6794`);
+      console.error(`  unity-cmd profile set ${name} --host-kind ${HOST_KIND.EditorPlay} --port ${DEFAULT_PORT_BY_HOST_KIND[HOST_KIND.EditorPlay]}`);
     }
     process.exit(1);
   }

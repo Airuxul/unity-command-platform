@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { waitForInstance as waitForInstanceAsync } from '../../src/client/connection.js';
+import { waitForProfileReady } from '../../src/client/connector-readiness.js';
+import { HOST_KIND, PROFILE_BY_HOST_KIND, INTEGRATION_ATTACH_TIMEOUT_MS, INTEGRATION_STEP_SLEEP_MS } from '../../src/constants.js';
+import { formatProfileCreateExample } from '../../src/constants.js';
 import { runStep } from './lib/steps.mjs';
 
 function sleep(ms) {
@@ -18,7 +20,7 @@ const scenarioName =
     ? process.env.UNITY_CMD_SCENARIO.trim()
     : 'editor-lifecycle';
 const SCENARIO = path.join(__dirname, 'scenarios', `${scenarioName}.json`);
-const ATTACH_TIMEOUT_MS = 20_000;
+const ATTACH_TIMEOUT_MS = INTEGRATION_ATTACH_TIMEOUT_MS;
 const RUN_TIMEOUT_MS = Number(process.env.UNITY_CMD_RUN_TIMEOUT_MS ?? 15 * 60_000);
 
 async function main() {
@@ -35,7 +37,7 @@ async function main() {
 
   console.log(`[integration] scenario=${scenarioName}`);
   const profileName = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
-  const instance = await waitForInstanceAsync({
+  const instance = await waitForProfileReady({
     profile: profileName,
     timeoutMs: ATTACH_TIMEOUT_MS,
     logProgress: false,
@@ -53,7 +55,7 @@ async function main() {
   let inPlay = false;
 
   for (const step of scenario.steps) {
-    const timeoutMs = step.timeoutMs ?? 20_000;
+    const timeoutMs = step.timeoutMs ?? INTEGRATION_ATTACH_TIMEOUT_MS;
     const stepStarted = Date.now();
     try {
       const result = await Promise.race([
@@ -84,7 +86,7 @@ async function main() {
     }
 
     if (failed) break;
-    await sleep(300);
+    await sleep(INTEGRATION_STEP_SLEEP_MS);
   }
 
   writeReport({ skipped: false, instance: { host: instance.host, port: instance.port }, results });
@@ -99,14 +101,14 @@ function timeoutAfter(name, ms) {
 }
 
 function defaultProfileForScenario(name) {
-  return name === 'player-runtime' ? 'package-play' : 'editor';
+  return name === 'player-runtime' ? PROFILE_BY_HOST_KIND[HOST_KIND.Player] : 'editor';
 }
 
 function logSkip() {
   const profile = process.env.UNITY_CMD_PROFILE ?? defaultProfileForScenario(scenarioName);
   console.error(`[integration] 未检测到可用的 Unity profile (${profile})。`);
-  console.error('  - 请在外部工程中安装 unity-connector 并用 Unity 打开该项目');
-  console.error('  - 先创建 profile: unity-cmd profile create editor --host 127.0.0.1 --port 6547 --host-kind editor');
+  console.error('  - 请在外部工程中安装 com.air.unity-connector 并用 Unity 打开该项目');
+  console.error(`  - 先创建 profile: ${formatProfileCreateExample('editor')}`);
   console.error('  - Editor: set UNITY_CMD_SCENARIO=editor-lifecycle && npm run test:integration');
   console.error('  - Player: set UNITY_CMD_SCENARIO=player-runtime && UNITY_CMD_PROFILE=package-play');
   console.error('  - 截图默认写到 UNITY_CMD_CACHE_DIR（默认 ~/.unity-cmd/cache），无需 UNITY_CMD_WORKSPACE');

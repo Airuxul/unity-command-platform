@@ -1,4 +1,5 @@
 import { withRetry, isTransientError } from './connection.js';
+import { DEFAULT_TIMEOUT_MS } from '../constants.js';
 
 function buildHeaders(body) {
   const headers = {};
@@ -9,7 +10,7 @@ function buildHeaders(body) {
 }
 
 export async function requestJson(url, options = {}) {
-  const { method = 'GET', body, timeoutMs = 20_000, retryOnDisconnect = false } = options;
+  const { method = 'GET', body, timeoutMs = DEFAULT_TIMEOUT_MS, retryOnDisconnect = false } = options;
 
   const doRequest = async (remainingMs) => {
     const controller = new AbortController();

@@ -1,24 +1,25 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Invoke;
 using UnityEditor;
 using UnityEngine;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class ScreenshotCommand : CommandBase, ICommand<ScreenshotParams>, ICommandDescriptorProvider
+    public class ScreenshotCommand : CliCommand<ScreenshotParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ScreenshotParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ScreenshotParams>(
             CommandNames.Screenshot,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Capture Scene or Game view to PNG (Editor host only)");
 
         private const int DefaultWidth = 1920;
         private const int DefaultHeight = 1080;
 
-        public void Run(ScreenshotParams p)
+        public override void Run(ScreenshotParams p)
         {
             (bool ok, object data, string error) result;
             try
@@ -51,7 +52,7 @@ namespace UnityCliConnector.Commands
             }
 
             if (result.ok)
-                CompleteSuccess(CommandResult.Ok("screenshot captured", result.data));
+                CompleteSuccess(InvokeResult.Ok("screenshot captured", result.data));
             else
                 CompleteFail(result.error);
         }

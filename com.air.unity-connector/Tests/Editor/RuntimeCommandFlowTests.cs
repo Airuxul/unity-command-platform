@@ -1,11 +1,13 @@
+using Air.UnityConnector.Job;
 using System.Collections.Generic;
 using System.Threading;
 using NUnit.Framework;
-using UnityCliConnector.Commands;
-using UnityCliConnector.Network;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Host;
 using UnityEngine;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Tests
+namespace Air.UnityConnector.Tests
 {
     public class RuntimeCommandFlowTests
     {
@@ -14,14 +16,14 @@ namespace UnityCliConnector.Tests
         [Test]
         public void RuntimeCommand_AcceptsAndCompletes_OnEditorPlayHost()
         {
-            CommandDiscovery.Invalidate();
-            var host = new PlayModeCommandHost(ConnectorHostKind.EditorPlay);
-            var request = new CommandRequest
+            CliCommandDiscovery.Invalidate();
+            var host = new PlayModeInvokeHost(HostKind.EditorPlay);
+            var request = new InvokeRequest
             {
                 Command = CommandName,
                 Parameters = new Dictionary<string, object>(),
                 RequestId = "req-runtime-command-flow",
-                Endpoint = ConnectorHostKind.EditorPlay,
+                Endpoint = HostKind.EditorPlay,
             };
 
             var post = host.HandleCommand(request);
@@ -30,11 +32,11 @@ namespace UnityCliConnector.Tests
             var commandId = commandIdRaw as string;
             Assert.IsNotNull(commandId);
 
-            var command = WaitForCommand(ConnectorHostKind.EditorPlay, commandId, 7000);
+            var command = WaitForCommand(HostKind.EditorPlay, commandId, 7000);
             Assert.IsNotNull(command);
-            Assert.AreEqual(CommandStatus.Succeeded, command.Status);
+            Assert.AreEqual(InvokeJobStatus.Succeeded, command.Status);
 
-            var payload = CommandResponseBuilder.ToResponse(command);
+            var payload = JobResponseBuilder.ToResponse(command);
             Assert.IsNotNull(payload);
             Assert.AreEqual("succeeded", payload["status"]);
             Assert.IsTrue(payload.ContainsKey("result"));
@@ -42,12 +44,12 @@ namespace UnityCliConnector.Tests
 
         private sealed class RuntimeFlowParams { }
 
-        private sealed class RuntimeFlowCommand : CommandBase, ICommandDescriptorProvider, ICommand<RuntimeFlowParams>
+        private sealed class RuntimeFlowCommand : CliCommand<RuntimeFlowParams>
         {
-            public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<RuntimeFlowParams>(
-                CommandName, CommandScope.Runtime, "runtime command flow test command");
+            public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<RuntimeFlowParams>(
+                CommandName, CommandHostScope.Runtime, "runtime command flow test command");
 
-            public void Run(RuntimeFlowParams cliParams)
+            public override void Run(RuntimeFlowParams cliParams)
             {
                 MarkRunning();
                 _ = System.Threading.Tasks.Task.Run(() =>
@@ -55,24 +57,24 @@ namespace UnityCliConnector.Tests
                     Debug.Log("[unity-connector][test] runtime command started");
                     Thread.Sleep(5000);
                     Debug.Log("[unity-connector][test] runtime command finished");
-                    CompleteSuccess(CommandResult.Ok("runtime command finished"));
+                    CompleteSuccess(InvokeResult.Ok("runtime command finished"));
                 });
             }
         }
 
-        private static CommandRecord WaitForCommand(string host, string commandId, int timeoutMs)
+        private static InvokeJobRecord WaitForCommand(string host, string commandId, int timeoutMs)
         {
             var waited = 0;
             while (waited <= timeoutMs)
             {
-                var command = RuntimeCommandStateManager.Get(host, commandId);
-                if (command != null && command.Status is CommandStatus.Succeeded or CommandStatus.Failed or CommandStatus.Orphaned)
+                var command = RuntimeJobStateManager.Get(host, commandId);
+                if (command != null && command.Status is InvokeJobStatus.Succeeded or InvokeJobStatus.Failed or InvokeJobStatus.Orphaned)
                     return command;
                 Thread.Sleep(100);
                 waited += 100;
             }
 
-            return RuntimeCommandStateManager.Get(host, commandId);
+            return RuntimeJobStateManager.Get(host, commandId);
         }
     }
 }

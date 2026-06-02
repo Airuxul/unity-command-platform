@@ -1,4 +1,4 @@
-/** @typedef {'NO_INSTANCE' | 'NO_PROFILE' | 'CONNECTION_FAILED' | 'CATALOG_FETCH_FAILED' | 'SCOPE_MISMATCH' | 'COMMAND_FAILED' | 'DEFERRED_COMMAND_FAILED' | 'COMMAND_STATUS_TIMEOUT' | 'COMMAND_NOT_FOUND' | 'HTTP_TIMEOUT' | 'UNKNOWN'} ErrorCode */
+/** @typedef {'NO_INSTANCE' | 'NO_PROFILE' | 'CONNECTOR_OUTDATED' | 'CONNECTION_FAILED' | 'CATALOG_FETCH_FAILED' | 'SCOPE_MISMATCH' | 'COMMAND_FAILED' | 'DEFERRED_COMMAND_FAILED' | 'COMMAND_STATUS_TIMEOUT' | 'COMMAND_NOT_FOUND' | 'HTTP_TIMEOUT' | 'UNKNOWN'} ErrorCode */
 
 /**
  * @param {string} message
@@ -35,7 +35,8 @@ export function enrichFailure(res, context = {}) {
     hint = 'Increase --timeout or check Unity Console (--profile editor console).';
   } else if (error === 'command_not_found') {
     error_code = 'COMMAND_NOT_FOUND';
-    hint = 'Domain reload may have cleared the command status. Retry the command.';
+    hint =
+      'Command status not found. After a domain reload, retry with allow_connection_retry or re-issue the command.';
   } else if (error === 'failed' || error === 'orphaned' || context.deferred) {
     error_code = 'DEFERRED_COMMAND_FAILED';
     hint = 'Run unity-cmd console --type error,warning to inspect Editor errors.';

@@ -1,18 +1,19 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class PingCommand : CommandBase, ICommand, ICommandDescriptorProvider
+    public class PingCommand : CliCommand
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
             CommandNames.Ping,
-            CommandScope.Any,
+            CommandHostScope.Any,
             "Health check");
 
-        public void Run()
+        public override void Run()
         {
-            CompleteSuccess(CommandResult.Ok("pong"));
+            CompleteSuccess(InvokeResult.Ok("pong"));
         }
     }
 }

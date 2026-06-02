@@ -2,6 +2,9 @@ import { ping } from './client/command.js';
 import { loadProfile, listProfiles, normalizeHostKind, hostKindMatches } from './client/connection.js';
 import { loadCatalog, readCachedCatalog } from './catalog.js';
 import { hostKindLabel, reachHint } from './host-labels.js';
+import { HOST_KIND } from './constants.js';
+import { cliResult } from './cli-result.js';
+import { resolveProfileName } from './remote-command.js';
 
 const OFFLINE_HINTS = {
   editor: 'compile, console, profiler, play/stop, screenshot, ping',
@@ -12,7 +15,7 @@ const OFFLINE_HINTS = {
 function exampleLines(profileName, hostKind) {
   const k = normalizeHostKind(hostKind);
   const p = `--profile ${profileName}`;
-  if (k === 'editor_play' || k === 'player') {
+  if (k === HOST_KIND.EditorPlay || k === HOST_KIND.Player) {
     return [`  unity-cmd ${p} echo`, `  unity-cmd ${p} ping`];
   }
   return [
@@ -106,24 +109,21 @@ export function formatProfileHelp(profile, options = {}) {
   return lines.join('\n');
 }
 
-function resolveProfileName(flags) {
-  return flags.profile ?? process.env.UNITY_CMD_PROFILE ?? null;
-}
-
+/** @returns {Promise<import('./cli-result.js').CliResult>} */
 export async function runHelp(flags, timeoutMs) {
   const profileName = resolveProfileName(flags);
   if (!profileName) {
-    console.log(formatLocalHelp({ profiles: listProfiles() }));
-    process.exit(0);
+    return cliResult(0, { stdout: formatLocalHelp({ profiles: listProfiles() }) });
   }
 
   const saved = loadProfile(profileName);
   if (!saved) {
-    console.log(`Profile "${profileName}" not found.`);
-    console.log(
-      `Create: unity-cmd profile create ${profileName} --host 127.0.0.1 --port <port> --host-kind <editor|editor_play|player>`,
-    );
-    process.exit(0);
+    return cliResult(0, {
+      stdout: [
+        `Profile "${profileName}" not found.`,
+        `Create: unity-cmd profile create ${profileName} --host 127.0.0.1 --port <port> --host-kind <editor|editor_play|player>`,
+      ].join('\n'),
+    });
   }
 
   const profile = { ...saved, name: profileName };
@@ -148,19 +148,19 @@ export async function runHelp(flags, timeoutMs) {
   if (healthOk) {
     try {
       const catalog = await loadCatalog(target, { timeoutMs, forceRefresh: true });
-      console.log(formatProfileHelp(profile, { catalog, connected: true }));
-      process.exit(0);
+      return cliResult(0, {
+        stdout: formatProfileHelp(profile, { catalog, connected: true }),
+      });
     } catch {
       const cached = readCachedCatalog(target);
-      console.log(
-        formatProfileHelp(profile, {
+      return cliResult(0, {
+        stdout: formatProfileHelp(profile, {
           connected: false,
           reason: 'catalog fetch failed',
           catalog: cached,
           cached: Boolean(cached),
         }),
-      );
-      process.exit(0);
+      });
     }
   }
 
@@ -169,13 +169,12 @@ export async function runHelp(flags, timeoutMs) {
     healthDetail && typeof healthDetail === 'object'
       ? `expected ${target.connector_host}, got ${healthDetail.host ?? 'none'}`
       : String(healthDetail ?? 'unreachable');
-  console.log(
-    formatProfileHelp(profile, {
+  return cliResult(0, {
+    stdout: formatProfileHelp(profile, {
       connected: false,
       reason,
       catalog: cached,
       cached: Boolean(cached),
     }),
-  );
-  process.exit(0);
+  });
 }

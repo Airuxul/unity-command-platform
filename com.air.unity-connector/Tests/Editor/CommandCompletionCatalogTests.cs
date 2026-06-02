@@ -1,27 +1,29 @@
+using Air.UnityConnector.Invoke;
 using NUnit.Framework;
+using Air.UnityConnector.Commands;
 
-namespace UnityCliConnector.Tests
+namespace Air.UnityConnector.Tests
 {
-    public class CommandCompletionCatalogTests
+    public class InvokeCompletionCatalogTests
     {
         [Test]
         public void Compile_IsDeferred()
         {
             Assert.AreEqual(
-                CommandCompletionCatalog.CompletionCompilation,
-                CommandCompletionCatalog.GetCompletionKind(CommandNames.Compile));
+                InvokeCompletionCatalog.CompletionCompilation,
+                InvokeCompletionCatalog.GetCompletionKind(CommandNames.Compile));
         }
 
         [Test]
         public void Ping_IsNotDeferred()
         {
-            Assert.IsNull(CommandCompletionCatalog.GetCompletionKind(CommandNames.Ping));
+            Assert.IsNull(InvokeCompletionCatalog.GetCompletionKind(CommandNames.Ping));
         }
 
         [Test]
         public void Console_IsNotDeferred()
         {
-            Assert.IsNull(CommandCompletionCatalog.GetCompletionKind(CommandNames.Console));
+            Assert.IsNull(InvokeCompletionCatalog.GetCompletionKind(CommandNames.Console));
         }
     }
 }

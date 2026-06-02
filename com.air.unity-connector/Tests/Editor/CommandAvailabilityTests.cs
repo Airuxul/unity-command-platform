@@ -1,51 +1,52 @@
 using NUnit.Framework;
-using UnityCliConnector.Network;
+using Air.UnityConnector.Host;
+using Air.UnityConnector.Invoke;
 
-namespace UnityCliConnector.Tests
+namespace Air.UnityConnector.Tests
 {
-    public class CommandAvailabilityTests
+    public class InvokeAvailabilityTests
     {
         [Test]
         public void EditorHost_AllowsEditorScopeOnly()
         {
             Assert.IsFalse(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Runtime,
-                    ConnectorHostKind.Editor));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Runtime,
+                    HostKind.Editor));
             Assert.IsTrue(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Editor,
-                    ConnectorHostKind.Editor));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Editor,
+                    HostKind.Editor));
             Assert.IsTrue(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Any,
-                    ConnectorHostKind.Editor));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Any,
+                    HostKind.Editor));
         }
 
         [Test]
         public void EditorPlayHost_AllowsRuntimeScopeOnly()
         {
             Assert.IsFalse(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Editor,
-                    ConnectorHostKind.EditorPlay));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Editor,
+                    HostKind.EditorPlay));
             Assert.IsTrue(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Runtime,
-                    ConnectorHostKind.EditorPlay));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Runtime,
+                    HostKind.EditorPlay));
         }
 
         [Test]
         public void PlayerHost_AllowsRuntimeScopeOnly()
         {
             Assert.IsFalse(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Editor,
-                    ConnectorHostKind.Player));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Editor,
+                    HostKind.Player));
             Assert.IsTrue(
-                CommandAvailability.IsAvailableForHost(
-                    CommandScope.Runtime,
-                    ConnectorHostKind.Player));
+                InvokeAvailability.IsAvailableForHost(
+                    CommandHostScope.Runtime,
+                    HostKind.Player));
         }
     }
 }

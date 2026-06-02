@@ -1,20 +1,21 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Editor.Services;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class CompileCommand : CommandBase, ICommand<CompileParams>, ICommandDescriptorProvider
+    public class CompileCommand : CliCommand<CompileParams>
     {
-        public CommandDescriptor Descriptor { get; } = new DeferredCommandDescriptor<CompileParams>(
+        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<CompileParams>(
             CommandNames.Compile,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Request script compilation (deferred)",
-            CommandCompletionCatalog.CompletionCompilation,
+            InvokeCompletionCatalog.CompletionCompilation,
             aliases: new[] { "recompile", "reload" },
-            defaultTimeoutMs: 30000);
+            defaultTimeoutMs: 20000);
 
-        public void Run(CompileParams p)
+        public override void Run(CompileParams p)
         {
             ScriptCompilationService.RequestWithCompletion(
                 CommandId,

@@ -1,12 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fetchCatalog, ping } from './client/command.js';
-
-const CACHE_DIR = path.join(os.homedir(), '.unity-cmd', 'cache');
-
-/** Agent skill TTL: catalog older than this is treated as expired. */
-export const CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+import { CACHE_DIR, CATALOG_TTL_MS } from './constants.js';
 
 export function cachePathForTarget(target) {
   const key = `${target.host}:${target.port}`.replace(/[\\/:*?"<>|]/g, '_');
@@ -203,27 +198,11 @@ export function resolveRemoteCommand(command, flags = {}, catalog) {
   else if (aliasMap[lower]) canonical = aliasMap[lower];
 
   const entry = byName[canonical];
-  const refreshWithCompile =
-    canonical === 'refresh' &&
-    (flags.compile === true || flags.compile === 'true');
-  const compileEntry = byName.compile;
-
-  if (refreshWithCompile) {
-    return {
-      command: canonical,
-      allowConnectionRetry: true,
-      minTimeoutMs: compileEntry?.default_timeout_ms ?? 30_000,
-    };
-  }
-
-  const minTimeoutMs =
-    entry?.default_timeout_ms > 0 ? entry.default_timeout_ms : null;
   const allowConnectionRetry =
     entry?.allow_connection_retry !== false && entry?.allow_connection_retry !== 'false';
 
   return {
     command: canonical,
     allowConnectionRetry,
-    minTimeoutMs,
   };
 }

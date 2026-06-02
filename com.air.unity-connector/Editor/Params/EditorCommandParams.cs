@@ -1,4 +1,4 @@
-namespace UnityCliConnector.Params
+﻿namespace Air.UnityConnector.Params
 {
     public sealed class ReserializeParams
     {
@@ -118,13 +118,13 @@ namespace UnityCliConnector.Params
 
     public sealed class PlayParams
     {
-        [CliParam("timeout_ms", Description = "override poll timeout (default: 60000)")]
+        [CliParam("timeout_ms", Description = "override poll timeout (default: 20000)")]
         public int? TimeoutMs { get; set; }
     }
 
     public sealed class StopParams
     {
-        [CliParam("timeout_ms", Description = "override poll timeout (default: 60000)")]
+        [CliParam("timeout_ms", Description = "override poll timeout (default: 20000)")]
         public int? TimeoutMs { get; set; }
     }
 

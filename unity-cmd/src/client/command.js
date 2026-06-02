@@ -1,14 +1,21 @@
 import { requestJson } from './http.js';
 import { pollCommandStatus } from './command-status.js';
-import { resolveTimeoutMs } from '../timeout.js';
+import { resolveTimeoutMs } from '../runtime.js';
 import { enrichFailure } from '../errors.js';
-import { sleep, PING_MAX_ATTEMPTS, PING_RETRY_INTERVAL_MS } from './connection.js';
-
-export { PING_MAX_ATTEMPTS, PING_RETRY_INTERVAL_MS };
+import { sleep } from './connection.js';
+import {
+  CONNECTOR_HTTP_ERROR,
+  PING_MAX_ATTEMPTS,
+  PING_RETRY_INTERVAL_MS,
+  POST_COMMAND_CAP_MS,
+  RETRYABLE_POST_ERRORS,
+  SEND_COMMAND_RETRY_INTERVAL_MS,
+} from '../constants.js';
 
 export async function sendCommand(target, command, parameters = {}, options = {}) {
   options.command = command;
-  const timeoutMs = resolveTimeoutMs(options.timeoutMs);
+  const commandTimeoutMs = resolveTimeoutMs(options.timeoutMs);
+  const deadline = Date.now() + commandTimeoutMs;
   const baseUrl = `http://${target.host}:${target.port}`;
   const body = {
     command,
@@ -17,39 +24,73 @@ export async function sendCommand(target, command, parameters = {}, options = {}
   };
 
   const retry = options.allowConnectionRetry !== false;
+  let lastResult = null;
 
-  const { status, data } = await requestJson(`${baseUrl}/command`, {
-    method: 'POST',
-    body,
-    timeoutMs,
-    retryOnDisconnect: retry,
-  });
+  while (Date.now() < deadline) {
+    const postTimeoutMs = Math.min(POST_COMMAND_CAP_MS, Math.max(500, deadline - Date.now()));
 
-  const commandId = data?.command_id;
-  if (status === 202 && commandId) {
-    const polled = await pollCommandStatus(baseUrl, commandId, timeoutMs, {
-      allowConnectionRetry: retry,
-    });
+    let status;
+    let data;
+    try {
+      ({ status, data } = await requestJson(`${baseUrl}/command`, {
+        method: 'POST',
+        body,
+        timeoutMs: postTimeoutMs,
+        retryOnDisconnect: retry,
+      }));
+    } catch (err) {
+      if (!retry) throw err;
+      await sleep(SEND_COMMAND_RETRY_INTERVAL_MS);
+      continue;
+    }
+
+    const commandId = data?.command_id;
+    if (status === 202 && commandId) {
+      const pollTimeoutMs = Math.max(0, deadline - Date.now());
+      const polled = await pollCommandStatus(baseUrl, commandId, pollTimeoutMs, {
+        allowConnectionRetry: retry,
+      });
+      const result = {
+        ok: polled.ok,
+        status: polled.ok ? 200 : 500,
+        data: polled.data?.result ?? polled.data,
+        error: polled.error,
+        command_id: commandId,
+        request_id: data.request_id,
+        timedOut: polled.timedOut,
+      };
+      return polled.ok ? result : enrichFailure(result, { deferred: true, status: result.status });
+    }
+
     const result = {
-      ok: polled.ok,
-      status: polled.ok ? 200 : 500,
-      data: polled.data?.result ?? polled.data,
-      error: polled.error,
-      command_id: commandId,
-      request_id: data.request_id,
-      timedOut: polled.timedOut,
+      ok: data?.ok ?? (status >= 200 && status < 300),
+      status,
+      data: data?.data,
+      error: data?.error,
+      request_id: data?.request_id,
     };
-    return polled.ok ? result : enrichFailure(result, { deferred: true, status: result.status });
+    lastResult = result;
+
+    if (
+      retry &&
+      status === 503 &&
+      RETRYABLE_POST_ERRORS.has(String(data?.error ?? ''))
+    ) {
+      await sleep(SEND_COMMAND_RETRY_INTERVAL_MS);
+      continue;
+    }
+
+    return result.ok ? result : enrichFailure(result, { status, command: options.command });
   }
 
-  const result = {
-    ok: data?.ok ?? (status >= 200 && status < 300),
-    status,
-    data: data?.data,
-    error: data?.error,
-    request_id: data?.request_id,
-  };
-  return result.ok ? result : enrichFailure(result, { status, command: options.command });
+  if (lastResult) {
+    return enrichFailure(lastResult, { status: lastResult.status, command: options.command });
+  }
+
+  return enrichFailure(
+    { ok: false, status: 503, error: CONNECTOR_HTTP_ERROR.Reloading },
+    { status: 503, command: options.command },
+  );
 }
 
 async function pingOnce(target, options = {}) {

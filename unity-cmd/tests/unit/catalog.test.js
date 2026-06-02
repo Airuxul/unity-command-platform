@@ -4,8 +4,8 @@ import {
   resolveRemoteCommand,
   catalogTimestamps,
   isCatalogExpired,
-  CATALOG_TTL_MS,
 } from '../../src/catalog.js';
+import { CATALOG_TTL_MS } from '../../src/constants.js';
 
 const MOCK_CATALOG = {
   catalog_version: 'test',
@@ -14,12 +14,12 @@ const MOCK_CATALOG = {
       name: 'compile',
       completion: 'compilation',
       aliases: ['recompile', 'reload', 'editor.recompile'],
-      default_timeout_ms: 30000,
+      default_timeout_ms: 20000,
       allow_connection_retry: true,
     },
     {
       name: 'play',
-      default_timeout_ms: 60000,
+      default_timeout_ms: 20000,
       allow_connection_retry: true,
     },
     {
@@ -28,7 +28,7 @@ const MOCK_CATALOG = {
     },
     {
       name: 'refresh',
-      allow_connection_retry: false,
+      allow_connection_retry: true,
     },
   ],
   commands_by_name: {},
@@ -48,28 +48,24 @@ test('recompile aliases map to compile deferred command', () => {
     const r = resolveRemoteCommand(alias, {}, MOCK_CATALOG);
     assert.equal(r.command, 'compile');
     assert.equal(r.allowConnectionRetry, true);
-    assert.equal(r.minTimeoutMs, 30_000);
   }
 });
 
-test('compile gets long timeout and retry', () => {
+test('deferred command resolves catalog retry metadata', () => {
   const r = resolveRemoteCommand('compile', {}, MOCK_CATALOG);
   assert.equal(r.command, 'compile');
   assert.equal(r.allowConnectionRetry, true);
-  assert.equal(r.minTimeoutMs, 30_000);
 });
 
 test('ping honors catalog allow_connection_retry', () => {
   const r = resolveRemoteCommand('ping', {}, MOCK_CATALOG);
   assert.equal(r.command, 'ping');
   assert.equal(r.allowConnectionRetry, false);
-  assert.equal(r.minTimeoutMs, null);
 });
 
-test('play gets retry and 60s min timeout', () => {
+test('play gets retry from catalog', () => {
   const r = resolveRemoteCommand('play', {}, MOCK_CATALOG);
   assert.equal(r.allowConnectionRetry, true);
-  assert.equal(r.minTimeoutMs, 60_000);
 });
 
 test('editor.play alias resolves to play', () => {
@@ -78,11 +74,10 @@ test('editor.play alias resolves to play', () => {
   assert.equal(r.command, 'play');
 });
 
-test('refresh with compile flag uses compile timeout', () => {
+test('refresh uses catalog entry regardless of compile flag', () => {
   const r = resolveRemoteCommand('refresh', { compile: true }, MOCK_CATALOG);
   assert.equal(r.command, 'refresh');
   assert.equal(r.allowConnectionRetry, true);
-  assert.equal(r.minTimeoutMs, 30_000);
 });
 
 test('catalogTimestamps sets updated_at and expires_at one TTL apart', () => {

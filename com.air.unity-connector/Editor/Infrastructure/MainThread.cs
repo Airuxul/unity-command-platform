@@ -1,7 +1,7 @@
-using System.Threading;
+﻿using System.Threading;
 using UnityEditor;
 
-namespace UnityCliConnector
+namespace Air.UnityConnector
 {
     [InitializeOnLoad]
     internal static class MainThread

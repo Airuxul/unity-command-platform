@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,11 +7,11 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
 using UnityEditor;
 using UnityEngine;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     public static class CsharpExecutor
     {

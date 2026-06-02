@@ -1,12 +1,12 @@
 {
   "name": "player-runtime",
-  "description": "Development Build player â€?runtime commands only, Editor tools must fail",
+  "description": "Development Build player — runtime commands only, Editor tools must fail",
   "steps": [
     {
       "name": "01_ping_player",
       "command": "ping",
       "expect": { "ok": true },
-      "expectConnectorBuild": 23
+      "expectConnectorBuild": 39
     },
     {
       "name": "02_list_catalog_player",

@@ -1,31 +1,66 @@
-import net from 'node:net';
+import { ping } from '../../src/client/command.js';
+import { loadProfile, hostKindMatches } from '../../src/client/connection.js';
+import { HOST_KIND, INTEGRATION_PLAYER_PROBE_MS, PROFILE_BY_HOST_KIND } from '../../src/constants.js';
+import { formatProfileCreateExample } from '../../src/constants.js';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { loadProfile, DEFAULT_PLAYER_PORT } from '../../src/client/connection.js';
 
 const RUNNER = fileURLToPath(new URL('./runner.mjs', import.meta.url));
 
 async function main() {
   await runScenario('editor-lifecycle', process.env.UNITY_CMD_PROFILE ?? 'editor');
 
-  const playerProfileName = process.env.UNITY_CMD_PLAYER_PROFILE ?? 'package-play';
+  const playerProfileName =
+    process.env.UNITY_CMD_PLAYER_PROFILE ?? PROFILE_BY_HOST_KIND[HOST_KIND.Player];
+  await maybeRunPlayerScenario(playerProfileName);
+}
+
+async function maybeRunPlayerScenario(playerProfileName) {
   const playerProfile = loadProfile(playerProfileName);
   if (!playerProfile?.host || !playerProfile?.port) {
     console.log(
-      `[integration] skip player-runtime: profile '${playerProfileName}' missing or invalid (requires host+port).`,
+      `[integration] skip player-runtime: profile '${playerProfileName}' missing or invalid.`,
     );
+    console.log(`[integration] hint: ${formatProfileCreateExample(playerProfileName, HOST_KIND.Player)}`);
     return;
   }
 
-  const listening = await isPortListening(playerProfile.host, playerProfile.port, 1000);
-  if (!listening) {
-    console.log(
-      `[integration] skip player-runtime: ${playerProfile.host}:${playerProfile.port} is not listening.`,
-    );
+  const probe = await probePlayerConnector(playerProfile);
+  if (!probe.ok) {
+    console.log(`[integration] skip player-runtime: ${probe.reason}`);
+    if (probe.reason === 'not_listening') {
+      console.log(
+        `[integration] hint: start a Development Build with connector on ${playerProfile.host}:${playerProfile.port}`,
+      );
+    } else if (probe.reason === 'host_mismatch') {
+      console.log(
+        `[integration] hint: endpoint responded but host is '${probe.actualHost}' (expected '${HOST_KIND.Player}')`,
+      );
+    }
     return;
   }
 
   await runScenario('player-runtime', playerProfileName);
+}
+
+async function probePlayerConnector(profile) {
+  const target = { host: profile.host, port: profile.port };
+  try {
+    const res = await ping(target, {
+      timeoutMs: INTEGRATION_PLAYER_PROBE_MS,
+      retryOnDisconnect: false,
+      maxAttempts: 1,
+    });
+    if (!res.ok) {
+      return { ok: false, reason: 'not_listening' };
+    }
+    if (!hostKindMatches(HOST_KIND.Player, res.data?.host)) {
+      return { ok: false, reason: 'host_mismatch', actualHost: res.data?.host ?? null };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'not_listening' };
+  }
 }
 
 function runScenario(scenario, profile) {
@@ -44,26 +79,6 @@ function runScenario(scenario, profile) {
       if (code === 0) return resolve();
       reject(new Error(`scenario '${scenario}' failed with exit code ${code}`));
     });
-  });
-}
-
-function isPortListening(host, port, timeoutMs = 1000) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    let settled = false;
-
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolve(result);
-    };
-
-    socket.setTimeout(timeoutMs);
-    socket.once('connect', () => finish(true));
-    socket.once('timeout', () => finish(false));
-    socket.once('error', () => finish(false));
-    socket.connect(port ?? DEFAULT_PLAYER_PORT, host ?? '127.0.0.1');
   });
 }
 

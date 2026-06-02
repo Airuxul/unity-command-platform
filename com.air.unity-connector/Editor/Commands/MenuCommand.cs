@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
-using UnityCliConnector.Commands;
+using Air.UnityConnector.Invoke;
 using UnityEditor;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class MenuCommand : CommandBase, ICommand<MenuParams>, ICommandDescriptorProvider
+    public class MenuCommand : CliCommand<MenuParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<MenuParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<MenuParams>(
             CommandNames.Menu,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Execute a Unity menu item by path");
 
         private static readonly HashSet<string> Blocklist = new(StringComparer.OrdinalIgnoreCase)
@@ -18,7 +19,7 @@ namespace UnityCliConnector.Commands
             "File/Quit",
         };
 
-        public void Run(MenuParams p)
+        public override void Run(MenuParams p)
         {
             var menuPath = p.MenuPath;
             if (string.IsNullOrWhiteSpace(menuPath))
@@ -42,7 +43,7 @@ namespace UnityCliConnector.Commands
                 return;
             }
 
-            CompleteSuccess(CommandResult.Ok($"menu executed: {menuPath}"));
+            CompleteSuccess(InvokeResult.Ok($"menu executed: {menuPath}"));
         }
     }
 }

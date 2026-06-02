@@ -12,6 +12,61 @@ test('runStep sleepMs passes without CLI', async () => {
   assert.ok(result.elapsedMs >= 45);
 });
 
+test('runStep writeFile creates the file with given content', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unity-cmd-step-wf-'));
+  const filePath = path.join(dir, 'sub', 'test.cs');
+  try {
+    const result = await runStep(
+      { name: 'write', writeFile: { path: filePath, content: '// hello\n' } },
+      {},
+      5000,
+    );
+    assert.equal(result.status, 'passed');
+    assert.equal(fs.readFileSync(filePath, 'utf8'), '// hello\n');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runStep writeFile fails when path is missing', async () => {
+  const result = await runStep(
+    { name: 'write_no_path', writeFile: { content: '// x' } },
+    {},
+    5000,
+  );
+  assert.equal(result.status, 'failed');
+  assert.match(result.error, /path is required/);
+});
+
+test('runStep deleteFile removes file and meta', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unity-cmd-step-df-'));
+  const filePath = path.join(dir, 'bad.cs');
+  const metaPath = `${filePath}.meta`;
+  fs.writeFileSync(filePath, 'x');
+  fs.writeFileSync(metaPath, 'y');
+  try {
+    const result = await runStep(
+      { name: 'delete', deleteFile: { path: filePath } },
+      {},
+      5000,
+    );
+    assert.equal(result.status, 'passed');
+    assert.equal(fs.existsSync(filePath), false);
+    assert.equal(fs.existsSync(metaPath), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runStep deleteFile passes even when file does not exist', async () => {
+  const result = await runStep(
+    { name: 'delete_missing', deleteFile: { path: '/tmp/nonexistent-unity-cmd-test.cs' } },
+    {},
+    5000,
+  );
+  assert.equal(result.status, 'passed');
+});
+
 test('runStep assertFile checks size', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unity-cmd-step-'));
   const project = path.join(dir, 'Proj');

@@ -1,10 +1,13 @@
-namespace UnityCliConnector.Completion
+using Air.UnityConnector.Job;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector;
+namespace Air.UnityConnector.Completion
 {
     public sealed class EnterPlayModePolicy : ICompletionPolicy
     {
-        public string Kind => CommandCompletionCatalog.CompletionEnterPlay;
+        public string Kind => InvokeCompletionCatalog.CompletionEnterPlay;
 
-        public bool TryComplete(CommandRecord command, EditorStateSnapshot state, out object result, out string error)
+        public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out string error)
         {
             result = null;
             error = null;
@@ -15,8 +18,8 @@ namespace UnityCliConnector.Completion
                 return true;
             }
 
-            if (command.Status == CommandStatus.Pending)
-                command.Status = CommandStatus.Running;
+            if (command.Status == InvokeJobStatus.Pending)
+                command.Status = InvokeJobStatus.Running;
 
             return false;
         }

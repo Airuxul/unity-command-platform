@@ -1,4 +1,4 @@
-namespace UnityCliConnector.Params
+﻿namespace Air.UnityConnector.Params
 {
     public sealed class RuntimeLogParams
     {

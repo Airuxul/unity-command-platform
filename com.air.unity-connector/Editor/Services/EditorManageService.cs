@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Params;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace UnityCliConnector.Editor.Services
+namespace Air.UnityConnector.Editor.Services
 {
     public static class EditorManageService
     {

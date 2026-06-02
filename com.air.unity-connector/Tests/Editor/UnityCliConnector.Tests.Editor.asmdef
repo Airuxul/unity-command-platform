@@ -1,9 +1,11 @@
 {
-  "name": "UnityCliConnector.Tests.Editor",
-  "rootNamespace": "UnityCliConnector.Tests",
+  "name": "com.air.UnityConnector.Tests.Editor",
+  "rootNamespace": "Air.UnityConnector.Tests",
   "references": [
-    "UnityCliConnector.Core",
-    "UnityCliConnector.Editor"
+    "com.air.GameCore",
+    "com.air.UnityGameCore.Runtime",
+    "com.air.UnityConnector.Runtime",
+    "com.air.UnityConnector.Editor"
   ],
   "includePlatforms": [
     "Editor"

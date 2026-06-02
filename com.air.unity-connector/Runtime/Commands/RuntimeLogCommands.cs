@@ -1,51 +1,52 @@
-using UnityCliConnector.Commands;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Params;
 using UnityEngine;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class DebugRuntimeCommand : CommandBase, ICommand<RuntimeLogParams>, ICommandDescriptorProvider
+    public class DebugRuntimeCommand : CliCommand<RuntimeLogParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<RuntimeLogParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<RuntimeLogParams>(
             CommandNames.Debug,
-            CommandScope.Runtime,
+            CommandHostScope.Runtime,
             "Print runtime debug log");
 
-        public void Run(RuntimeLogParams p)
+        public override void Run(RuntimeLogParams p)
         {
             var text = RuntimeLogCommandSupport.BuildText(p);
             Debug.Log(text);
-            CompleteSuccess(CommandResult.Ok(text));
+            CompleteSuccess(InvokeResult.Ok(text));
         }
     }
 
-    public class WarnRuntimeCommand : CommandBase, ICommand<RuntimeLogParams>, ICommandDescriptorProvider
+    public class WarnRuntimeCommand : CliCommand<RuntimeLogParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<RuntimeLogParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<RuntimeLogParams>(
             CommandNames.Warn,
-            CommandScope.Runtime,
+            CommandHostScope.Runtime,
             "Print runtime warning log");
 
-        public void Run(RuntimeLogParams p)
+        public override void Run(RuntimeLogParams p)
         {
             var text = RuntimeLogCommandSupport.BuildText(p);
             Debug.LogWarning(text);
-            CompleteSuccess(CommandResult.Ok(text));
+            CompleteSuccess(InvokeResult.Ok(text));
         }
     }
 
-    public class ErrorRuntimeCommand : CommandBase, ICommand<RuntimeLogParams>, ICommandDescriptorProvider
+    public class ErrorRuntimeCommand : CliCommand<RuntimeLogParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<RuntimeLogParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<RuntimeLogParams>(
             CommandNames.Error,
-            CommandScope.Runtime,
+            CommandHostScope.Runtime,
             "Print runtime error log");
 
-        public void Run(RuntimeLogParams p)
+        public override void Run(RuntimeLogParams p)
         {
             var text = RuntimeLogCommandSupport.BuildText(p);
             Debug.LogError(text);
-            CompleteSuccess(CommandResult.Ok(text));
+            CompleteSuccess(InvokeResult.Ok(text));
         }
     }
 

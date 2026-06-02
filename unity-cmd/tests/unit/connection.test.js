@@ -13,10 +13,12 @@ import {
   normalizeHostKind,
   resolveTarget,
   profileNameForHostKind,
+} from '../../src/client/connection.js';
+import {
   DEFAULT_EDITOR_PORT,
   DEFAULT_EDITOR_PLAY_PORT,
   DEFAULT_PLAYER_PORT,
-} from '../../src/client/connection.js';
+} from '../../src/constants.js';
 
 test('defaultPortForHostKind uses fixed defaults', () => {
   assert.equal(defaultPortForHostKind('editor'), DEFAULT_EDITOR_PORT);

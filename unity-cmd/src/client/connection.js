@@ -1,27 +1,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { ping } from './command.js';
-
-/** Must match Unity `ConnectorPorts` defaults. */
-export const DEFAULT_EDITOR_PORT = 6547;
-export const DEFAULT_EDITOR_PLAY_PORT = 6794;
-export const DEFAULT_PLAYER_PORT = 6795;
-
-const PROFILES_DIR = path.join(os.homedir(), '.unity-cmd', 'profiles');
-
-/** Integration step hostKind → profile file name. */
-export const PROFILE_BY_HOST_KIND = {
-  editor: 'editor',
-  editor_play: 'editor-play',
-  player: 'package-play',
-};
+import {
+  DEFAULT_EDITOR_PORT,
+  DEFAULT_EDITOR_PLAY_PORT,
+  DEFAULT_PLAYER_PORT,
+  DEFAULT_TIMEOUT_MS,
+  HOST_KIND,
+  CONNECTION_RETRY_FLOOR_MS,
+  CONNECTION_RETRY_INTERVAL_MS,
+  CONNECTION_RETRY_MIN_MS,
+  PING_MAX_ATTEMPTS,
+  PING_RETRY_INTERVAL_MS,
+  PROFILE_BY_HOST_KIND,
+  PROFILES_DIR,
+  RESOLVE_TARGET_RETRY_INTERVAL_MS,
+} from '../constants.js';
 
 /** @param {string} [kind] */
-const VALID_HOST_KINDS = new Set(['editor', 'editor_play', 'player']);
+const VALID_HOST_KINDS = new Set(Object.values(HOST_KIND));
 
 export function normalizeHostKind(kind) {
-  const k = (kind ?? 'editor').toLowerCase();
+  const k = (kind ?? HOST_KIND.Editor).toLowerCase();
   if (!VALID_HOST_KINDS.has(k)) {
     throw Object.assign(new Error(`Invalid host kind: ${kind}`), { error_code: 'INVALID_HOST_KIND' });
   }
@@ -38,15 +38,11 @@ export function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Health probe: up to 3 attempts, 3s apart (see ping). */
-export const PING_MAX_ATTEMPTS = 3;
-export const PING_RETRY_INTERVAL_MS = 3000;
-
-export function defaultPortForHostKind(hostKind = 'editor') {
+export function defaultPortForHostKind(hostKind = HOST_KIND.Editor) {
   switch (normalizeHostKind(hostKind)) {
-    case 'editor_play':
+    case HOST_KIND.EditorPlay:
       return DEFAULT_EDITOR_PLAY_PORT;
-    case 'player':
+    case HOST_KIND.Player:
       return DEFAULT_PLAYER_PORT;
     default:
       return DEFAULT_EDITOR_PORT;
@@ -81,7 +77,7 @@ export function saveProfile(name, target) {
     name: sanitizeProfileName(name),
     host: target.host,
     port: target.port,
-    connector_host: normalizeHostKind(target.connector_host ?? 'editor'),
+    connector_host: normalizeHostKind(target.connector_host ?? HOST_KIND.Editor),
     updated_at: new Date().toISOString(),
   };
   fs.writeFileSync(profileFile(name), JSON.stringify(payload, null, 2));
@@ -143,16 +139,16 @@ export function isTransientError(err) {
   );
 }
 
-export async function withRetry(fn, { timeoutMs = 20_000, intervalMs = 400 } = {}) {
+export async function withRetry(fn, { timeoutMs = DEFAULT_TIMEOUT_MS, intervalMs = CONNECTION_RETRY_INTERVAL_MS } = {}) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
     try {
-      return await fn(Math.max(500, deadline - Date.now()));
+      return await fn(Math.max(CONNECTION_RETRY_MIN_MS, deadline - Date.now()));
     } catch (err) {
       lastError = err;
       if (!isTransientError(err)) throw err;
-      await sleep(Math.min(intervalMs, Math.max(100, deadline - Date.now())));
+      await sleep(Math.min(intervalMs, Math.max(CONNECTION_RETRY_FLOOR_MS, deadline - Date.now())));
     }
   }
   throw lastError ?? new Error('connection_retry_exhausted');
@@ -174,13 +170,13 @@ async function probeHealth(host, port, timeoutMs) {
  * Resolve target from a saved profile only.
  * @param {{ profile: string, timeoutMs?: number, verify?: boolean }} options
  */
-export async function resolveTarget({ profile, timeoutMs = 20_000, verify = true } = {}) {
+export async function resolveTarget({ profile, timeoutMs = DEFAULT_TIMEOUT_MS, verify = true } = {}) {
   if (!profile) return null;
 
   const saved = loadProfile(profile);
   if (!saved?.host || !saved?.port) return null;
 
-  const expectedKind = normalizeHostKind(saved.connector_host ?? 'editor');
+  const expectedKind = normalizeHostKind(saved.connector_host ?? HOST_KIND.Editor);
   const base = {
     profile: sanitizeProfileName(profile),
     host: saved.host,
@@ -190,40 +186,22 @@ export async function resolveTarget({ profile, timeoutMs = 20_000, verify = true
 
   if (!verify) return base;
 
-  try {
-    const res = await probeHealth(saved.host, saved.port, timeoutMs);
-    if (res.ok && hostKindMatches(expectedKind, res.data?.host)) {
-      return {
-        ...base,
-        connector_host: res.data?.host ?? expectedKind,
-        connector_build: res.data?.connector_build,
-      };
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const remaining = Math.max(CONNECTION_RETRY_MIN_MS, deadline - Date.now());
+      const res = await probeHealth(saved.host, saved.port, remaining);
+      if (res.ok && hostKindMatches(expectedKind, res.data?.host)) {
+        return {
+          ...base,
+          connector_host: res.data?.host ?? expectedKind,
+          connector_build: res.data?.connector_build,
+        };
+      }
+    } catch {
+      // retry until deadline
     }
-  } catch {
-    // unreachable
+    await sleep(RESOLVE_TARGET_RETRY_INTERVAL_MS);
   }
   return null;
-}
-
-/** Poll until profile endpoint responds or timeout (integration tests). */
-export async function waitForInstance({ profile, timeoutMs = 20_000, logProgress = true } = {}) {
-  const profileName = profile ?? process.env.UNITY_CMD_PROFILE ?? null;
-  if (!profileName) return null;
-
-  const deadline = Date.now() + timeoutMs;
-  let attempts = 0;
-  while (Date.now() < deadline) {
-    attempts += 1;
-    if (logProgress && (attempts === 1 || attempts % 5 === 0)) {
-      const remaining = Math.max(0, deadline - Date.now());
-      console.log(`[connection] waiting profile=${profileName}, attempt=${attempts}, remaining=${remaining}ms`);
-    }
-    const target = await resolveTarget({
-      profile: profileName,
-      timeoutMs: Math.min(5_000, deadline - Date.now()),
-    });
-    if (target?.host && target?.port) return target;
-    await sleep(300);
-  }
-  return resolveTarget({ profile: profileName, timeoutMs: 3_000 });
 }

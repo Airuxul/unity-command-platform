@@ -1,18 +1,19 @@
 using System.Collections.Generic;
-using UnityCliConnector.Commands;
-using UnityCliConnector.Editor.Services;
-using UnityCliConnector.Params;
+using Air.UnityConnector.Invoke;
+using Air.UnityConnector.Editor.Services;
+using Air.UnityConnector.Params;
+using Air.UnityConnector.Cli;
 
-namespace UnityCliConnector.Commands
+namespace Air.UnityConnector.Commands
 {
-    public class ConsoleCommand : CommandBase, ICommand<ConsoleParams>, ICommandDescriptorProvider
+    public class ConsoleCommand : CliCommand<ConsoleParams>
     {
-        public CommandDescriptor Descriptor { get; } = new CommandDescriptor<ConsoleParams>(
+        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ConsoleParams>(
             CommandNames.Console,
-            CommandScope.Editor,
+            CommandHostScope.Editor,
             "Read or clear Unity Editor console logs");
 
-        public void Run(ConsoleParams p)
+        public override void Run(ConsoleParams p)
         {
             if (!UnityConsoleReader.IsReady)
             {
@@ -24,7 +25,7 @@ namespace UnityCliConnector.Commands
             if (p.Clear)
             {
                 UnityConsoleReader.Clear();
-                CompleteSuccess(CommandResult.Ok("console cleared"));
+                CompleteSuccess(InvokeResult.Ok("console cleared"));
                 return;
             }
 
@@ -43,7 +44,7 @@ namespace UnityCliConnector.Commands
                 ["types"] = p.Type ?? "error,warning",
                 ["stacktrace"] = stacktrace,
             };
-            CompleteSuccess(CommandResult.Ok("console entries", data));
+            CompleteSuccess(InvokeResult.Ok("console entries", data));
         }
     }
 }

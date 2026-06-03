@@ -37,7 +37,7 @@ unity-cmd --profile editor screenshot --view game --output_path Screenshots/game
 unity-cmd --profile editor stop
 ```
 
-Connector 安装与打开工程：[com.air.unity-connector/README.zh-CN.md](com.air.unity-connector/README.zh-CN.md)。  
+Connector 安装与打开工程：[com.air.unity-connector/README.zh-CN.md](com.air.unity-connector/README.zh-CN.md)。
 CLI 参数与 npm 脚本：[unity-cmd/README.zh-CN.md](unity-cmd/README.zh-CN.md)。
 
 修改 connector 源码后：`unity-cmd --profile editor compile`（别名 `recompile`）。默认超时 **20s**，除非必要不要加大。
@@ -46,49 +46,13 @@ CLI 参数与 npm 脚本：[unity-cmd/README.zh-CN.md](unity-cmd/README.zh-CN.md
 
 ## AI / Agent 使用
 
-本仓库在 **`docs/unity-cmd-skill/`** 提供可提交的 [Cursor Agent Skill](https://cursor.com/docs/skills) 源文件。`.cursor/` 通常不纳入 Git，需在本机安装一次。
+Unity 自动化 Skill 在 **AirUnityPackage 元仓库**（本子模块 `docs/` 下不再存放 Skill 副本）。
 
-### 安装 Skill（必做）
+| 资源 | 工作区根为 **CustomPackages** 时的路径 |
+|------|----------------------------------------|
+| Skill | `.cursor/skills/unity-cmd/SKILL.md` |
 
-将 **`docs/unity-cmd-skill`** 整个文件夹复制为：
-
-```text
-<仓库根>/.cursor/skills/unity-cmd/
-```
-
-**目标文件夹名必须为 `unity-cmd`**（与 `SKILL.md` 中 `name: unity-cmd` 一致）。
-
-```powershell
-# Windows PowerShell（在仓库根目录执行）
-New-Item -ItemType Directory -Force -Path .cursor\skills | Out-Null
-Copy-Item -Recurse -Force docs\unity-cmd-skill .cursor\skills\unity-cmd
-```
-
-```bash
-# macOS / Linux
-mkdir -p .cursor/skills
-cp -R docs/unity-cmd-skill .cursor/skills/unity-cmd
-```
-
-说明详见 [docs/unity-cmd-skill/README.md](docs/unity-cmd-skill/README.md)。
-
-### 仓库内 Skill 目录结构
-
-```text
-docs/unity-cmd-skill/           # Git 中的源（复制到 .cursor/skills/unity-cmd/ 后由 Cursor 加载）
-  SKILL.md
-  references/guide.zh-CN.md
-```
-
-### 接入方式
-
-| 方式 | 说明 |
-|------|------|
-| 自动加载 | 安装后，讨论 Unity 自动化时 Cursor 加载 `.cursor/skills/unity-cmd/` |
-| `/unity-cmd` | 聊天输入斜杠命令 |
-| `@` 引用 | `@.cursor/skills/unity-cmd/SKILL.md`（需先安装）；或直接 `@docs/unity-cmd-skill/SKILL.md` 阅读规范 |
-| 完整指南 | [docs/unity-cmd-skill/references/guide.zh-CN.md](docs/unity-cmd-skill/references/guide.zh-CN.md) |
-| 英文速查 | [docs/AGENTS.md](docs/AGENTS.md) |
+在元仓库根目录打开 Cursor 即可加载。速查：[docs/AGENTS.md](docs/AGENTS.md)。
 
 ### 默认逻辑（用户说「在 Unity 编辑器 / 运行时做 xxx」）
 
@@ -152,7 +116,7 @@ unity-cmd --profile editor list --refresh-catalog
 在 Agent 对话开头发送：
 
 ```text
-请按 @.cursor/skills/unity-cmd/SKILL.md 操作 Unity（若未安装 Skill，请先复制 docs/unity-cmd-skill）：先 unity-cmd --profile editor list 确认有 compile/console，
+请按 @.cursor/skills/unity-cmd/SKILL.md 操作 Unity：先 unity-cmd --profile editor list 确认有 compile/console，
 再帮我在编辑器里执行 compile 并读取最近 20 条 error/warning 控制台日志。
 ```
 
@@ -174,7 +138,7 @@ unity-cmd profile list
 
 ### 1. Editor — 编辑模式（profile `editor`，端口 **6547**）
 
-**时机：** Unity Editor 已打开。  
+**时机：** Unity Editor 已打开。
 **前提：** 工程已装 `com.air.unity-connector`；Console 出现 `http://127.0.0.1:6547/`。
 
 ```bat
@@ -190,7 +154,7 @@ unity-cmd --profile editor screenshot --view scene --output_path Screenshots/edi
 
 ### 2. Editor Play — 播放模式（profile `editor-play`，端口 **6794**）
 
-**时机：** Editor **正在播放**（仅 Play 时监听 6794）。  
+**时机：** Editor **正在播放**（仅 Play 时监听 6794）。
 先用 **`--profile editor`** 执行 `play`。
 
 ```bat
@@ -216,7 +180,7 @@ unity-cmd --profile package-play list
 unity-cmd --profile package-play echo
 ```
 
-局域网：创建 profile 时把 `--host` 设为局域网 IP，例如：
+**局域网：** Unity 侧设置 `UNITY_CMD_BIND=lan`（或 `UNITY_CMD_LAN=1`）。在另一台机器上，profile 的 `--host` 指向局域网 IP：
 
 ```bat
 unity-cmd profile create phone-play --host 192.168.1.50 --port 6794 --host-kind editor_play
@@ -244,20 +208,19 @@ npm run test:integration
 
 ## 环境变量
 
-| 变量 | 用途 |
-|------|------|
-| `UNITY_CMD_PROFILE` | 默认 profile 名称（也可用 `--profile`） |
-| `UNITY_CMD_WORKSPACE` | 仅集成测试：Unity 工程根目录（截图文件断言） |
-| `UNITY_CMD_TIMEOUT_MS` | 超时（默认 `20000`） |
-| `UNITY_CMD_TOKEN` | 可选鉴权（与 Unity 侧一致） |
-
-Unity 侧端口环境变量（创建 profile 时对应默认端口）：`UNITY_CMD_PORT`、`UNITY_CMD_EDITOR_PLAY_PORT`、`UNITY_CMD_PLAYER_PORT`。
-| `UNITY_CMD_EDITOR_PLAY_PORT` | Editor Play HTTP 端口（默认 `6794`） |
-| `UNITY_CMD_BIND` | `loopback`（默认）、`lan`（局域网）、`any`（需 URL ACL） |
-| `UNITY_CMD_LAN` | 设为 `1` 等同 `UNITY_CMD_BIND=lan` |
-| `UNITY_CMD_ADVERTISE_HOST` | LAN 模式下 `/health` endpoints 对外 IP（如 `192.168.1.10`） |
-| `UNITY_CMD_TOKEN` | 可选鉴权；CLI 与 Unity 需一致 |
-| `UNITY_CMD_TIMEOUT_MS` | 超时（默认 `20000`） |
+| 变量 | 侧 | 用途 |
+|------|-----|------|
+| `UNITY_CMD_PROFILE` | CLI | 默认 profile 名称（也可用 `--profile`） |
+| `UNITY_CMD_WORKSPACE` | CLI | 仅集成测试：Unity 工程根目录（截图文件断言） |
+| `UNITY_CMD_SCENARIO` | CLI | 集成测试：场景名 |
+| `UNITY_CMD_TIMEOUT_MS` | CLI | 超时（默认 `20000`） |
+| `UNITY_CMD_TOKEN` | CLI + Unity | 可选共享鉴权令牌 |
+| `UNITY_CMD_PORT` | Unity | Editor HTTP 端口（默认 `6547`） |
+| `UNITY_CMD_EDITOR_PLAY_PORT` | Unity | Editor Play HTTP 端口（默认 `6794`） |
+| `UNITY_CMD_PLAYER_PORT` | Unity | Dev player HTTP 端口（默认 `6795`） |
+| `UNITY_CMD_BIND` | Unity | `loopback`（默认）、`lan`、`any`（需 URL ACL） |
+| `UNITY_CMD_LAN` | Unity | 设为 `1` 等同 `UNITY_CMD_BIND=lan` |
+| `UNITY_CMD_ADVERTISE_HOST` | Unity | 局域网：`/health` 对外公布的 IP |
 
 ## 测试
 
@@ -271,8 +234,8 @@ npm run test:integration    # 需已打开 Editor；无实例则跳过
 
 | 文档 | |
 |------|---|
-| [docs/unity-cmd-skill/](docs/unity-cmd-skill/SKILL.md) | **Cursor Skill 源**（复制到 `.cursor/skills/unity-cmd/`） |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构与请求流 |
 | [docs/AGENTS.md](docs/AGENTS.md) | 自动化速查 |
+| [docs/DOC_GOVERNANCE.md](docs/DOC_GOVERNANCE.md) | 文档治理（链至 meta AirUnityPackage） |
 | [unity-cmd/docs/IMPLEMENTATION.md](unity-cmd/docs/IMPLEMENTATION.md) | CLI 实现 |
 | [com.air.unity-connector/docs/IMPLEMENTATION.md](com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API 与参数 |

@@ -37,7 +37,7 @@ unity-cmd --profile editor screenshot --view game --output_path Screenshots/game
 unity-cmd --profile editor stop
 ```
 
-Install the connector and open your Unity project: [com.air.unity-connector/README.md](com.air.unity-connector/README.md).  
+Install the connector and open your Unity project: [com.air.unity-connector/README.md](com.air.unity-connector/README.md).
 CLI flags and npm scripts: [unity-cmd/README.md](unity-cmd/README.md).
 
 After editing connector C#: `unity-cmd --profile editor compile` (alias `recompile`). Default timeout is **20s**; do not raise unless needed.
@@ -46,49 +46,13 @@ Fixed ports: **Editor `6547`**, **Editor Play `6794`**, **Player `6795`** — al
 
 ## AI / Agent usage
 
-The [Cursor Agent Skill](https://cursor.com/docs/skills) source lives in **`docs/unity-cmd-skill/`** (committed to Git). `.cursor/` is usually not committed — **copy the folder into your local skills directory once**.
+Unity automation uses the **AirUnityPackage meta repository** Cursor skill (this submodule does not ship a copy under `docs/`).
 
-### Install the skill (required)
+| Resource | Path when workspace root is **CustomPackages** |
+|----------|--------------------------------------------------|
+| Skill | `.cursor/skills/unity-cmd/SKILL.md` |
 
-Copy **`docs/unity-cmd-skill`** to:
-
-```text
-<repo-root>/.cursor/skills/unity-cmd/
-```
-
-The folder name **must be `unity-cmd`** (matches `name: unity-cmd` in `SKILL.md`).
-
-```powershell
-# Windows PowerShell (repo root)
-New-Item -ItemType Directory -Force -Path .cursor\skills | Out-Null
-Copy-Item -Recurse -Force docs\unity-cmd-skill .cursor\skills\unity-cmd
-```
-
-```bash
-# macOS / Linux
-mkdir -p .cursor/skills
-cp -R docs/unity-cmd-skill .cursor/skills/unity-cmd
-```
-
-See [docs/unity-cmd-skill/README.md](docs/unity-cmd-skill/README.md).
-
-### Layout in the repo
-
-```text
-docs/unity-cmd-skill/           # source in Git → copy to .cursor/skills/unity-cmd/
-  SKILL.md
-  references/guide.zh-CN.md
-```
-
-### How to enable
-
-| Method | Description |
-|--------|-------------|
-| Auto | After install, Cursor loads `.cursor/skills/unity-cmd/` for Unity tasks |
-| `/unity-cmd` | Slash command in chat |
-| `@` mention | `@.cursor/skills/unity-cmd/SKILL.md` (after install), or `@docs/unity-cmd-skill/SKILL.md` to read the spec |
-| Full guide | [docs/unity-cmd-skill/references/guide.zh-CN.md](docs/unity-cmd-skill/references/guide.zh-CN.md) |
-| Quick ref | [docs/AGENTS.md](docs/AGENTS.md) |
+Open the meta repo root in Cursor so the skill loads. Quick reference: [docs/AGENTS.md](docs/AGENTS.md).
 
 ### Default logic (user asks to do X in Editor or runtime)
 
@@ -148,7 +112,7 @@ Updates `~/.unity-cmd/cache/catalog-*.json` via CLI; do **not** write skill mark
 ### Example 4: one-shot Cursor prompt
 
 ```text
-Follow @.cursor/skills/unity-cmd/SKILL.md (install `docs/unity-cmd-skill` first if needed): run unity-cmd --profile editor list to confirm compile/console exist,
+Follow @.cursor/skills/unity-cmd/SKILL.md: run unity-cmd --profile editor list to confirm compile/console exist,
 then compile in the Unity Editor and show the last 20 error/warning console lines.
 ```
 
@@ -170,7 +134,7 @@ unity-cmd profile list
 
 ### 1. Editor — Edit Mode (profile `editor`, port **6547**)
 
-**When:** Unity Editor is open.  
+**When:** Unity Editor is open.
 **Prerequisite:** Project has `com.air.unity-connector` installed; Console shows `http://127.0.0.1:6547/`.
 
 ```bat
@@ -186,7 +150,7 @@ unity-cmd --profile editor screenshot --view scene --output_path Screenshots/edi
 
 ### 2. Editor Play (profile `editor-play`, port **6794**)
 
-**When:** Editor is in **Play Mode** (port listens only while playing).  
+**When:** Editor is in **Play Mode** (port listens only while playing).
 Enter Play with `--profile editor` first.
 
 ```bat
@@ -212,6 +176,12 @@ unity-cmd --profile package-play list
 unity-cmd --profile package-play echo
 ```
 
+**LAN:** On Unity, set `UNITY_CMD_BIND=lan` (or `UNITY_CMD_LAN=1`). On another machine, point the profile at the LAN IP:
+
+```bat
+unity-cmd profile create phone-play --host 192.168.1.50 --port 6794 --host-kind editor_play
+```
+
 ### Integration tests (from `unity-cmd/`)
 
 ```bat
@@ -234,14 +204,19 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#runtime--play-mode-http), [
 
 ## Environment
 
-| Variable | Purpose |
-|----------|---------|
-| `UNITY_CMD_PROFILE` | Default profile name (`--profile` overrides) |
-| `UNITY_CMD_WORKSPACE` | Integration tests only: Unity project root for `assertFile` |
-| `UNITY_CMD_TIMEOUT_MS` | Timeout (default `20000`) |
-| `UNITY_CMD_TOKEN` | Optional auth token (must match Unity `UNITY_CMD_TOKEN`) |
-
-Unity-side port overrides (when creating profiles): `UNITY_CMD_PORT`, `UNITY_CMD_EDITOR_PLAY_PORT`, `UNITY_CMD_PLAYER_PORT`.
+| Variable | Side | Purpose |
+|----------|------|---------|
+| `UNITY_CMD_PROFILE` | CLI | Default profile name (`--profile` overrides) |
+| `UNITY_CMD_WORKSPACE` | CLI | Integration tests only: Unity project root for `assertFile` |
+| `UNITY_CMD_SCENARIO` | CLI | Integration tests: scenario name |
+| `UNITY_CMD_TIMEOUT_MS` | CLI | Timeout (default `20000`) |
+| `UNITY_CMD_TOKEN` | CLI + Unity | Optional shared auth token |
+| `UNITY_CMD_PORT` | Unity | Editor HTTP port (default `6547`) |
+| `UNITY_CMD_EDITOR_PLAY_PORT` | Unity | Editor Play HTTP port (default `6794`) |
+| `UNITY_CMD_PLAYER_PORT` | Unity | Dev player HTTP port (default `6795`) |
+| `UNITY_CMD_BIND` | Unity | `loopback` (default), `lan`, or `any` (URL ACL) |
+| `UNITY_CMD_LAN` | Unity | Set to `1` = same as `UNITY_CMD_BIND=lan` |
+| `UNITY_CMD_ADVERTISE_HOST` | Unity | LAN: IP advertised in `/health` endpoints |
 
 ## Tests
 
@@ -255,8 +230,8 @@ npm run test:integration    # needs Editor open; skips if no instance
 
 | Doc | |
 |-----|---|
-| [docs/unity-cmd-skill/](docs/unity-cmd-skill/SKILL.md) | **Cursor Skill source** (copy to `.cursor/skills/unity-cmd/`) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design and request flow |
 | [docs/AGENTS.md](docs/AGENTS.md) | Automation quick reference |
+| [docs/DOC_GOVERNANCE.md](docs/DOC_GOVERNANCE.md) | Doc workflow (links meta AirUnityPackage) |
 | [unity-cmd/docs/IMPLEMENTATION.md](unity-cmd/docs/IMPLEMENTATION.md) | CLI internals |
 | [com.air.unity-connector/docs/IMPLEMENTATION.md](com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API and parameters |

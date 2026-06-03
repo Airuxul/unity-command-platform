@@ -162,7 +162,7 @@ unity-cmd --profile editor stop
 }
 ```
 
-Sync success: `200` + `{ ok: true, data: {...} }`.  
+Sync success: `200` + `{ ok: true, data: {...} }`.
 Command accepted: `202` + `{ command_id, request_id }`.
 
 ## Command discovery

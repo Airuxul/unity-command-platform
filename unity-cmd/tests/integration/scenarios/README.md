@@ -27,21 +27,21 @@ npm run test:integration
 
 ## editor-lifecycle (~26 steps)
 
-1. **Edit mode** — ping, state, catalog, echo (editor channel), console, profiler, exec  
-2. **Play** — play, wait for editor-play endpoint  
-3. **Play mode** — runtime echo on editor_play; catalog isolation; editor host: state, profiler, screenshot  
-4. **Exit** — stop, verify edit mode restored  
+1. **Edit mode** — ping, state, catalog, echo (editor channel), console, profiler, exec
+2. **Play** — play, wait for editor-play endpoint
+3. **Play mode** — runtime echo on editor_play; catalog isolation; editor host: state, profiler, screenshot
+4. **Exit** — stop, verify edit mode restored
 
 ## compile-error-recovery (13 steps)
 
 Requires `UNITY_CMD_WORKSPACE` pointing to a writable Unity project root.
 
-1. **Baseline** — ping + compile to confirm a clean build  
-2. **Inject error** — write `Assets/_IntegrationTest_CompileErrorRecovery.cs` with a syntax error  
-3. **Fail compile** — call `compile`; expect `EDITOR_NOT_READY` (connector is compiling / reloading)  
-4. **Fix** — delete the bad `.cs` (+ `.meta`) file  
-5. **Recover** — call `compile` again; expect success  
-6. **Verify** — state, ping, catalog, echo all confirm the editor is back to a clean edit-mode state  
+1. **Baseline** — ping + compile to confirm a clean build
+2. **Inject error** — write `Assets/_IntegrationTest_CompileErrorRecovery.cs` with a syntax error
+3. **Fail compile** — call `compile`; expect `EDITOR_NOT_READY` (connector is compiling / reloading)
+4. **Fix** — delete the bad `.cs` (+ `.meta`) file
+5. **Recover** — call `compile` again; expect success
+6. **Verify** — state, ping, catalog, echo all confirm the editor is back to a clean edit-mode state
 
 > The test file is always cleaned up by `deleteFile` even if a preceding step fails, because the runner
 > stops at first failure and the file will be removed in the next full run's `deleteFile` step.

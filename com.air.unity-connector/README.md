@@ -1,11 +1,11 @@
-# unity-connector
+# Unity Connector (`com.air.unity-connector`)
 
 [简体中文](README.zh-CN.md)
 
 Unity Editor / Player HTTP bridge for [unity-cmd](../unity-cmd/).
 
-**Version:** 1.1.0  
-**UPM name:** `com.air.unity-connector`  
+**Version:** 1.1.0
+**UPM name:** `com.air.unity-connector`
 **Dependencies:** `com.air.unity-game-core`, `com.unity.nuget.newtonsoft-json`
 
 ## Install (local path)

@@ -14,8 +14,12 @@ import {
   PING_RETRY_INTERVAL_MS,
   PROFILE_BY_HOST_KIND,
   PROFILES_DIR,
+  RESOLVE_TARGET_HEALTH_TIMEOUT_MS,
   RESOLVE_TARGET_RETRY_INTERVAL_MS,
 } from '../constants.js';
+import { findInstanceByPort, readConnectorState } from './connector-readiness.js';
+import { readEditorHttpCache } from './editor-http-cache.js';
+import { CONNECTOR_STATE, EDITOR_HTTP_CACHE_STATUS } from '../constants.js';
 
 /** @param {string} [kind] */
 const VALID_HOST_KINDS = new Set(Object.values(HOST_KIND));
@@ -155,12 +159,20 @@ export async function withRetry(fn, { timeoutMs = DEFAULT_TIMEOUT_MS, intervalMs
 }
 
 async function probeHealth(host, port, timeoutMs) {
+  const perAttempt = Math.min(
+    RESOLVE_TARGET_HEALTH_TIMEOUT_MS,
+    Math.max(CONNECTION_RETRY_MIN_MS, timeoutMs),
+  );
+  const maxAttempts = Math.min(
+    PING_MAX_ATTEMPTS,
+    Math.max(1, Math.ceil(timeoutMs / perAttempt)),
+  );
   return ping(
     { host, port },
     {
-      timeoutMs,
+      timeoutMs: perAttempt,
       retryOnDisconnect: true,
-      maxAttempts: PING_MAX_ATTEMPTS,
+      maxAttempts,
       retryIntervalMs: PING_RETRY_INTERVAL_MS,
     },
   );
@@ -186,11 +198,34 @@ export async function resolveTarget({ profile, timeoutMs = DEFAULT_TIMEOUT_MS, v
 
   if (!verify) return base;
 
+  const port = saved.port;
+  const inst = findInstanceByPort(port);
+  const cache = readEditorHttpCache();
+  const likelyRestarting =
+    inst?.listener_running === false &&
+    (readConnectorState(inst) === CONNECTOR_STATE.Reloading ||
+      cache?.status === EDITOR_HTTP_CACHE_STATUS.Stopped);
+  if (likelyRestarting) {
+    try {
+      const res = await probeHealth(saved.host, port, RESOLVE_TARGET_HEALTH_TIMEOUT_MS);
+      if (res.ok && hostKindMatches(expectedKind, res.data?.host)) {
+        return {
+          ...base,
+          connector_host: res.data?.host ?? expectedKind,
+          connector_build: res.data?.connector_build,
+        };
+      }
+    } catch {
+      // reload: fail fast; caller uses diagnostics + wait
+    }
+    return null;
+  }
+
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const remaining = Math.max(CONNECTION_RETRY_MIN_MS, deadline - Date.now());
-      const res = await probeHealth(saved.host, saved.port, remaining);
+      const res = await probeHealth(saved.host, port, remaining);
       if (res.ok && hostKindMatches(expectedKind, res.data?.host)) {
         return {
           ...base,

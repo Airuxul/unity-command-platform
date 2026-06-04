@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Air.UnityConnector.Editor.Services;
 using UnityEditor;
 using Air.UnityConnector;
+using Air.UnityConnector.Server;
 using Air.UnityConnector.State;
 
 namespace Air.UnityConnector
@@ -39,6 +40,8 @@ namespace Air.UnityConnector
                 ["blocking_reasons"] = connector.BlockingReasons,
                 ["active_command"] = activeCommand,
                 ["connector_build"] = ConnectorBuild.Id,
+                ["supervisor_phase"] = EditorServerSupervisor.Instance.Phase.ToString(),
+                ["startup_failure"] = BuildStartupFailureObject(),
             };
 
             if (UnityConsoleReader.IsReady)
@@ -59,6 +62,19 @@ namespace Air.UnityConnector
             }
 
             return manifest;
+        }
+
+        private static Dictionary<string, object> BuildStartupFailureObject()
+        {
+            if (string.IsNullOrEmpty(EditorConnectorStartupLog.LastMessage))
+                return null;
+
+            return new Dictionary<string, object>
+            {
+                ["site"] = EditorConnectorStartupLog.LastSite,
+                ["message"] = EditorConnectorStartupLog.LastMessage,
+                ["utc"] = EditorConnectorStartupLog.LastUtc,
+            };
         }
 
         private static string FindActiveCommandId()

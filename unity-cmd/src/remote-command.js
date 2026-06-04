@@ -1,6 +1,7 @@
 import { sendCommand, ping } from './client/command.js';
-import { resolveTarget } from './client/connection.js';
-import { waitForConnectorReady } from './client/connector-readiness.js';
+import { loadProfile, resolveTarget } from './client/connection.js';
+import { waitForConnectorReady, waitForProfileReady } from './client/connector-readiness.js';
+import { buildReachabilityDiagnostics } from './client/instance-diagnostics.js';
 import { createCommandBudget, checkMinConnectorBuild } from './runtime.js';
 import {
   loadCatalog,
@@ -24,9 +25,11 @@ const defaultDeps = {
   ping,
   resolveTarget,
   waitForConnectorReady,
+  waitForProfileReady,
   loadCatalog,
   sendCommand,
   checkMinConnectorBuild,
+  diagnoseReachability: buildReachabilityDiagnostics,
 };
 
 export function resolveProfileName(flags) {
@@ -59,11 +62,28 @@ export async function executeRemoteCommand(command, flags, timeoutMs, deps = def
     timeoutMs: budget.remaining(),
   });
   if (!target) {
+    const saved = loadProfile(profileName);
+    let diagnostics = null;
+    if (saved) {
+      try {
+        diagnostics = await deps.diagnoseReachability({
+          profile: profileName,
+          host: saved.host,
+          port: saved.port,
+          connector_host: saved.connector_host,
+          projectPath: process.cwd(),
+        });
+      } catch {
+        diagnostics = null;
+      }
+    }
     return cliResult(1, {
       json: cliError(
         `Profile "${profileName}" is unreachable or /health host mismatch.`,
         'NO_INSTANCE',
-        `Check the profile file or run: unity-cmd profile show ${profileName}`,
+        diagnostics?.hint ??
+          `Check the profile file or run: unity-cmd profile show ${profileName}`,
+        { profile: profileName, diagnostics },
       ),
     });
   }

@@ -61,13 +61,13 @@ namespace Air.UnityConnector.Http
         public void Stop()
         {
             _running = false;
-            AbortInflight();
 
             var listener = _listener;
             var thread = _thread;
             _listener = null;
             _thread = null;
 
+            // Stop the listener first so GetContext / BeginGetContext unblocks and releases the port.
             try
             {
                 listener?.Stop();
@@ -78,10 +78,12 @@ namespace Air.UnityConnector.Http
                 // ignored
             }
 
+            AbortInflight();
+
             if (thread == null || !thread.IsAlive)
                 return;
 
-            var deadline = Environment.TickCount + 3000;
+            var deadline = Environment.TickCount + 5000;
             while (thread.IsAlive && Environment.TickCount < deadline)
             {
                 try

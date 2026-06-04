@@ -31,8 +31,8 @@ namespace Air.UnityConnector.Http
 
         public int Port => Endpoint.Port;
 
-        public bool TryStart(Action<string> log, Action<string> logError) =>
-            Endpoint.TryStart(log, logError);
+        public bool TryStart(Action<string> log, Action<string> logError, bool requirePortFree = true) =>
+            Endpoint.TryStart(log, logError, requirePortFree);
 
         public void Stop(Action<string> log) => Endpoint.Stop(log);
 

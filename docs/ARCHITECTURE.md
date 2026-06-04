@@ -4,6 +4,10 @@
 
 This monorepo connects a **Node CLI** (`unity-cmd`) to a **Unity UPM package** (`com.air.unity-connector`) over loopback HTTP. Unity owns the command catalog; the CLI resolves names, timeouts, and deferred command polling.
 
+## Editor HTTP reliability
+
+For domain reload, port reuse, job ledger, and CLI `wait`/`diagnostics` contract, see **[EDITOR_SERVER_RELIABILITY.zh-CN.md](EDITOR_SERVER_RELIABILITY.zh-CN.md)** (design target: unified Editor Server Supervisor).
+
 ## Repository layout
 
 ```text

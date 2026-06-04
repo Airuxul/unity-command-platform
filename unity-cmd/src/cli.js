@@ -2,6 +2,7 @@ import { resolveTimeoutMs } from './runtime.js';
 import { runHelp } from './help.js';
 import { runProfileCommand } from './profile.js';
 import { executeRemoteCommand } from './remote-command.js';
+import { executeWaitCommand } from './wait-command.js';
 import { applyCliResult } from './cli-result.js';
 
 function assignFlag(flags, key, value) {
@@ -56,6 +57,11 @@ export async function runCommand(command, flags, timeoutMs, subArgs = []) {
   }
   if (command === 'profile') {
     await runProfileCommand(subArgs, flags, timeoutMs);
+    return;
+  }
+  if (command === 'wait') {
+    const result = await executeWaitCommand(flags, timeoutMs);
+    applyCliResult(result);
     return;
   }
   const result = await executeRemoteCommand(command, flags, timeoutMs);

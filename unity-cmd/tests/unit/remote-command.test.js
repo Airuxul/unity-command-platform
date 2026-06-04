@@ -40,6 +40,8 @@ function happyDeps(overrides = {}) {
     checkMinConnectorBuild: () => null,
     loadCatalog: async () => CATALOG_COMPILE,
     waitForConnectorReady: async () => ({ ok: true }),
+    waitForProfileReady: async () => TARGET,
+    diagnoseReachability: async () => ({ reason: 'port_closed', hint: 'test' }),
     sendCommand: async (_t, cmd) => ({ ok: true, data: { compiled: true }, command: cmd }),
     ping: async () => ({ ok: true, data: { host: HOST_KIND.Editor } }),
     ...overrides,

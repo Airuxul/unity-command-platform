@@ -22,6 +22,7 @@ For **running** Unity automation, use the meta-repo skill [`.cursor/skills/unity
 |------|----------|
 | [README.md](../README.md) | English |
 | [README.zh-CN.md](../README.zh-CN.md) | Chinese |
+| [TODO.zh-CN.md](../TODO.zh-CN.md) | Chinese backlog — IDs sync with [TODO.md](TODO.md) |
 
 ## Agent documentation (this repo)
 
@@ -30,6 +31,7 @@ For **running** Unity automation, use the meta-repo skill [`.cursor/skills/unity
 | [AGENTS.md](AGENTS.md) | This file |
 | [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | Doc workflow |
 | [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) | Agent-side changelog |
+| [TODO.md](TODO.md) | Optimization backlog (CONN- / CMD-; meta [TODO_ROADMAP](https://github.com/Airuxul/AirUnityPackage/blob/main/docs/TODO_ROADMAP.md)) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design, request flow |
 | [MAINTENANCE.md](MAINTENANCE.md) | Command patterns, bumps, extension |
 | [../unity-cmd/docs/IMPLEMENTATION.md](../unity-cmd/docs/IMPLEMENTATION.md) | CLI internals |

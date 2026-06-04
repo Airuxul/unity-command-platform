@@ -42,6 +42,9 @@ namespace Air.UnityConnector
             public string ListenerId;
             public string Status;
             public string UpdatedAtUtc;
+            public string Phase;
+            public string LastError;
+            public string ProjectPath;
         }
 
         private static string CachePath =>
@@ -120,31 +123,45 @@ namespace Air.UnityConnector
             }
         }
 
-        public static void MarkRunning(string sessionId, int generation, int port, string listenerId)
+        /// <summary>Wait until loopback port is free (call after Stop, before TryStart).</summary>
+        public static void WaitForPortAvailable(int port, int timeoutMs = 3000)
         {
             lock (FileGate)
             {
-                var payload = new Dictionary<string, object>
-                {
-                    ["pid"] = CurrentPid(),
-                    ["session_id"] = sessionId,
-                    ["generation"] = generation,
-                    ["port"] = port,
-                    ["connector_build"] = ConnectorBuild.Id,
-                    ["listener_id"] = listenerId,
-                    ["status"] = "running",
-                    ["updated_at_utc"] = DateTime.UtcNow.ToString("o"),
-                };
-                WriteUnsafe(payload);
+                WaitForPortRelease(port, timeoutMs);
             }
         }
 
-        public static void MarkStopped(string sessionId, int generation, int port)
+        public static void MarkRunning(
+            string sessionId,
+            int generation,
+            int port,
+            string listenerId,
+            Server.EditorServerSupervisorPhase? supervisorPhase = null,
+            string lastError = null) =>
+            WriteStatus(sessionId, generation, port, listenerId, "running", supervisorPhase, lastError);
+
+        public static void MarkStopped(
+            string sessionId,
+            int generation,
+            int port,
+            Server.EditorServerSupervisorPhase? supervisorPhase = null,
+            string lastError = null) =>
+            WriteStatus(sessionId, generation, port, "", "stopped", supervisorPhase, lastError);
+
+        private static void WriteStatus(
+            string sessionId,
+            int generation,
+            int port,
+            string listenerId,
+            string status,
+            Server.EditorServerSupervisorPhase? supervisorPhase,
+            string lastError)
         {
             lock (FileGate)
             {
                 var cache = LoadUnsafe();
-                var payload = cache != null
+                var payload = status == "stopped" && cache != null
                     ? MakeStopped(cache, CurrentPid(), sessionId, generation, port)
                     : new Dictionary<string, object>
                     {
@@ -153,10 +170,20 @@ namespace Air.UnityConnector
                         ["generation"] = generation,
                         ["port"] = port,
                         ["connector_build"] = ConnectorBuild.Id,
-                        ["listener_id"] = "",
-                        ["status"] = "stopped",
+                        ["listener_id"] = listenerId ?? "",
+                        ["status"] = status,
                         ["updated_at_utc"] = DateTime.UtcNow.ToString("o"),
                     };
+
+                if (supervisorPhase.HasValue)
+                    payload["phase"] = supervisorPhase.Value.ToString();
+                if (!string.IsNullOrEmpty(lastError))
+                    payload["last_error"] = lastError;
+
+                var dataPath = UnityEngine.Application.dataPath;
+                if (!string.IsNullOrEmpty(dataPath))
+                    payload["project_path"] = Path.GetDirectoryName(dataPath) ?? "";
+
                 WriteUnsafe(payload);
             }
         }
@@ -225,6 +252,9 @@ namespace Air.UnityConnector
                     ListenerId = ReadString(data, "listener_id"),
                     Status = ReadString(data, "status"),
                     UpdatedAtUtc = ReadString(data, "updated_at_utc"),
+                    Phase = ReadString(data, "phase"),
+                    LastError = ReadString(data, "last_error"),
+                    ProjectPath = ReadString(data, "project_path"),
                 };
             }
             catch
@@ -268,33 +298,11 @@ namespace Air.UnityConnector
             return HttpProbe.TryValidateHealth(body, HostKind.Editor, connectorBuild, sessionId);
         }
 
-        private static void WaitForPortRelease(int port, int timeoutMs)
-        {
-            var deadline = Environment.TickCount + timeoutMs;
-            while (Environment.TickCount < deadline)
-            {
-                if (!IsPortOpen(port))
-                    return;
+        private static void WaitForPortRelease(int port, int timeoutMs) =>
+            PortReachability.WaitUntilFree("127.0.0.1", port, timeoutMs);
 
-                Thread.Sleep(50);
-            }
-        }
-
-        private static bool IsPortOpen(int port)
-        {
-            try
-            {
-                using var client = new TcpClient();
-                var task = client.ConnectAsync("127.0.0.1", port);
-                if (!task.Wait(120))
-                    return false;
-                return client.Connected;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        private static bool IsPortOpen(int port) =>
+            PortReachability.IsPortOpen("127.0.0.1", port);
 
         private static int CurrentPid() => Process.GetCurrentProcess().Id;
 

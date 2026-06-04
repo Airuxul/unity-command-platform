@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Air.UnityConnector.Host;
 using Air.UnityConnector.Http;
 
@@ -7,8 +6,6 @@ namespace Air.UnityConnector.Http
 {
     public static class ConnectorHttpLifecycle
     {
-        private const int MaxAttempts = 8;
-
         public static bool TryStart(
             ref HttpListenerHost server,
             ref HostListenOptions listen,
@@ -17,36 +14,65 @@ namespace Air.UnityConnector.Http
             string label,
             Action<string> log,
             Action<string> logError,
-            Action onStarted = null)
+            Action onStarted = null,
+            bool requirePortFree = true)
         {
-            for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+            listen = HostNetwork.BuildListenOptions(port);
+            var probeHost = ResolveProbeHost(listen);
+
+            if (requirePortFree && PortReachability.IsPortOpen(probeHost, port))
             {
-                try
-                {
-                    listen = HostNetwork.BuildListenOptions(port);
-                    server?.Dispose();
-                    server = new HttpListenerHost(dispatcher, log, logError);
-                    server.Start(listen.BindPrefixes);
-                    onStarted?.Invoke();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    server?.Dispose();
-                    server = null;
-
-                    if (!IsAddressInUseError(ex) || attempt >= MaxAttempts)
-                    {
-                        logError?.Invoke(
-                            $"[unity-connector] {label} failed on port {port} after {attempt} attempt(s): {ex.Message}");
-                        return false;
-                    }
-
-                    Thread.Sleep(BackoffMs(attempt));
-                }
+                logError?.Invoke(FormatPortInUseMessage(label, probeHost, port));
+                return false;
             }
 
-            return false;
+            try
+            {
+                server?.Dispose();
+                server = new HttpListenerHost(dispatcher, log, logError);
+                server.Start(listen.BindPrefixes);
+                onStarted?.Invoke();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                server?.Dispose();
+                server = null;
+
+                if (IsAddressInUseError(ex))
+                {
+                    logError?.Invoke(FormatPortInUseMessage(label, probeHost, port, ex.Message));
+                    return false;
+                }
+
+                logError?.Invoke($"[unity-connector] {label} failed on {probeHost}:{port}: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static string FormatPortInUseMessage(
+            string label,
+            string host,
+            int port,
+            string detail = null)
+        {
+            var endpoint = $"{host}:{port}";
+            var hint = " Close the other process or set a different port (e.g. UNITY_CMD_PORT / UNITY_CMD_EDITOR_PLAY_PORT / UNITY_CMD_PLAYER_PORT).";
+            if (string.IsNullOrEmpty(detail))
+                return $"[unity-connector] {label} cannot start: {endpoint} is already in use.{hint}";
+
+            return $"[unity-connector] {label} cannot start: {endpoint} is already in use ({detail}).{hint}";
+        }
+
+        private static string ResolveProbeHost(HostListenOptions listen)
+        {
+            if (listen == null || listen.BindMode is HostBindMode.Loopback or HostBindMode.Any)
+                return "127.0.0.1";
+
+            if (!string.IsNullOrWhiteSpace(listen.AdvertiseHost))
+                return listen.AdvertiseHost;
+
+            return "127.0.0.1";
         }
 
         public static void Stop(ref HttpListenerHost server)
@@ -54,8 +80,6 @@ namespace Air.UnityConnector.Http
             server?.Dispose();
             server = null;
         }
-
-        private static int BackoffMs(int attempt) => Math.Min(50 * attempt, 400);
 
         private static bool IsAddressInUseError(Exception ex)
         {

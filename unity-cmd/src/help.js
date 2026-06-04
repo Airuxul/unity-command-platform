@@ -55,6 +55,7 @@ export function formatLocalHelp(options = {}) {
     '  profile delete <name>        remove a profile file',
     '',
     'Remote commands (require --profile or UNITY_CMD_PROFILE):',
+    '  wait                         block until Editor connector is ready (compile/reload safe)',
     '  ping                         check /health for the profile endpoint',
     '  list                         print command catalog as JSON',
     '  help                         catalog for that profile (human-readable)',

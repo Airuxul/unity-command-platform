@@ -19,6 +19,7 @@ namespace Air.UnityConnector.Commands
         public const string Reserialize = "reserialize";
         public const string Screenshot = "screenshot";
         public const string State = "state";
+        public const string ConnectorRestart = "connector.restart";
         public const string Stop = "stop";
         public const string Warn = "warn";
     }

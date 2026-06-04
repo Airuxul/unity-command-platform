@@ -5,6 +5,7 @@ using Air.UnityConnector;
 using Air.UnityConnector.Invoke;
 using Air.UnityConnector.Http;
 using Air.UnityConnector.Host;
+using Air.UnityConnector.Server;
 using Air.UnityConnector.State;
 
 namespace Air.UnityConnector
@@ -64,9 +65,10 @@ namespace Air.UnityConnector
 
         public void ClearListenerId() => _listenerId = null;
 
-        public void Start() => _core.TryStart(Debug.Log, EditorConnectorBootstrap.LogThrottled);
+        public void Start() => TryStart();
 
-        public bool TryStart() => _core.TryStart(Debug.Log, EditorConnectorBootstrap.LogThrottled);
+        public bool TryStart(bool requirePortFree = true) =>
+            _core.TryStart(Debug.Log, Debug.LogError, requirePortFree);
 
         public void Stop() => _core.Stop(Debug.Log);
 
@@ -91,8 +93,8 @@ namespace Air.UnityConnector
             }
 
             if (!TryProbeHealth(
-                    EditorConnectorBootstrap.HealthTimeoutMs,
-                    EditorConnectorBootstrap.HealthProbeAttempts,
+                    EditorServerLifecycle.HealthTimeoutMs,
+                    EditorServerLifecycle.HealthProbeAttempts,
                     out var healthError))
             {
                 reason = "health_probe_failed:" + (healthError ?? "unknown");

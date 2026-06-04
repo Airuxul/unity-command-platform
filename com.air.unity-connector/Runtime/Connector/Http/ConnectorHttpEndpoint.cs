@@ -40,7 +40,7 @@ namespace Air.UnityConnector.Http
 
         public int Port => _listen?.Port ?? _resolvePort();
 
-        public bool TryStart(Action<string> log, Action<string> logError)
+        public bool TryStart(Action<string> log, Action<string> logError, bool requirePortFree = true)
         {
             var wasRunning = _server != null;
             var ok = ConnectorHttpLifecycle.TryStart(
@@ -51,7 +51,8 @@ namespace Air.UnityConnector.Http
                 _label,
                 log,
                 logError,
-                _onStarted);
+                _onStarted,
+                requirePortFree);
 
             if (ok && _logLifecycle && !wasRunning)
             {

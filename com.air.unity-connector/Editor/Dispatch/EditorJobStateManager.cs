@@ -108,8 +108,36 @@ namespace Air.UnityConnector
             EditorJobLedger.PurgeCorruptFiles();
             LoadFromSession();
             EditorJobLedger.MergePendingInto(_commands);
+            OrphanJobsAfterDomainReload();
             Save();
             TryCompleteIdleCompilationJobs();
+        }
+
+        /// <summary>P1: pending/running jobs without a completion policy cannot resume after reload.</summary>
+        static void OrphanJobsAfterDomainReload()
+        {
+            var now = JobStateCore.UtcNowMs();
+            foreach (var command in _commands.Values.ToList())
+            {
+                if (JobStateCore.ShouldSkip(command))
+                    continue;
+
+                if (command.Status is not (InvokeJobStatus.Pending or InvokeJobStatus.Running))
+                    continue;
+
+                var kind = command.CompletionKind ?? "";
+                if (Policies.ContainsKey(kind))
+                    continue;
+
+                if (string.Equals(kind, InvokeCompletionCatalog.CompletionDeferred, StringComparison.Ordinal))
+                    continue;
+
+                JobStateCore.MarkOrphaned(
+                    command,
+                    JobStateCore.ReloadOrphanErrorMessage,
+                    now,
+                    Save);
+            }
         }
 
         /// <summary>

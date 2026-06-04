@@ -11,6 +11,8 @@ namespace Air.UnityConnector.Job
 
         public const int DefaultOrphanTimeoutMs = 20000;
         public const string OrphanErrorMessage = "Command timed out without progress (20s).";
+        public const string ReloadOrphanErrorMessage =
+            "Command lost after domain reload (no completion policy to resume).";
 
         public static InvokeJobRecord Create(
             IDictionary<string, InvokeJobRecord> jobs,
@@ -42,8 +44,16 @@ namespace Air.UnityConnector.Job
         public static bool TryOrphan(InvokeJobRecord job, long nowUtcMs, int orphanTimeoutMs, Action save)
         {
             if (nowUtcMs - job.UpdatedAtUtcMs <= orphanTimeoutMs) return false;
+            return MarkOrphaned(job, OrphanErrorMessage, nowUtcMs, save);
+        }
+
+        public static bool MarkOrphaned(InvokeJobRecord job, string error, long nowUtcMs, Action save)
+        {
+            if (ShouldSkip(job))
+                return false;
+
             job.Status = InvokeJobStatus.Orphaned;
-            job.Error = OrphanErrorMessage;
+            job.Error = error ?? OrphanErrorMessage;
             job.UpdatedAtUtcMs = nowUtcMs;
             save?.Invoke();
             return true;

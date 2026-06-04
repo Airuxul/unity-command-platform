@@ -24,6 +24,8 @@ export const PING_RETRY_INTERVAL_MS = 3_000;
 export const PING_MAX_ATTEMPTS = 3;
 export const STABLE_TICKS_REQUIRED = 2;
 export const RESOLVE_TARGET_RETRY_INTERVAL_MS = 300;
+/** Per-attempt cap for /health during resolveTarget (avoids multi-minute hangs). */
+export const RESOLVE_TARGET_HEALTH_TIMEOUT_MS = 1_500;
 
 /** Editor ready wait caps applied before sendCommand (see remote-command.js). */
 export const EDITOR_READY_WAIT_CAP_MS = 7_000;

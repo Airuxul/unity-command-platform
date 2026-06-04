@@ -40,7 +40,7 @@ namespace Air.UnityConnector
         public void Start()
         {
             ConnectorSerialization.EnsureRegistered();
-            _core.TryStart(Debug.Log, Debug.LogWarning);
+            _core.TryStart(Debug.Log, Debug.LogError);
         }
 
         public void Stop()

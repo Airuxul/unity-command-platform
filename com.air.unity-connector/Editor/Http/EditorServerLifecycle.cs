@@ -84,12 +84,15 @@ namespace Air.UnityConnector.Server
 
             if (prepare == EditorHttpLocalCache.PrepareResult.PortOwnedByOtherProcess)
             {
-                EditorServerSupervisor.LogConnectorError(
-                    ConnectorHttpLifecycle.FormatPortInUseMessage(
-                        "Editor HTTP server",
-                        "127.0.0.1",
-                        port,
-                        "another Unity instance or stale listener"));
+                var portMsg = ConnectorHttpLifecycle.FormatPortInUseMessage(
+                    "Editor HTTP server",
+                    "127.0.0.1",
+                    port,
+                    "another Unity instance or stale listener");
+                if (EditorServerSupervisor.Instance.IsHttpTransitionUnstable())
+                    EditorServerSupervisor.LogThrottled(portMsg);
+                else
+                    EditorServerSupervisor.LogConnectorError(portMsg);
                 return StartAttemptResult.ForeignPort;
             }
 
@@ -114,7 +117,10 @@ namespace Air.UnityConnector.Server
                 var healthMsg =
                     "health probe failed after bind"
                     + (string.IsNullOrEmpty(healthError) ? "" : ": " + healthError);
-                EditorConnectorStartupLog.Record("TryStartListening(health)", healthMsg);
+                if (EditorServerSupervisor.Instance.IsHttpTransitionUnstable())
+                    EditorServerSupervisor.LogThrottled("[unity-connector] " + healthMsg);
+                else
+                    EditorConnectorStartupLog.Record("TryStartListening(health)", healthMsg);
                 PerformStop("TryStartListening(health_failed)");
                 return StartAttemptResult.Failed;
             }

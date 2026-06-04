@@ -25,7 +25,7 @@ namespace Air.UnityConnector.Server
 
         private const double WatchdogIntervalSeconds = 2.0;
         private const double WarningCooldownSeconds = 30.0;
-        private const double PlayTransitionSettleSeconds = 2.0;
+        private const double PlayTransitionSettleSeconds = 4.0;
         private const int EnsureRetriesPerBurst = 3;
 
         private readonly object _gate = new();
@@ -120,7 +120,7 @@ namespace Air.UnityConnector.Server
 
             _nextWatchdogUtc = now + WatchdogIntervalSeconds;
 
-            if (IsInBackoff())
+            if (IsInBackoff() || IsHttpTransitionUnstable())
                 return;
 
             if (EditorConnectorServer.Instance.TryDescribeRunningCache(out _))
@@ -200,6 +200,30 @@ namespace Air.UnityConnector.Server
         internal void MarkPlayTransition() =>
             _transitionUntilUtc = EditorApplication.timeSinceStartup + PlayTransitionSettleSeconds;
 
+        /// <summary>After play enter/exit: reconcile if already listening; otherwise defer start until transition settles.</summary>
+        internal void OnPlayModeSettled()
+        {
+            MarkPlayTransition();
+
+            if (EditorConnectorServer.Instance.IsListening)
+            {
+                lock (_gate)
+                {
+                    if (EditorConnectorServer.Instance.TryDescribeRunningCache(out var reason))
+                    {
+                        EditorServerLifecycle.ReconcileRunningCache(reason, "OnPlayModeSettled");
+                        EnterRunning(reconcileOnly: true);
+                        return;
+                    }
+                }
+
+                RequestStart(5);
+                return;
+            }
+
+            RequestStart(8);
+        }
+
         internal bool IsHttpTransitionUnstable() =>
             EditorApplication.timeSinceStartup < _transitionUntilUtc
             || EditorPlayState.IsCompiling
@@ -231,9 +255,16 @@ namespace Air.UnityConnector.Server
 
                 if (Phase == EditorServerSupervisorPhase.Running)
                 {
-                    if (EditorConnectorServer.Instance.TryDescribeRunningCache(out _))
+                    if (EditorConnectorServer.Instance.TryDescribeRunningCache(out var runningReason))
                     {
-                        EditorServerLifecycle.ReconcileRunningCache("RequestStart", "RequestStart(running)");
+                        EditorServerLifecycle.ReconcileRunningCache(runningReason, "RequestStart(running)");
+                        return;
+                    }
+
+                    // Do not tear down a live listener during play/compile transitions (cache/health can lag).
+                    if (EditorConnectorServer.Instance.IsListening && ShouldDeferStart())
+                    {
+                        RequestStart(5);
                         return;
                     }
 
@@ -264,6 +295,13 @@ namespace Air.UnityConnector.Server
 
         private void HandleStartFailure()
         {
+            if (IsHttpTransitionUnstable())
+            {
+                EnterStopped();
+                RequestStart(5);
+                return;
+            }
+
             _ensurePass++;
             EditorConnectorStartupLog.Record(
                 "HandleStartFailure",

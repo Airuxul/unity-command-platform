@@ -89,7 +89,6 @@ namespace Air.UnityConnector
 
                 case PlayModeStateChange.EnteredPlayMode:
                 case PlayModeStateChange.EnteredEditMode:
-                    EditorServerSupervisor.Instance.ResetTransientBackoff();
                     EditorServerSupervisor.Instance.OnPlayModeSettled();
                     return;
             }

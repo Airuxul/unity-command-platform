@@ -136,7 +136,6 @@
     {
       "name": "13b_ping_editor_during_play",
       "command": "ping",
-      "timeoutMs": 60000,
       "expect": { "ok": true, "data": { "listener_running": true } }
     },
     {
@@ -264,12 +263,10 @@
     {
       "name": "26_play_stop_stress",
       "repeat": 5,
-      "timeoutMs": 120000,
       "steps": [
         {
           "name": "play",
           "command": "play",
-          "timeoutMs": 60000,
           "expect": { "ok": true }
         },
         {
@@ -279,7 +276,6 @@
         {
           "name": "stop",
           "command": "stop",
-          "timeoutMs": 60000,
           "expect": { "ok": true }
         },
         {
@@ -289,7 +285,6 @@
         {
           "name": "ping_editor",
           "command": "ping",
-          "timeoutMs": 60000,
           "expect": { "ok": true, "data": { "listener_running": true, "play_mode": "edit" } }
         },
         {

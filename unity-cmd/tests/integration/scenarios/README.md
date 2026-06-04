@@ -31,8 +31,10 @@ npm run test:integration
 2. **Play** — play, wait for editor-play endpoint
 3. **Play mode** — runtime echo on `editor_play`; catalog isolation; editor host: ping, list, state, profiler, screenshot
 4. **Exit** — stop, verify edit mode restored
-5. **Play/Stop stress** — `26_play_stop_stress` repeats 5×: play → stop → ping (`listener_running`) → echo
+5. **Play/Stop stress** — `26_play_stop_stress` repeats 5×: play → stop → ping → echo (uses default CLI/step timeouts only)
 6. **Final gate** — state + ping confirm Editor HTTP still healthy (guards `EditorServerSupervisor` regressions)
+
+Do not add per-step `timeoutMs` unless a step truly needs more than `INTEGRATION_ATTACH_TIMEOUT_MS` / deferred command defaults.
 
 ### Scenario `repeat` blocks
 
@@ -72,4 +74,10 @@ These edits live in `unity-cmd/src/client/` only. They do **not** change connect
 
 **Not affected:** `editor_play` / `player` hosts, catalog cache TTL, command dispatch, unit-test mocks (unless they call the same functions with the same inputs).
 
-**Related connector fix (C#, separate package):** `EditorServerSupervisor.OnPlayModeSettled` — avoids false `[startup-failure]` LogError spam after Stop; validated by stress steps above.
+**Related connector fixes (C#, `com.air.unity-connector`):**
+
+- `TryStartListening(reuse)` — if :6547 is already listening and `/health` passes, refresh disk cache **without** `PerformStop` (fixes Play/Stop + stale `editor-http.json` → `RegisterFailureBurst`).
+- `OnPlayModeSettled` / `RequestStart(running)` — reuse listener instead of `EnterDraining` when only cache lags.
+- Play transition — no `ResetTransientBackoff` on enter Play/Edit (avoids retry storm right after failures).
+
+Recompile the Unity project after pulling connector changes.

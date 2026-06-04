@@ -43,7 +43,6 @@
     {
       "name": "05_compile_with_syntax_error",
       "command": "compile",
-      "timeoutMs": 120000,
       "expect": { "ok": true }
     },
 
@@ -51,7 +50,6 @@
       "name": "06_console_has_compile_errors",
       "command": "console",
       "args": ["--type", "error", "--lines", "30"],
-      "timeoutMs": 20000,
       "expect": { "ok": true, "dataHas": ["count", "entries"] }
     },
 
@@ -70,7 +68,6 @@
     {
       "name": "09_recompile_after_fix",
       "command": "compile",
-      "timeoutMs": 45000,
       "expect": { "ok": true }
     },
 

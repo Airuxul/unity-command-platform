@@ -261,10 +261,15 @@ namespace Air.UnityConnector.Server
                         return;
                     }
 
-                    // Do not tear down a live listener during play/compile transitions (cache/health can lag).
-                    if (EditorConnectorServer.Instance.IsListening && ShouldDeferStart())
+                    if (EditorConnectorServer.Instance.IsListening)
                     {
-                        RequestStart(5);
+                        if (ShouldDeferStart())
+                        {
+                            RequestStart(5);
+                            return;
+                        }
+
+                        EnterStarting();
                         return;
                     }
 

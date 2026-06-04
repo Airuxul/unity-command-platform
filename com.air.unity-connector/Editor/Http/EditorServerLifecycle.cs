@@ -77,6 +77,26 @@ namespace Air.UnityConnector.Server
                 return StartAttemptResult.CacheReconciled;
             }
 
+            // Disk cache can lag (e.g. after Play/Stop) while the listener is still healthy — do not PerformStop.
+            if (server.IsListening
+                && server.TryProbeHealth(HealthTimeoutMs, HealthProbeAttempts, out _))
+            {
+                if (string.IsNullOrEmpty(server.ListenerId))
+                    server.SetListenerId(Guid.NewGuid().ToString("N"));
+                EditorHttpSession.SetListenerActive(true, "TryStartListening(reuse)");
+                EditorHttpSession.SetDomainReloading(false, "TryStartListening(reuse)");
+                EditorHttpLocalCache.MarkRunning(
+                    EditorHttpSession.SessionId,
+                    EditorHttpSession.Generation,
+                    port,
+                    server.ListenerId,
+                    EditorServerSupervisorPhase.Running);
+                EditorConnectorStartupLog.Clear();
+                EditorInstanceFile.NotifyHttpServing();
+                WarmCatalogIfNeeded();
+                return StartAttemptResult.Running;
+            }
+
             var prepare = EditorHttpLocalCache.PrepareForStart(
                 EditorHttpSession.SessionId,
                 EditorHttpSession.Generation,

@@ -5,7 +5,7 @@ npm package for **ucp-cli** (CLI) and **ucp-host** (daemon).
 ## Setup
 
 ```powershell
-cd CustomPackages/packages/ucp/ucp-cli
+cd CustomPackages/packages/unity-command-platform/ucp-cli
 .\setup.ps1
 ```
 

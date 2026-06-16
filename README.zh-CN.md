@@ -25,7 +25,7 @@ ucp-cli host status
 Unity `manifest.json`：
 
 ```json
-"com.air.ucp-agent": "file:../CustomPackages/packages/ucp/com.air.ucp-agent"
+"com.air.ucp-agent": "file:../CustomPackages/packages/unity-command-platform/com.air.ucp-agent"
 ```
 
 打开 Unity 工程并等待编译完成，Agent 会写入 `~/.ucp/sessions/{projectId}.json`。

@@ -1,6 +1,6 @@
 # UCP Naming & Code Conventions
 
-Applies to `packages/ucp/` (this repo), `ucp-cli/` (Node), and `com.air.ucp-agent/` (Unity).
+Applies to `packages/unity-command-platform/` (this repo), `ucp-cli/` (Node), and `com.air.ucp-agent/` (Unity).
 
 ## Product & layers
 
@@ -18,7 +18,7 @@ Data root: **`~/.ucp/`** (`sessions/`, `queues/`, `host.json`, `host.lock`).
 ## Repository layout
 
 ```text
-packages/ucp/
+packages/unity-command-platform/
 ├── ucp-cli/               # npm ucp-cli
 ├── com.air.ucp-agent/     # Unity UPM
 ├── docs/

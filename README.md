@@ -25,7 +25,7 @@ ucp-cli host status
 Unity `Packages/manifest.json`:
 
 ```json
-"com.air.ucp-agent": "file:../CustomPackages/packages/ucp/com.air.ucp-agent"
+"com.air.ucp-agent": "file:../CustomPackages/packages/unity-command-platform/com.air.ucp-agent"
 ```
 
 Open the Unity project and wait for compile — the agent writes `~/.ucp/sessions/{projectId}.json`.

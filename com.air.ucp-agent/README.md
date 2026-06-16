@@ -5,7 +5,7 @@ Unity Command Platform agent — Editor FileQueue polling and native command dis
 ## Install
 
 ```json
-"com.air.ucp-agent": "file:../CustomPackages/packages/ucp/com.air.ucp-agent"
+"com.air.ucp-agent": "file:../CustomPackages/packages/unity-command-platform/com.air.ucp-agent"
 ```
 
 Open the Unity project — the agent registers at `~/.ucp/sessions/{projectId}.json`.

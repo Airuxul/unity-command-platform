@@ -163,6 +163,8 @@ namespace Air.UcpAgent.Cli
             public string[] ParamDescriptions =>
                 _paramDescriptions ??= InvokeParameterBinding.DescribeOrEmpty(_paramType);
 
+            public Type ParamType => _paramType;
+
             public void Invoke(IInvocationContext context, IReadOnlyDictionary<string, object> arguments) =>
                 InvokeRemote(RequireRemote(context).Context, ToDictionary(arguments));
 

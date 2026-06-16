@@ -172,6 +172,40 @@ ucp-cli run echo --session-type runtime --args '{"message":"hello from runtime"}
 ucp-cli run stop --session-type editor
 ```
 
+### Runtime Cmd 面板（Play Mode 内 UGUI）
+
+将 `Resources/UcpCmdPanel.prefab` 拖入场景 Canvas 下即可使用（可用 `` ` `` 键显隐）。布局与 `_fontSize` 均在 Prefab 上配置。
+
+```text
+com.air.ucp-agent/Resources/UcpCmdPanel.prefab
+com.air.ucp-agent/Runtime/CmdPanel/UcpCmdPanel.cs
+```
+
+场景需包含 Canvas、EventSystem。
+
+| 区域 | 说明 |
+|------|------|
+| 历史区 | 每次执行两行：第一行 `> 命令`，第二行执行结果 |
+| 提示区 | 根据当前输入实时显示可用命令及 `--参数` 说明 |
+| 输入框 | 点击聚焦后输入；`Tab` 补全；`Enter` 执行；`↑`/`↓` 浏览历史 |
+
+**扩展 Runtime 命令：** 在项目的 `Assets/Scripts/` 下新增 `CliCommand` / `CliCommand<TParams>`，编译后即可在面板中执行（与 `ucp-cli --session-type runtime` 共用命令发现机制）。
+
+```csharp
+// Assets/Scripts/MyRuntimeCommand.cs
+public class MyRuntimeCommand : CliCommand<MyParams> { ... }
+```
+
+示例：
+
+```text
+> ping
+pong
+
+> echo --message hello
+echo ok {"channel":"runtime","message":"hello"}
+```
+
 ---
 
 ## 数据目录（`~/.ucp/`）

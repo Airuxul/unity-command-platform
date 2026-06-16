@@ -1,7 +1,9 @@
 {
   "name": "com.air.UcpAgent.Runtime",
   "rootNamespace": "Air.UcpAgent",
-  "references": [],
+  "references": [
+    "UnityEngine.UI"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

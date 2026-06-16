@@ -9,6 +9,7 @@ namespace Air.UcpAgent.Commands
         public const string Console = "console";
         public const string Echo = "echo";
         public const string Exec = "exec";
+        public const string Help = "help";
         public const string Manage = "manage";
         public const string Menu = "menu";
         public const string Ping = "ping";

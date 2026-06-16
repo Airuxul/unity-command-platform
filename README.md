@@ -9,7 +9,7 @@
 | [ucp-cli](ucp-cli/) | Node — `ucp-cli` front-end + `ucp-host` daemon (single npm package) |
 | [com.air.ucp-agent](com.air.ucp-agent/) | Unity UPM — Editor FileQueue agent + commands |
 
-Design: [../../01_Architecture.md](../../01_Architecture.md) · Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
+Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 
 ## Quick start
 

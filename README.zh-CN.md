@@ -9,7 +9,7 @@
 | [ucp-cli](ucp-cli/) | Node：`ucp-cli` 命令行 + `ucp-host` 守护进程 |
 | [com.air.ucp-agent](com.air.ucp-agent/) | Unity UPM：Editor FileQueue Agent + 命令实现 |
 
-架构：[../../01_Architecture.md](../../01_Architecture.md) · 命名：[CONVENTIONS.md](CONVENTIONS.md) · 文档：[docs/](docs/)
+命名：[CONVENTIONS.md](CONVENTIONS.md) · 文档：[docs/](docs/)
 
 ## 快速开始
 

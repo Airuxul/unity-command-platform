@@ -67,9 +67,57 @@ Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 - **Targets config** — `~/.ucp/targets.json` stores Editor and Runtime targets. Runtime targets are probed via `/health`; Editor targets fall back to session-file discovery.
 - **Capability gating** — each session advertises which command types it supports; `ucp-host` rejects unsupported commands before dispatching.
 - **Deferred long-running commands** — compile, play, stop, and exec block inside `EditorJobStateManager` without timing out the HTTP caller.
+- **Domain Reload Safe** — in-flight commands survive Unity's script compilation cycle without losing state; see below.
 - **Play Mode runtime channel** — `RuntimeAgentHost` starts automatically on `AfterSceneLoad`, binds `127.0.0.1:6620` (configurable), and shuts down cleanly when Play Mode exits.
 - **Multi-project safe** — queue paths are keyed by `SHA-256(projectPath)[0:16]`; multiple Unity instances coexist without conflicts.
 - **Structured JSON everywhere** — every command response is `{ ok, data, message, error_code }` — easy to parse in scripts or AI tool calls.
+
+---
+
+## Domain Reload Safety
+
+Unity wipes all C# static state when script compilation finishes (**Domain Reload**). UCP uses a two-layer persistence strategy so in-flight commands are never lost or stuck.
+
+### Persistence layers
+
+| Layer | Mechanism | Notes |
+|-------|-----------|-------|
+| In-memory | `EditorJobStateManager._commands` | Primary dictionary; rebuilt immediately from the layers below after each reload |
+| Lightweight | `SessionState` (`Air.UcpAgent.Jobs`) | Unity's built-in Editor key-value store; survives Domain Reload automatically |
+| Disk | `~/.ucp/jobs/{projectId}/{cmdId}.json` | Written by `EditorJobLedger`; recovers from any crash or hot reload |
+
+### Recovery sequence after reload
+
+```text
+Domain Reload fires
+    ↓
+EditorJobStateManager  [InitializeOnLoad static ctor]
+    1. PurgeCorruptFiles()        remove bad disk job files
+    2. LoadFromSession()          restore dict from SessionState
+    3. MergePendingInto()         fill gaps from disk ledger
+    4. OrphanJobsAfterDomainReload()  mark non-resumable jobs as Orphaned
+    5. Save()                     write merged state back to SessionState + disk
+    ↓
+EditorAgentBootstrap  [InitializeOnLoad static ctor]
+    re-registers EditorApplication.update
+    rewrites session file → ucp-host sees the agent as ready again
+```
+
+### Which commands survive a Domain Reload?
+
+`OrphanJobsAfterDomainReload` decides based on the job's `CompletionKind` field:
+
+| CompletionKind | After reload | Typical commands |
+|----------------|-------------|-----------------|
+| `compilation` | Resumes — `CompilationPolicy` checks `IsCompiling` flag | `compile`, `refresh` |
+| `enter_play` | Resumes — `EnterPlayModePolicy` checks Play Mode state | `play` |
+| `exit_play` | Resumes — `ExitPlayModePolicy` checks Play Mode state | `stop` |
+| `deferred` | Resumes — caller drives progress in `Update()` | `exec` |
+| other / empty | **Orphaned** — failure written to outbox immediately | commands without a registered policy |
+
+### How does the CLI receive results after a reload?
+
+`EditorAgentBootstrap.PollInbox()` resumes in the next `EditorApplication.update` tick (~250 ms). `ucp-host` picks up the outbox result before the command timeout and forwards it to `ucp-cli`. Orphaned commands also write an explicit error to the outbox, so the CLI never hangs indefinitely.
 
 ---
 

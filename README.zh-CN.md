@@ -67,9 +67,57 @@
 - **Targets 配置** — `~/.ucp/targets.json` 存储 Editor 和 Runtime 目标；Runtime 目标通过 `/health` 探测，Editor 目标自动回退到 Session 文件发现。
 - **Capability 校验** — 每个会话声明自己支持哪些命令类型；`ucp-host` 在派发前拦截不支持的命令。
 - **长命令延迟执行** — 编译、play、stop、exec 等命令由 `EditorJobStateManager` 在 `Update()` 内驱动，不会因 HTTP 超时而失败。
+- **域重载安全（Domain Reload Safe）** — 命令在执行过程中触发脚本编译/域重载时不会丢失，详见下方说明。
 - **Play Mode Runtime 通道** — `RuntimeAgentHost` 在 `AfterSceneLoad` 自动启动，绑定 `127.0.0.1:6620`（可配置），退出 Play Mode 时干净关闭。
 - **多项目安全** — 队列路径以 `SHA-256(项目路径)[0:16]` 为键，多个 Unity 实例互不干扰。
 - **全程结构化 JSON** — 所有命令响应格式统一为 `{ ok, data, message, error_code }`，便于脚本或 AI 工具调用解析。
+
+---
+
+## 域重载安全（Domain Reload Safe）
+
+Unity 脚本编译结束时会触发 **Domain Reload**，所有 C# 静态状态都会被清空。UCP 通过双重持久化机制确保正在执行的命令不会丢失或卡死：
+
+### 持久化方案
+
+| 层 | 机制 | 说明 |
+|----|------|------|
+| 内存 | `EditorJobStateManager._commands` | 运行时主字典，`[InitializeOnLoad]` 重建后立即从下方两层恢复 |
+| 轻量持久 | `SessionState`（`Air.UcpAgent.Jobs`） | Unity 内置的 Editor 会话键值存储，Domain Reload 后自动保留 |
+| 磁盘持久 | `~/.ucp/jobs/{projectId}/{cmdId}.json` | `EditorJobLedger` 写入，任何崩溃或热重载都能从磁盘还原 |
+
+### 重载后恢复流程
+
+```text
+Domain Reload 触发
+    ↓
+EditorJobStateManager (static ctor, [InitializeOnLoad])
+    1. PurgeCorruptFiles() — 清理损坏的磁盘 job 文件
+    2. LoadFromSession()   — 从 SessionState 还原内存字典
+    3. MergePendingInto()  — 用磁盘文件补全 SessionState 遗漏的条目
+    4. OrphanJobsAfterDomainReload() — 无法续跑的 job 标记为 Orphaned
+    5. Save()              — 将合并结果写回 SessionState + 磁盘
+    ↓
+EditorAgentBootstrap (static ctor, [InitializeOnLoad])
+    重新注册 EditorApplication.update
+    重写 session 文件 → ucp-host 感知 Agent 已恢复 ready
+```
+
+### 哪些命令能跨域重载续跑？
+
+`OrphanJobsAfterDomainReload` 负责判断：命令的 `CompletionKind` 字段决定其是否可以在域重载后继续推进。
+
+| CompletionKind | 重载后行为 | 典型命令 |
+|----------------|-----------|---------|
+| `compilation` | 续跑 — `CompilationPolicy` 检查 `IsCompiling` 标志 | `compile`、`refresh` |
+| `enter_play` | 续跑 — `EnterPlayModePolicy` 检查 Play Mode 状态 | `play` |
+| `exit_play` | 续跑 — `ExitPlayModePolicy` 检查 Play Mode 状态 | `stop` |
+| `deferred` | 续跑 — 由调用方在 `Update()` 中自行推进 | `exec` |
+| 其他 / 空 | **Orphaned** — 立即写入失败结果，CLI 收到明确错误 | 未注册策略的命令 |
+
+### 结果如何返回给 CLI？
+
+域重载后 `EditorAgentBootstrap.PollInbox()` 在下一个 `EditorApplication.update` 周期（约 250 ms）重新轮询 inbox。对于已在 `outbox` 中写入结果的命令，`ucp-host` 会在轮询超时前取到结果并返回给 `ucp-cli`。对于被标记为 Orphaned 的命令，Agent 同样把错误写入 outbox，CLI 不会无限等待。
 
 ---
 

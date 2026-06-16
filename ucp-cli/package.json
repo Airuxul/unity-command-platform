@@ -1,0 +1,67 @@
+{
+  "name": "ucp-cli",
+  "version": "0.2.0",
+  "description": "UCP: ucp-cli front-end and ucp-host daemon for Unity",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js"
+    },
+    "./host": {
+      "types": "./dist/host/app.d.ts",
+      "import": "./dist/host/app.js"
+    },
+    "./cli/client": {
+      "types": "./dist/cli/client/ucp-host-client.d.ts",
+      "import": "./dist/cli/client/ucp-host-client.js"
+    }
+  },
+  "imports": {
+    "#shared/*": "./dist/shared/*",
+    "#host/*": "./dist/host/*",
+    "#cli/*": "./dist/cli/*"
+  },
+  "bin": {
+    "ucp-cli": "./bin/ucp-cli.js",
+    "ucp-host": "./bin/ucp-host.js"
+  },
+  "files": ["dist", "bin"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "preucp-cli": "npm run build",
+    "prehost": "npm run build",
+    "ucp-cli": "node bin/ucp-cli.js",
+    "host": "node bin/ucp-host.js",
+    "check": "tsc --noEmit && biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:editor": "vitest run --config vitest.integration.config.ts",
+    "verify": "npm run build && npm run check && npm test && npm run test:integration"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.13.10",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
+}

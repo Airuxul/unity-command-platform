@@ -4,15 +4,18 @@
 
 | Document | Description |
 |----------|-------------|
-| [../README.md](../README.md) | Overview, [commands per instance](../README.md#commands-per-instance), [AI usage](../README.md#ai--agent-usage) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture and request flow |
-| [AGENTS.md](AGENTS.md) | Automation quick reference |
-| [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | Doc workflow |
-| [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) | Agent-side changelog |
-| [MAINTENANCE.md](MAINTENANCE.md) | Command contract, bump builds |
-| [../unity-cmd/README.md](../unity-cmd/README.md) | CLI usage |
-| [../com.air.unity-connector/README.md](../com.air.unity-connector/README.md) | Connector install |
-| [../unity-cmd/docs/IMPLEMENTATION.md](../unity-cmd/docs/IMPLEMENTATION.md) | CLI implementation |
-| [../com.air.unity-connector/docs/IMPLEMENTATION.md](../com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API reference |
+| [../README.md](../README.md) | UCP overview (English) |
+| [../README.zh-CN.md](../README.zh-CN.md) | UCP overview (Chinese) |
+| [../CONVENTIONS.md](../CONVENTIONS.md) | Naming and layout |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Implemented stack and data flow |
+| [MAINTENANCE.md](MAINTENANCE.md) | Extend commands, bump versions, tests |
+| [AGENTS.md](AGENTS.md) | Agent / automation entry |
+| [TODO.md](TODO.md) | Backlog (English) |
+| [../TODO.zh-CN.md](../TODO.zh-CN.md) | Backlog (Chinese) |
+| [RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md) | FileQueue reliability (Chinese) |
+| [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | How to maintain docs |
+| [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) | Agent-facing changelog |
+| [../ucp-cli/README.md](../ucp-cli/README.md) | CLI setup and scripts |
+| [../com.air.ucp-agent/README.md](../com.air.ucp-agent/README.md) | Unity UPM install |
 
-Unity automation skill (meta repo only): `.cursor/skills/unity-cmd/SKILL.md` at the **CustomPackages** workspace root.
+Authoritative architecture: [01_Architecture.md](../../../01_Architecture.md) (GameDemo root).

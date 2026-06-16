@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+import { run } from "../dist/cli/main.js";
+
+run(process.argv.slice(2)).catch((err) => {
+  console.log(
+    JSON.stringify(
+      {
+        ok: false,
+        error_code: "ucp_cli_error",
+        hint: err instanceof Error ? err.message : String(err),
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(1);
+});

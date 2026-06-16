@@ -4,15 +4,15 @@
 
 | 文档 | 说明 |
 |------|------|
-| [../README.zh-CN.md](../README.zh-CN.md) | 概览、[各实例命令](../README.zh-CN.md#各实例命令)、[AI 使用](../README.zh-CN.md#ai--agent-使用) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 架构与请求流 |
-| [AGENTS.md](AGENTS.md) | 自动化速查（英文） |
-| [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | 文档治理（英文） |
-| [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) | Agent 变更记录（英文） |
-| [MAINTENANCE.md](MAINTENANCE.md) | 命令契约、版本号 |
-| [../unity-cmd/README.zh-CN.md](../unity-cmd/README.zh-CN.md) | CLI 用法 |
-| [../com.air.unity-connector/README.zh-CN.md](../com.air.unity-connector/README.zh-CN.md) | Connector |
-| [../unity-cmd/docs/IMPLEMENTATION.md](../unity-cmd/docs/IMPLEMENTATION.md) | CLI 实现 |
-| [../com.air.unity-connector/docs/IMPLEMENTATION.md](../com.air.unity-connector/docs/IMPLEMENTATION.md) | HTTP API |
+| [../README.zh-CN.md](../README.zh-CN.md) | UCP 概览 |
+| [../CONVENTIONS.md](../CONVENTIONS.md) | 命名与目录规范 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 已实现架构与数据流 |
+| [MAINTENANCE.md](MAINTENANCE.md) | 扩展命令、版本、测试 |
+| [AGENTS.md](AGENTS.md) | Agent / 自动化入口 |
+| [TODO.md](TODO.md) | 待办（英文） |
+| [../TODO.zh-CN.md](../TODO.zh-CN.md) | 待办（中文） |
+| [RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md) | FileQueue 可靠性 |
+| [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | 文档维护流程 |
+| [../ucp-cli/README.md](../ucp-cli/README.md) | CLI 用法 |
 
-Unity 自动化 Skill 仅在元仓库：工作区根为 **CustomPackages** 时使用 `.cursor/skills/unity-cmd/SKILL.md`。
+架构原文：[01_Architecture.md](../../../01_Architecture.md)

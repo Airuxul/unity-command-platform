@@ -4,77 +4,59 @@
 
 | Path | Role |
 |------|------|
-| `unity-cmd/` | Node CLI — profiles, catalog cache, integration tests |
-| `com.air.unity-connector/` | Unity UPM — HTTP hosts, commands, job state |
-| `docs/` | Architecture, agents, this file |
+| `ucp-cli/` | Node — CLI, host, protocol, tests |
+| `com.air.ucp-agent/` | Unity UPM — agent, commands |
+| `docs/` | Architecture, agents, maintenance |
 
-## Connector framework
+## Add an Editor command
 
-| Layer | Key types |
-|-------|-----------|
-| Commands | `CliCommand` / `CliCommand<T>`, `InvokeDescriptor`, `CliCommandDiscovery` |
-| HTTP | `ConnectorRequestDispatcher`, `InvokePipeline`, `HttpListenerHost` |
-| Job state | `JobStateCore`, `InvokeJobRecord`, `EditorJobStateManager` (Editor), `RuntimeJobStateManager` (play/player) |
-| Execution | `InvokeExecutor`, `InvokePipeline` |
+1. Add constant to `com.air.ucp-agent/Runtime/Commands/CommandNames.cs`.
+2. Create `Editor/Commands/{Name}Command.cs` in namespace `Air.UcpAgent.Editor.Commands`.
+3. Inherit `CliCommand` or `CliCommand<TParams>` with `InvokeDescriptor`.
+4. Recompile Unity — `CliCommandDiscovery` picks it up automatically.
+5. Test: `ucp-cli run <name> [--args '{}']`.
 
-## Builtin command names (C#)
+Deferred example (`compile`, `play`, `stop`): use `DeferredInvokeDescriptor`, `MarkRunning()`, complete via `EditorJobStateManager`.
 
-Rename or add built-in commands in **`com.air.unity-connector/Runtime/Commands/CommandNames.cs`**. Reference `CommandNames.*` from command `Descriptor` and tests under `com.air.unity-connector/Tests/`.
+## Command shape (C#)
 
-### Command shape
+| Piece | Location |
+|-------|----------|
+| Name constants | `Runtime/Commands/CommandNames.cs` |
+| Implementation | `Editor/Commands/*Command.cs` |
+| FileQueue bridge | `Editor/Bridge/UcpCliCommandHandler.cs` |
+| Protocol DTOs | `Runtime/Protocol/` |
 
-Each command is an **instantiable class** (not abstract `CliCommand` / `CliCommand<T>`):
+## Node development
 
-| Piece | Shape |
-|-------|--------|
-| Base | `CliCommand` or `CliCommand<TParams>` |
-| Metadata | `InvokeDescriptor` / `DeferredInvokeDescriptor<TParams>` |
-| Entry | `Run()` or `Run(TParams)` |
-
-**Deferred commands:** call `MarkRunning()` then `CompleteSuccess` / `CompleteFail` when done. Editor compile/play policies use `DeferredInvokeDescriptor` + `InvokeCompletionCatalog` + `Editor/Completion/*`.
-
-Example:
-
-```csharp
-public sealed class MyDeferredCommand : CliCommand<MyParams>
-{
-    public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<MyParams>(
-        "my.deferred", CommandHostScope.Runtime, "Background work", defaultTimeoutMs: 15000);
-
-    public override void Run(MyParams p)
-    {
-        MarkRunning();
-        _ = System.Threading.Tasks.Task.Run(() => CompleteSuccess(InvokeResult.Ok("done")));
-    }
-}
+```powershell
+cd ucp-cli
+npm run verify                    # build + lint + unit + file-queue e2e
+$env:UCP_EDITOR_INTEGRATION="1"
+npm run test:integration:editor   # needs Unity
 ```
 
-Discovery (`CliCommandDiscovery`): scans assemblies, skips abstract types, builds `IInvokeHandler` per concrete command class.
+## Bump agent version
 
-Design notes: `com.air.unity-connector/Runtime/Connector/Command/DESIGN.md`.
+When changing session/command JSON shape:
 
-### Command parameters
+1. Update `Runtime/Protocol/` and `ucp-cli/src/shared/` together.
+2. Bump `com.air.ucp-agent/package.json` version.
+3. Re-run Unity + integration tests.
 
-- Define a `*Params` class per command (`Editor/Params/`, `Runtime/Params/`).
-- `[CliParam]` on properties; `CliParamBinder` binds JSON from HTTP/CLI.
+## Environment
 
-## Bump connector build
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `UCP_ROOT` | `~/.ucp` | Data root |
+| `UCP_HOST_PORT` | `6610` | Host HTTP |
+| `UCP_EDITOR_INTEGRATION` | unset | Enable live tests |
 
-When changing HTTP protocol or catalog contract:
+## Troubleshooting
 
-1. Implement change in `com.air.unity-connector`
-2. Increment `com.air.unity-connector/Runtime/ConnectorBuild.cs` → `Id`
-3. Set `unity-cmd/src/constants.js` → `MIN_CONNECTOR_BUILD` to the same value
-4. Update `expectConnectorBuild` in integration JSON scenarios if present
-5. Run `npm run verify` from `unity-cmd/` (includes `doc:check` for version + build sync)
-
-## Tests
-
-From `unity-cmd/`:
-
-```bash
-npm run verify          # unit + doc:check
-npm run test:integration   # needs Unity + profiles
-```
-
-Unity EditMode: `UnityCliConnector.Tests.Editor` assembly in consuming project.
+| Symptom | Check |
+|---------|--------|
+| `no_ready_session` | Unity open, agent compiled, `~/.ucp/sessions/*.json` exists |
+| Host won't start | Kill stale `node …/ucp-host.js` from old paths; delete `host.lock` |
+| Command missing | Unity recompile; session `capabilities` list |
+| BOM parse error | Agent writes UTF-8 without BOM; CLI strips BOM on read |

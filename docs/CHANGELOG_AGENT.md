@@ -1,17 +1,14 @@
-# Agent Changelog — `unity-cli`
+# Agent Changelog — `packages/ucp`
 
-## 2026-06-04
+## 2026-06-16 — UCP migration & doc refresh
 
-- **CONN-10:** Sync `POST /command` (build 40); removed CLI HTTP 202 poll (`command-status.js`, `editor-http-cache.js`).
-- **CLI SSOT:** `wait` / `resolveTarget` use `~/.unity-cmd/instances/*.json`; `resolveWaitProjectPath()` + `UNITY_CMD_WORKSPACE` for integration cwd ≠ Unity root.
-- **Editor:** `EditorServerSupervisor` single writer; `TryRecoverStuckDomainReload`; `PendingHttpResponses` for held HTTP.
-- **Tests:** `editor-lifecycle` post-compile wait; `compile-recompile-cycle`, `editor-reliability-stress`, `gamedemo-scene-switch-play`; docs synced for `UNITY_CMD_WORKSPACE`.
+- Renamed CLI binary `uctl` → **`ucp-cli`**; repo path **`packages/ucp`**.
+- Removed `com.air.unity-connector`, `unity-cmd`, Editor HTTP stack.
+- Stack: `ucp-cli` → `ucp-host` → FileQueue → `com.air.ucp-agent`.
+- Data root: `~/.ucp/` (replaces `~/.unity-cmd/`).
+- Commands: single `CliCommand` track; `state` returns `agent_state`.
+- Rewrote `docs/*`, `README*`, `CONVENTIONS.md`, `TODO*.md` for UCP.
 
-## 2026-06-02
+## 2026-06-04 and earlier
 
-- Added `docs/DOC_GOVERNANCE.md` (bilingual README layout, meta AirUnityPackage link)
-- Added `docs/CHANGELOG_AGENT.md`
-- Updated `docs/AGENTS.md` (metadata, governance index)
-- Moved `unity-cmd` skill to meta `.cursor/skills/unity-cmd/SKILL.md` (single English file; no references/)
-- Aligned `README.md` / `README.zh-CN.md` (environment variable table, LAN profile example)
-- Updated `docs/README.md` / `docs/README.zh-CN.md` (governance doc links)
+Entries before 2026-06-16 refer to the **legacy** `unity-cmd` + `com.air.unity-connector` HTTP architecture and are kept for historical context only.

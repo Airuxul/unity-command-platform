@@ -12,15 +12,15 @@ Desktop.ini
 *.sln.docstates
 .vscode/
 
-# --- Node (unity-cmd) ---
+# --- Node (ucp-cli) ---
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# --- unity-cmd test / local output ---
-unity-cmd/tests/integration/out/
+# --- ucp-cli test / local output ---
+ucp-cli/tests/integration/out/
 
 # --- Agent 
 .cursor/

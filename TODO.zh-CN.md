@@ -1,66 +1,60 @@
-# 待办 — `unity-cli`（连接器 + CLI）
+# 待办 — UCP（`packages/ucp`）
 
-**最后更新：** 2026-06-03 · **范围：** Unity 自动化栈现有功能的后续优化（中文）
+**最后更新：** 2026-06-16 · **范围：** UCP 栈后续优化（中文）
 
-> **仓库结构：** `com.air.unity-connector`（UPM）+ `unity-cmd`（Node CLI）。  
-> **不负责：** `GameRuntime` 组装、产品 UI、在 game-core 重复 HTTP。  
-> Agent 英文条目：[`docs/TODO.md`](docs/TODO.md)
+> **仓库结构：** `ucp-cli`（Node）+ `com.air.ucp-agent`（Unity UPM）。  
+> **英文条目：** [`docs/TODO.md`](docs/TODO.md)
 
 ---
 
-## `com.air.unity-connector`（CONN-）
+## `com.air.ucp-agent`（AGENT-）
 
-### 现有能力概要
+### 现有能力
 
-- 本机 HTTP：`editor` :6547、`editor_play` :6794、`player` :6795
-- `POST /list`、`POST /command`、`GET /commands/{id}`、`GET /health`
-- `InvokeCatalog`、主线程调度、域重载后任务账本
-- `CliCommand` 发现（非 game-core `ICommand`）
+- Editor FileQueue 轮询（`~/.ucp/queues/{projectId}/inbox|outbox`）
+- Session 注册（`~/.ucp/sessions/{projectId}.json`）
+- `CliCommand` 自动发现 + `UcpCliCommandHandler` 桥接
+- 延迟命令：`compile` / `play` / `stop` + `EditorJobStateManager`
+- 命令：`ping`, `echo`, `state`, `console`, `refresh`, `screenshot`, `profiler`, `manage`, `menu`, `reserialize`, `compile`, `play`, `stop`, `exec`, `build`（骨架）
 
-### 待办列表
+### 待办
 
 | ID | 优先级 | 标题 | 说明 |
 |----|--------|------|------|
-| CONN-01 | P0 | 修复 `profiler` 参数转型 | `--frames`、`--from`–`--to` 已知缺陷。 |
-| CONN-02 | P1 | README 版本同步 | README 1.1.0 与 `package.json` 2.3.0 不一致。 |
-| CONN-03 | P1 | `UNITY_CMD_TOKEN` 加固 | 头校验与统一失败 JSON。 |
-| CONN-04 | P1 | 重载后任务审计 | 孤儿任务 / `EditorJobLedger` 无再派发。 |
-| CONN-05 | P2 | `ConnectorBuild.Id` 配对 | 与 CLI `MIN_CONNECTOR_BUILD` 同步 bump。 |
-| CONN-06 | P2 | Release 剥离 Player HTTP | 确认 Release 无 :6795。 |
+| AGENT-01 | P1 | `build` 接入 BuildPipeline | 当前为骨架，需真实构建流程。 |
+| AGENT-02 | P1 | Runtime Agent HTTP | 按架构 §10 实现 Player 侧适配（独立阶段）。 |
+| AGENT-03 | P2 | 域重载后延迟任务审计 | `EditorJobLedger` 与 outbox 一致性。 |
+| AGENT-04 | P2 | `profiler` 参数绑定 | 修复/补全参数校验与文档。 |
 
 ### 请勿在本包实现
 
 | 主题 | 归属 |
 |------|------|
-| Node 配置、目录缓存、argv | `unity-cmd` |
+| CLI / Host 调度 | `ucp-cli` |
 | `GameRuntime`、实体、UI | `com.air.unity-game-core` / `com.air.unity-ui` |
-| GoF 撤销命令 | `com.air.game-core` |
 
 ---
 
-## `unity-cmd`（CMD-）
+## `ucp-cli`（CLI-）
 
-### 现有能力概要
+### 现有能力
 
-- 配置目录 `~/.unity-cmd/profiles/`
-- 自 `POST /list` 缓存目录；`/health` 版本失效
-- 编辑器就绪：`~/.unity-cmd/instances/*.json`（SSOT）+ `/health`；`editor-http.json` 仅调试
-- 集成场景：编辑器生命周期、编译恢复、Player 运行时
+- `ucp-cli` + `ucp-host` 单 npm 包（TypeScript, vitest）
+- FileQueue e2e、`UCP_EDITOR_INTEGRATION` 真机测试
+- `~/.ucp` 路径、Session 发现、Scheduler + Retry
 
-### 待办列表
+### 待办
 
 | ID | 优先级 | 标题 | 说明 |
 |----|--------|------|------|
-| CMD-01 | P0 | 子模块完整性 | 稀疏检出须含 `src/`、`bin/`、单元测试。 |
-| CMD-02 | P1 | 集成 CI 清理 | `compile-error-recovery` 运行前清理临时 `.cs`。 |
-| CMD-03 | P1 | CI 集成矩阵 | Editor + 开发版 Player 可用时跑全场景。 |
-| CMD-04 | P1 | 构建 ID 锁步 | 协议变更时 `MIN_CONNECTOR_BUILD` ↔ `ConnectorBuild.Id`。 |
-| CMD-05 | P2 | 局域网配置文档 | `UNITY_CMD_BIND=lan` 与远程 `editor_play`。 |
-| CMD-06 | P2 | 无 Unity 单元测试 | 目录过期、作用域不匹配、轮询超时等。 |
+| CLI-01 | P1 | CI 集成矩阵 | Editor 打开时跑 `test:integration:editor`。 |
+| CLI-02 | P1 | Runtime HTTP 适配器 | 对接 Player Agent（与 AGENT-02 配对）。 |
+| CLI-03 | P2 | SQLite Editor 适配器 | 架构可选方案，低优先级。 |
+| CLI-04 | P2 | `ucp-cli` 全局安装文档 | Windows PATH / `npm link` 排错。 |
 
 ### 请勿在本包实现
 
 | 主题 | 归属 |
 |------|------|
-| `HttpListener`、处理器、完成策略 | `com.air.unity-connector` |
-| Unity 主线程 API 执行 | 连接器调度器 |
+| Unity 主线程 API | `com.air.ucp-agent` |
+| 业务命令逻辑 | `Editor/Commands/` |

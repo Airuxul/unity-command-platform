@@ -1,0 +1,13 @@
+{
+  "name": "com.air.ucp-agent",
+  "version": "0.3.0",
+  "displayName": "UCP Unity Agent",
+  "description": "Unity Command Platform agent — FileQueue editor commands (no HTTP connector)",
+  "unity": "2021.3",
+  "author": {
+    "name": "airuxul"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

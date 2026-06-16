@@ -47,9 +47,21 @@ export function ensureDir(dir: string): void {
 
 export function writeJsonAtomic(filePath: string, data: unknown): void {
   ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-  fs.renameSync(tmp, filePath);
+  const payload = `${JSON.stringify(data, null, 2)}\n`;
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, payload, "utf8");
+
+  try {
+    fs.renameSync(tmp, filePath);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EPERM" || code === "EACCES" || code === "EBUSY") {
+      fs.copyFileSync(tmp, filePath);
+      fs.unlinkSync(tmp);
+      return;
+    }
+    throw err;
+  }
 }
 
 export function readJsonFile(filePath: string): unknown | null {

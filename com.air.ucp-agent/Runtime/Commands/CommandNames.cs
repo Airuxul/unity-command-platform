@@ -4,6 +4,7 @@ namespace Air.UcpAgent.Commands
     /// <summary>Built-in ucp-cli command names for ucp-agent.</summary>
     public static class CommandNames
     {
+        public const string Asset = "asset";
         public const string Build = "build";
         public const string Compile = "compile";
         public const string Console = "console";
@@ -19,8 +20,11 @@ namespace Air.UcpAgent.Commands
         public const string Profiler = "profiler";
         public const string Refresh = "refresh";
         public const string Reserialize = "reserialize";
+        public const string SceneEdit = "scene.edit";
+        public const string SceneRead = "scene.read";
         public const string Screenshot = "screenshot";
         public const string State = "state";
         public const string Stop = "stop";
+        public const string UiSnapshot = "ui.snapshot";
     }
 }

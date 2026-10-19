@@ -129,7 +129,7 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 | `echo` | Editor / Runtime | 返回消息并标注通道 |
 | `state` | Editor | Agent + Editor 状态快照（Play Mode、编译中等） |
 | `console` | Editor | 读取 Unity Console 条目，支持类型/数量过滤 |
-| `screenshot` | Editor | 截图 Game 或 Scene 视图到文件 |
+| `screenshot` | Editor | 截图 Game 或 Scene 视图到文件。Game 视图含 Overlay Canvas |
 | `profiler` | Editor | 启用/禁用 Profiler，读取帧数据 |
 | `refresh` | Editor | `AssetDatabase.Refresh`，可选触发编译 |
 | `compile` | Editor | 请求脚本编译并等待结果 |
@@ -139,8 +139,14 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 | `build` | Editor | 触发 Player 构建（骨架实现，流水线待完善） |
 | `reserialize` | Editor | 强制重新序列化资产 |
 | `exec` | Editor | 在 Editor 内执行 C# 代码片段 |
-| `prefab.read` | Editor | 列出 Prefab 节点（`path` 和组件），不保存 |
-| `prefab.edit` | Editor | 挂组件、写对象引用或改节点名，然后一次保存 |
+| `prefab.read` | Editor | 列出 Prefab 节点。传 `node` 时返回该节点的 Rect 和可写字段，不保存 |
+| `prefab.edit` | Editor | 改层级、组件、引用、布局和序列化字段，然后一次保存 |
+| `scene.read` | Editor | 列出当前场景，或在当前场景未改动时打开 `scene_path`。不保存 |
+| `scene.edit` | Editor | 用与 `prefab.edit` 相同的操作改场景，然后保存 |
+| `asset` | Editor | 在 `Assets/` 下移动、复制、删除或建目录，`.meta` 跟着走 |
+| `ui.snapshot` | Editor | 仅 Play Mode。列出 Canvas、文本和按钮能否点击 |
+
+进 Play 后核对界面：`play`，然后 `ui.snapshot`，再 `screenshot`（`view` 为 `game`），然后 `console`，最后 `stop`。
 
 ---
 

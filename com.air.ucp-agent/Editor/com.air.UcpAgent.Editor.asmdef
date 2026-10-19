@@ -2,7 +2,8 @@
     "name": "com.air.UcpAgent.Editor",
     "rootNamespace": "Air.UcpAgent.Editor",
     "references": [
-        "com.air.UcpAgent.Runtime"
+        "com.air.UcpAgent.Runtime",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"

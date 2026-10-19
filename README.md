@@ -129,7 +129,7 @@ EditorAgentBootstrap  [InitializeOnLoad static ctor]
 | `echo` | Editor / Runtime | Return a message with channel annotation |
 | `state` | Editor | Agent + Editor state snapshot (play mode, compiling, …) |
 | `console` | Editor | Read Unity Console entries with type/count filters |
-| `screenshot` | Editor | Capture Game or Scene view to a file |
+| `screenshot` | Editor | Capture Game or Scene view to a file. Game view includes overlay canvases |
 | `profiler` | Editor | Enable / disable Profiler, read frame stats |
 | `refresh` | Editor | `AssetDatabase.Refresh`, optionally trigger compile |
 | `compile` | Editor | Request script compilation and wait for result |
@@ -139,8 +139,14 @@ EditorAgentBootstrap  [InitializeOnLoad static ctor]
 | `build` | Editor | Trigger a Player build (skeleton — pipeline TBD) |
 | `reserialize` | Editor | Force-reserialize assets |
 | `exec` | Editor | Execute a C# snippet inside the Editor |
-| `prefab.read` | Editor | List prefab nodes (`path`, components). Does not save |
-| `prefab.edit` | Editor | Add a component, set an object reference, or rename a node, then save once |
+| `prefab.read` | Editor | List prefab nodes. Pass `node` for that node's rect and writable fields. Does not save |
+| `prefab.edit` | Editor | Edit hierarchy, components, references, layout, and serialized fields, then save once |
+| `scene.read` | Editor | List the active scene, or open `scene_path` when the active scene is clean. Does not save |
+| `scene.edit` | Editor | Apply the same operations as `prefab.edit`, then save the scene |
+| `asset` | Editor | Move, copy, delete, or create a folder under `Assets/` (`.meta` follows) |
+| `ui.snapshot` | Editor | Play Mode only. List canvases, text, and whether each button can be clicked |
+
+After entering Play Mode, check UI with `play`, then `ui.snapshot`, then `screenshot` (`view` = `game`), then `console`, then `stop`.
 
 ---
 

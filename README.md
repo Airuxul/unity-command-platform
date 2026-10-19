@@ -139,6 +139,8 @@ EditorAgentBootstrap  [InitializeOnLoad static ctor]
 | `build` | Editor | Trigger a Player build (skeleton — pipeline TBD) |
 | `reserialize` | Editor | Force-reserialize assets |
 | `exec` | Editor | Execute a C# snippet inside the Editor |
+| `prefab.read` | Editor | List prefab nodes (`path`, components). Does not save |
+| `prefab.edit` | Editor | Add a component, set an object reference, or rename a node, then save once |
 
 ---
 

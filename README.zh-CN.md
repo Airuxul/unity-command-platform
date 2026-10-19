@@ -139,6 +139,8 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 | `build` | Editor | 触发 Player 构建（骨架实现，流水线待完善） |
 | `reserialize` | Editor | 强制重新序列化资产 |
 | `exec` | Editor | 在 Editor 内执行 C# 代码片段 |
+| `prefab.read` | Editor | 列出 Prefab 节点（`path` 和组件），不保存 |
+| `prefab.edit` | Editor | 挂组件、写对象引用或改节点名，然后一次保存 |
 
 ---
 

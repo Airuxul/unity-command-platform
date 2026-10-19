@@ -14,6 +14,8 @@ namespace Air.UcpAgent.Commands
         public const string Menu = "menu";
         public const string Ping = "ping";
         public const string Play = "play";
+        public const string PrefabEdit = "prefab.edit";
+        public const string PrefabRead = "prefab.read";
         public const string Profiler = "profiler";
         public const string Refresh = "refresh";
         public const string Reserialize = "reserialize";

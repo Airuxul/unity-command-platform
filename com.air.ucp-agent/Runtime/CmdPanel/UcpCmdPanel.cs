@@ -19,6 +19,7 @@ namespace Air.UcpAgent.Runtime.CmdPanel
 
         [SerializeField] int _fontSize = 14;
         [SerializeField] float _lineHeight = 50f;
+        [SerializeField] KeyCode _toggleKey = KeyCode.BackQuote;
         [SerializeField] ScrollRect _historyScroll;
         [SerializeField] RectTransform _historyContent;
         [SerializeField] Text _hintText;
@@ -34,7 +35,8 @@ namespace Air.UcpAgent.Runtime.CmdPanel
         bool _completionCommonPrefixApplied;
 
         Font _runtimeFont;
-        bool _visible = true;
+        CanvasGroup _canvasGroup;
+        bool _visible;
         bool _initialized;
 
         public static UcpCmdPanel Instance { get; private set; }
@@ -52,8 +54,45 @@ namespace Air.UcpAgent.Runtime.CmdPanel
         void Awake()
         {
             Instance = this;
+            EnsureOverlayCanvas();
             if (!_initialized)
                 Initialize();
+            SetVisible(false);
+        }
+
+        void EnsureOverlayCanvas()
+        {
+            var canvas = GetComponent<Canvas>();
+            if (canvas == null)
+                canvas = gameObject.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = short.MaxValue;
+
+            var scaler = GetComponent<CanvasScaler>();
+            if (scaler == null)
+                scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1600f, 900f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            if (GetComponent<GraphicRaycaster>() == null)
+                gameObject.AddComponent<GraphicRaycaster>();
+
+            if (transform is RectTransform rootRect)
+            {
+                rootRect.anchorMin = Vector2.zero;
+                rootRect.anchorMax = Vector2.one;
+                rootRect.offsetMin = Vector2.zero;
+                rootRect.offsetMax = Vector2.zero;
+                rootRect.pivot = new Vector2(0.5f, 0.5f);
+            }
+
+            _canvasGroup = GetComponent<CanvasGroup>();
+            if (_canvasGroup == null)
+                _canvasGroup = gameObject.AddComponent<CanvasGroup>();
+
+            DontDestroyOnLoad(gameObject);
         }
 
         void Initialize()
@@ -69,8 +108,8 @@ namespace Air.UcpAgent.Runtime.CmdPanel
 
             _runtimeFont = _hintText != null ? _hintText.font : _inputField.textComponent?.font;
 
-            _inputField.onValidateInput = static (text, index, addedChar) =>
-                addedChar == '\t' ? '\0' : addedChar;
+            _inputField.onValidateInput = (text, index, addedChar) =>
+                addedChar == '\t' || addedChar == '`' || addedChar == '~' ? '\0' : addedChar;
             _inputField.onValueChanged.AddListener(_ => OnInputChanged());
             _inputField.onEndEdit.AddListener(OnInputEndEdit);
 
@@ -98,7 +137,7 @@ namespace Air.UcpAgent.Runtime.CmdPanel
 
         void Update()
         {
-            if (Input.GetKeyDown(KeyCode.BackQuote))
+            if (Input.GetKeyDown(_toggleKey))
                 SetVisible(!_visible);
 
             if (!_visible || _inputField == null || !_inputField.isFocused)
@@ -199,8 +238,11 @@ namespace Air.UcpAgent.Runtime.CmdPanel
             if (hintsRect != null)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(hintsRect);
 
-            if (transform is RectTransform panelRect)
-                LayoutRebuilder.MarkLayoutForRebuild(panelRect);
+            var layoutRoot = _historyScroll != null
+                ? _historyScroll.transform.parent as RectTransform
+                : transform as RectTransform;
+            if (layoutRoot != null)
+                LayoutRebuilder.MarkLayoutForRebuild(layoutRoot);
         }
 
         void ApplyTabCompletion(bool reverse = false)
@@ -388,8 +430,14 @@ namespace Air.UcpAgent.Runtime.CmdPanel
         void SetVisible(bool visible)
         {
             _visible = visible;
-            gameObject.SetActive(visible);
-
+            if (_canvasGroup != null)
+            {
+                _canvasGroup.alpha = visible ? 1f : 0f;
+                _canvasGroup.interactable = visible;
+                _canvasGroup.blocksRaycasts = visible;
+            }
+            if (!visible && _inputField != null)
+                _inputField.DeactivateInputField();
             if (visible)
                 FocusInput();
         }

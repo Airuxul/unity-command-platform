@@ -23,7 +23,9 @@ namespace Air.UcpAgent.Editor
         static string _projectId;
         static double _nextPoll;
         static double _nextHeartbeat;
-        const double PollIntervalSec = 0.25;
+        // Every tick in the background (about 10 a second), at most 50 a second in front. Was 0.25 s,
+        // which added about 125 ms to every command; listing an empty folder costs microseconds.
+        const double PollIntervalSec = 0.02;
         const double HeartbeatIntervalSec = 2.0;
 
         static EditorAgentBootstrap()

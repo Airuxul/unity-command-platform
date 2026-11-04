@@ -17,6 +17,13 @@ namespace Air.UcpAgent.Dispatch
 
         public void Register(ICommandHandler handler) => _handlers[handler.CommandType] = handler;
 
+        /// <summary>Registers an extra name for a handler, so declared aliases really dispatch.</summary>
+        public void Register(string commandType, ICommandHandler handler)
+        {
+            if (!string.IsNullOrEmpty(commandType) && handler != null)
+                _handlers[commandType] = handler;
+        }
+
         public bool TryGetHandler(string commandType, out ICommandHandler handler) =>
             _handlers.TryGetValue(commandType, out handler);
 

@@ -44,6 +44,27 @@ npm run test:integration
 
 The `editor-runtime-play` suite enters Play Mode, runs `echo` on editor + runtime sessions, stops Play, then asserts runtime commands fail.
 
+## Testing against a live Editor
+
+Two tiers, same transport:
+
+| | Command | Covers | Time |
+|-|---------|--------|------|
+| Smoke | `npm run smoke -- --project <path>` | One Prefab round trip, 18 assertions | ~3-4 min |
+| Full | `npm run test:integration` (needs `UCP_EDITOR_INTEGRATION=1`) | Every editor command | ~16 min |
+
+```powershell
+npm run smoke -- --project C:/Path/To/UnityProject
+```
+
+The smoke test creates a prefab with no scene open, edits its contents, reads the values back off
+disk, instantiates it into an additive scratch scene, overrides the instance and applies those
+overrides to the asset — then deletes everything it made. It never touches the scene you have open.
+Exit code is 0 only if all 18 pass, so it works as a CI gate.
+
+`--project` defaults to `$UCP_TEST_PROJECT`, and with neither set the host picks the only ready
+editor session. `--keep` leaves `Assets/UcpSmoke` behind for inspection after a failure.
+
 ## Development
 
 ```powershell

@@ -52,8 +52,14 @@ cd ucp-cli
 ## Quick facts
 
 - **No profiles**, no `POST /list`, no `~/.unity-cmd/`.
-- **Command names:** lowercase `type` field; constants in `CommandNames.cs`.
-- **Add command:** one `CliCommand` class under `Editor/Commands/` + constant in `CommandNames.cs`.
+- **Command names:** lowercase `{domain}_{operation}`; constants in `CommandNames.cs`.
+- **Command catalog:** `ucp-cli run help` (Editor scope) — 79 commands, generated from discovery.
+- **Add command:** constant in `CommandNames.cs` + params in `Editor/Params/` + logic in
+  `Editor/Services/` + an `EditorActionCommand<T>` shell in `Editor/Commands/`. See
+  [MAINTENANCE.md](MAINTENANCE.md).
+- **Editing project content:** `gameobject_*` / `component_*` take an optional `prefab` argument —
+  with it they edit that prefab asset in place, without it the open scene. Same commands, one
+  implementation (`Editor/Services/Objects/EditTargetScope.cs`).
 - **After C# changes:** recompile in Unity before live CLI tests.
 - **State field:** `agent_state` in `run state` response.
 
@@ -62,3 +68,10 @@ cd ucp-cli
 - Reintroduce `com.air.unity-connector` or Editor HTTP `:6547`.
 - Add manual handler registration (use `CliCommandDiscovery` only).
 - Maintain a markdown command catalog in this repo — use `CommandNames.cs` + discovery.
+- Add multi-action commands that dispatch on an `action` parameter (that is what `manage` was, and
+  it was removed in 0.4.0). One operation, one command; use `aliases` for synonyms.
+- Duplicate a content operation into a separate `prefab_*` version — extend
+  `GameObjectService` / `ComponentService` so both scopes get it.
+- Call anything that can raise a modal dialog (unsaved-changes prompts, `EditorUtility.DisplayDialog`)
+  — a modal blocks the Editor main thread, which is also the agent's poll loop. Refuse and ask the
+  caller for `force` instead, as `SceneService` does.

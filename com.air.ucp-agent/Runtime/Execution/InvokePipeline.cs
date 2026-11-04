@@ -74,6 +74,13 @@ namespace Air.UcpAgent.Execution
                 body["code"] = code;
             if (!string.IsNullOrWhiteSpace(message))
                 body["message"] = message;
+            else if (!ok)
+            {
+                // A failing command has no result to carry a message, so mirror the error text into
+                // `message`. Without this the reason a command failed only reaches the caller as an
+                // error *code*, and anything human-readable in it is lost.
+                body["message"] = context.CompletedError;
+            }
 
             return new PostResult
             {

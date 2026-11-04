@@ -158,6 +158,54 @@ export async function executeCommand(
   };
 }
 
+/**
+ * Why a command failed can land in any of three fields: `message` when the agent executed and
+ * rejected it, `error_code` for a protocol-level failure, and `hint` when the host could not reach
+ * Unity at all. Reading only one of them turns a real diagnosis into "unknown error".
+ */
+export function describeFailure(result: CliResult): string {
+  return [result.message, result.error_code, result.hint].filter(Boolean).join(" | ");
+}
+
+/**
+ * Submit-time failures that mean "Unity is momentarily not answering", not "the command is wrong".
+ * The Editor stops ticking while it imports assets, so its heartbeat stops too; once it is
+ * `STALE_MS` behind, the host rejects at submit (see host/targets/target-probe.ts and
+ * host/server/ucp-host-server.ts). The host's RetryPolicy only covers dispatch of an already-queued
+ * command, so nothing retries this today.
+ */
+const TRANSIENT_SUBMIT_ERRORS = new Set(["no_ready_session", "invalid_session", "failed"]);
+
+function isTransient(result: CliResult): boolean {
+  // A `message` means the agent ran the command and said no — that is a real answer, never retried.
+  if (result.ok || result.message) return false;
+  return TRANSIENT_SUBMIT_ERRORS.has(String(result.error_code ?? ""));
+}
+
+export interface ResilientCommandOptions extends ExecuteCommandOptions {
+  /** Total tries, including the first. Default 4. */
+  attempts?: number;
+}
+
+/**
+ * {@link executeCommand} that rides out a briefly unresponsive Editor. Only retries transient
+ * submit failures; a command the agent rejected is returned as-is on the first try.
+ */
+export async function executeCommandResilient(
+  type: string,
+  options: ResilientCommandOptions = {},
+): Promise<CliResult> {
+  const { attempts = 4, ...rest } = options;
+  let result = await executeCommand(type, rest);
+
+  for (let attempt = 1; attempt < Math.max(1, attempts) && isTransient(result); attempt++) {
+    await sleep(1_500 * attempt);
+    result = await executeCommand(type, rest);
+  }
+
+  return result;
+}
+
 export async function fetchUcpHostStatus(port = DEFAULT_HOST_PORT) {
   await ensureUcpHost({ ucpRoot: process.env.UCP_ROOT });
   const [health, sessionsBody, targetsBody] = await Promise.all([

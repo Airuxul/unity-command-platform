@@ -6,26 +6,6 @@ namespace Air.UcpAgent.Params
         public string Paths { get; set; }
     }
 
-    public sealed class ManageEditorParams
-    {
-        [CliParam(Description = "operation to perform",
-            AllowedValues = "play|stop|pause|refresh|set_active_tool|add_tag|remove_tag|add_layer|remove_layer",
-            Required = true)]
-        public string Action { get; set; }
-
-        [CliParam(Description = "wait for completion", AlternateKeys = "wait_for_completion")]
-        public bool Wait { get; set; }
-
-        [CliParam("tool_name", Description = "tool name for set_active_tool")]
-        public string ToolName { get; set; }
-
-        [CliParam("tag_name", Description = "tag name for add/remove_tag")]
-        public string TagName { get; set; }
-
-        [CliParam("layer_name", Description = "layer name for add/remove_layer")]
-        public string LayerName { get; set; }
-    }
-
     public sealed class MenuParams
     {
         [CliParam("menu_path", Description = "Unity menu path, e.g. File/Save Project", Required = true,
@@ -94,17 +74,31 @@ namespace Air.UcpAgent.Params
 
     public sealed class ScreenshotParams
     {
-        [CliParam(Description = "view to capture", AllowedValues = "scene|game")]
+        [CliParam(Description = "what to capture; 'ui' is the only one that shows a ScreenSpaceOverlay canvas",
+            AllowedValues = "scene|game|ui")]
         public string View { get; set; } = "scene";
 
         [CliParam("output_path", Description = "relative or absolute path")]
         public string OutputPath { get; set; }
 
-        [CliParam(Description = "pixels")]
+        [CliParam(Description = "pixels (view=ui defaults to the CanvasScaler reference resolution)")]
         public int? Width { get; set; }
 
-        [CliParam(Description = "pixels")]
+        [CliParam(Description = "pixels (view=ui defaults to the CanvasScaler reference resolution)")]
         public int? Height { get; set; }
+
+        [CliParam(Description = "view=ui: prefab asset to render a throwaway copy of (no side effects)",
+            AlternateKeys = "prefab_path")]
+        public string Prefab { get; set; }
+
+        [CliParam(Description = "view=ui: node in an open scene whose canvas to render")]
+        public string Node { get; set; }
+
+        [CliParam(Description = "view=ui: loaded scene the node belongs to (default: active scene)")]
+        public string Scene { get; set; }
+
+        [CliParam(Description = "view=ui: background as #RRGGBB, #RRGGBBAA or 'transparent' (default)")]
+        public string Background { get; set; }
     }
 
     public sealed class RefreshParams

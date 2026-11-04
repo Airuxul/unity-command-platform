@@ -76,8 +76,21 @@ ucp-host reads result → ucp-cli prints JSON
 |-----------|----------------|
 | `EditorAgentBootstrap` | Poll inbox, write outbox |
 | `UcpCliCommandHandler` | FileQueue ↔ `CliCommand` |
-| `CliCommandDiscovery` | Register all `Editor/Commands/*` |
+| `CliCommandDiscovery` | Register all `Editor/Commands/**` |
 | `EditorJobStateManager` | Deferred compile/play/stop |
+| `EditorActionCommand<T>` | Command shell: service payload → result, exception → error |
+
+### Content command layer (`Editor/Services/`)
+
+| Component | Responsibility |
+|-----------|----------------|
+| `Objects/EditTargetScope` | Resolves "what am I editing" — a loaded scene, a prefab asset (`LoadPrefabContents` → `SaveAsPrefabAsset`), or the open Prefab Mode stage. Persists only if `MarkDirty()` was called. |
+| `Objects/GameObjectPath` | Node addressing: `Root/Body/Arm`, `Body[1]` for same-named siblings |
+| `Objects/GameObjectService` · `ComponentService` | The single implementation behind `gameobject_*` / `component_*`, for both scopes |
+| `Objects/SerializedValueReader` · `SerializedValueWriter` | Serialized-property read/write; symmetric shapes so reads feed back into writes |
+| `Objects/JsonValues` · `ComponentTypeResolver` | Value coercion and type-name resolution, shared by params and the property writer |
+| `Prefab/PrefabAssetService` · `PrefabInstanceService` · `PrefabStageService` | Prefab assets, instances/overrides, Prefab Mode |
+| `Scenes/SceneService` · `Assets/AssetService` · `SelectionService` · `EditorSettingsService` | Scenes, AssetDatabase, Editor selection, tag/layer/tool tables |
 
 ## Command protocol
 
@@ -91,8 +104,13 @@ ucp-host reads result → ucp-cli prints JSON
 
 `state` command returns `agent_state` (not legacy `connector_state`).
 
+Declared `aliases` are registered as extra dispatcher keys and advertised as capabilities, so they
+dispatch like real names.
+
 ## Not implemented yet
 
 - Runtime Player HTTP adapter (skeleton only in `runtime-http/`)
 - Real `build` pipeline (skeleton command)
 - Cloud / SSH / ADB adapters (architecture §13)
+- Test Runner and Package Manager commands — both are async and need the deferred-job pipeline
+  (`docs/TODO.md` AGENT-05 / AGENT-06)

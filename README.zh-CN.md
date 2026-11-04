@@ -121,32 +121,44 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 
 ---
 
-## 内置命令
+## 命令
 
-| 命令 | 传输层 | 说明 |
-|------|--------|------|
-| `ping` | Editor / Runtime | 往返健康检查 |
-| `echo` | Editor / Runtime | 返回消息并标注通道 |
-| `state` | Editor | Agent + Editor 状态快照（Play Mode、编译中等） |
-| `console` | Editor | 读取 Unity Console 条目，支持类型/数量过滤 |
-| `screenshot` | Editor | 截图 Game 或 Scene 视图到文件。Game 视图含 Overlay Canvas |
-| `profiler` | Editor | 启用/禁用 Profiler，读取帧数据 |
-| `refresh` | Editor | `AssetDatabase.Refresh`，可选触发编译 |
-| `compile` | Editor | 请求脚本编译并等待结果 |
-| `play` / `stop` | Editor | 进入 / 退出 Play Mode |
-| `manage` | Editor | Tags、Layers、当前工具、杂项编辑器操作 |
-| `menu` | Editor | 按路径执行任意 `MenuItem` |
-| `build` | Editor | 触发 Player 构建（骨架实现，流水线待完善） |
-| `reserialize` | Editor | 强制重新序列化资产 |
-| `exec` | Editor | 在 Editor 内执行 C# 代码片段 |
-| `prefab.read` | Editor | 列出 Prefab 节点。传 `node` 时返回该节点的 Rect 和可写字段，不保存 |
-| `prefab.edit` | Editor | 改层级、组件、引用、布局和序列化字段，然后一次保存 |
-| `scene.read` | Editor | 列出当前场景，或在当前场景未改动时打开 `scene_path`。不保存 |
-| `scene.edit` | Editor | 用与 `prefab.edit` 相同的操作改场景，然后保存 |
-| `asset` | Editor | 在 `Assets/` 下移动、复制、删除或建目录，`.meta` 跟着走 |
-| `ui.snapshot` | Editor | 仅 Play Mode。列出 Canvas、文本和按钮能否点击 |
+命令目录由 Agent 自己生成，仓库里不再维护会过期的命令表：
 
-进 Play 后核对界面：`play`，然后 `ui.snapshot`，再 `screenshot`（`view` 为 `game`），然后 `console`，最后 `stop`。
+```powershell
+ucp-cli run help          # 列出全部命令、说明与参数
+```
+
+Editor 侧共 79 个命令，按操作对象分组：
+
+| 命令族 | 覆盖范围 |
+|--------|----------|
+| `ping` `echo` `state` `console` `help` | 健康检查、Agent/Editor 状态、Console 日志、命令目录 |
+| `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` `build` | 编辑器控制与诊断 |
+| `prefab_*`（20 个） | Prefab 资产、变体、实例、Overrides、嵌套、Prefab Mode |
+| `gameobject_*`（12 个） | 增删、复制、改名、换父级、Transform、启用、Tag、Layer、详情、层级、查找 |
+| `component_*`（5 个） | 加组件、删组件、列组件、读写序列化属性 |
+| `scene_*`（7 个） | 打开、新建、保存、另存、关闭、列表、详情 |
+| `asset_*`（9 个） | 列表、搜索、详情、建目录、删除、移动、复制、依赖、GUID |
+| `selection_*`（3 个） | 读取与设置编辑器选中项 |
+| `tag_*` `layer_*` `tool_set`（7 个） | 工程 Tag/Layer 表与当前变换工具 |
+
+### 一套命令，两个作用域
+
+每个 `gameobject_*` / `component_*` 命令都带一个可选的 `prefab` 参数。传了就直接改那个 Prefab
+资产（**不需要打开场景，也不需要进 Prefab Mode**），不传就改当前打开的场景。因此 Prefab 与场景
+的能力不会跑偏 —— 它们是同一份实现。
+
+```powershell
+# 改当前场景
+ucp-cli run component_add --args '{"node":"Player/Body","component":"Rigidbody"}'
+
+# 改磁盘上的 Prefab 资产
+ucp-cli run component_add --args '{"prefab":"Assets/P/Player.prefab","node":"Player/Body","component":"Rigidbody"}'
+```
+
+对象引用类属性可以用资产路径、GUID、节点路径或 instance id 赋值；`component_get` 读回的格式
+与 `component_set` 接受的格式完全一致，可以直接改完塞回去。
 
 ---
 

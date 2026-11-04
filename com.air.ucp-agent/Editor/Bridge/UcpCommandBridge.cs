@@ -135,7 +135,7 @@ namespace Air.UcpAgent.Editor.Bridge
                 if (!InvokeAvailability.IsAvailableForHost(handler.Scope, EditorHost))
                     continue;
 
-                registry.Register(new UcpCliCommandHandler(handler));
+                registry.Register(new UcpCliCommandHandler(handler), handler.Aliases);
             }
         }
     }

@@ -121,32 +121,44 @@ EditorAgentBootstrap  [InitializeOnLoad static ctor]
 
 ---
 
-## Built-in commands
+## Commands
 
-| Command | Transport | Description |
-|---------|-----------|-------------|
-| `ping` | Editor / Runtime | Round-trip health check |
-| `echo` | Editor / Runtime | Return a message with channel annotation |
-| `state` | Editor | Agent + Editor state snapshot (play mode, compiling, …) |
-| `console` | Editor | Read Unity Console entries with type/count filters |
-| `screenshot` | Editor | Capture Game or Scene view to a file. Game view includes overlay canvases |
-| `profiler` | Editor | Enable / disable Profiler, read frame stats |
-| `refresh` | Editor | `AssetDatabase.Refresh`, optionally trigger compile |
-| `compile` | Editor | Request script compilation and wait for result |
-| `play` / `stop` | Editor | Enter / exit Play Mode |
-| `manage` | Editor | Tags, layers, active tool, misc editor actions |
-| `menu` | Editor | Execute any `MenuItem` by path |
-| `build` | Editor | Trigger a Player build (skeleton — pipeline TBD) |
-| `reserialize` | Editor | Force-reserialize assets |
-| `exec` | Editor | Execute a C# snippet inside the Editor |
-| `prefab.read` | Editor | List prefab nodes. Pass `node` for that node's rect and writable fields. Does not save |
-| `prefab.edit` | Editor | Edit hierarchy, components, references, layout, and serialized fields, then save once |
-| `scene.read` | Editor | List the active scene, or open `scene_path` when the active scene is clean. Does not save |
-| `scene.edit` | Editor | Apply the same operations as `prefab.edit`, then save the scene |
-| `asset` | Editor | Move, copy, delete, or create a folder under `Assets/` (`.meta` follows) |
-| `ui.snapshot` | Editor | Play Mode only. List canvases, text, and whether each button can be clicked |
+The catalog is generated from the agent itself, so there is no checked-in command table to drift:
 
-After entering Play Mode, check UI with `play`, then `ui.snapshot`, then `screenshot` (`view` = `game`), then `console`, then `stop`.
+```powershell
+ucp-cli run help          # every command, its description and its parameters
+```
+
+79 Editor commands, grouped by what they address:
+
+| Family | What it covers |
+|--------|----------------|
+| `ping` `echo` `state` `console` `help` | Health, agent/editor state, console log, command catalog |
+| `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` `build` | Editor control and diagnostics |
+| `prefab_*` (20) | Prefab assets, variants, instances, overrides, nesting, Prefab Mode |
+| `gameobject_*` (12) | Create, delete, duplicate, rename, reparent, transform, activate, tag, layer, info, tree, find |
+| `component_*` (5) | Add, remove, list, and read/write serialized properties |
+| `scene_*` (7) | Open, new, save, save-as, close, list, info |
+| `asset_*` (9) | List, find, info, folders, delete, move, duplicate, dependencies, GUIDs |
+| `selection_*` (3) | Read and drive the Editor selection |
+| `tag_*` `layer_*` `tool_set` (7) | Project tag/layer tables and the active transform tool |
+
+### One command set, two scopes
+
+Every `gameobject_*` and `component_*` command takes an optional `prefab` argument. With it, the
+command edits that prefab asset in place — no scene open, no Prefab Mode. Without it, it edits the
+open scene. Prefab and scene editing therefore cannot drift apart; it is one implementation.
+
+```powershell
+# edit the open scene
+ucp-cli run component_add --args '{"node":"Player/Body","component":"Rigidbody"}'
+
+# edit the asset on disk
+ucp-cli run component_add --args '{"prefab":"Assets/P/Player.prefab","node":"Player/Body","component":"Rigidbody"}'
+```
+
+Object-reference properties accept an asset path, a GUID, a node path or an instance id, and
+`component_get` returns values in exactly the shape `component_set` takes back.
 
 ---
 

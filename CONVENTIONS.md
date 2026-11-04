@@ -69,16 +69,32 @@ Host submodules (match [01_Architecture.md](../../01_Architecture.md)):
 
 ## Unity (`com.air.ucp-agent`)
 
-Single command track: **`CliCommand`** under `Editor/Commands/`.
+Single command track: **`CliCommand`** under `Editor/Commands/`. Editor commands normally inherit
+`EditorActionCommand<TParams>` (thin shell) and delegate to a service.
 
 | Path | Namespace |
 |------|-----------|
 | `Runtime/Commands/CommandNames.cs` | `Air.UcpAgent.Commands` |
-| `Editor/Commands/*.cs` | `Air.UcpAgent.Editor.Commands` |
+| `Editor/Commands/**/*.cs` | `Air.UcpAgent.Editor.Commands` (flat — subfolders group, they do not nest the namespace) |
+| `Editor/Params/*.cs` | `Air.UcpAgent.Params` |
+| `Editor/Services/Objects/` | `Air.UcpAgent.Editor.Services.Objects` |
+| `Editor/Services/Prefab/` | `Air.UcpAgent.Editor.Services.Prefab` |
+| `Editor/Services/Scenes/` · `Editor/Services/Assets/` | `…Services.Scenes` · `…Services.Assets` |
+| `Editor/IO/AssetPaths.cs` | `Air.UcpAgent.Editor.IO` |
 | `Editor/Bridge/` | `Air.UcpAgent.Editor.Bridge` |
 | `Runtime/Protocol/` | `UcpCommand`, `UcpResult`, `UcpSession` |
 
 Deferred commands (`compile`, `play`, `stop`) use `EditorJobStateManager`; bridge tracks `DeferredJobId`.
+
+### Command naming
+
+`{domain}_{operation}`, lowercase, one operation per command — `prefab_create`, `component_set`,
+`gameobject_reparent`. No multi-action `action` dispatchers. Use `aliases` for a synonym
+(`prefab_move` → `prefab_rename`) rather than a second class; aliases are dispatched and advertised
+as capabilities.
+
+**Legacy (removed in 0.4.0):** `manage` (its actions became `pause`, `tag_add`, `tag_remove`,
+`tag_list`, `layer_add`, `layer_remove`, `layer_list`, `tool_set`).
 
 ## CLI commands
 

@@ -22,11 +22,10 @@ namespace Air.UcpAgent.Editor.Services.Prefab
     {
         const int DefaultListLimit = 200;
 
-        public static Dictionary<string, object> Create(PrefabCreateParams p)
+        public static Dictionary<string, object> Create(EditTargetScope scope, PrefabCreateParams p)
         {
             var path = AssetPaths.RequirePrefabPath(p.Path, "path");
 
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var connect = p.Connect ?? true;
 
@@ -317,9 +316,9 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         {
             var path = AssetPaths.RequireExisting(p.Path, "path");
 
-            return GameObjectService.Tree(new GameObjectTreeParams
+            using var scope = EditTargetScope.Open(path);
+            return GameObjectService.Tree(scope, new GameObjectTreeParams
             {
-                Prefab = path,
                 Depth = p.Depth ?? -1,
                 Components = p.Components,
                 IncludeInactive = true,

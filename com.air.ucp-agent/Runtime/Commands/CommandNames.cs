@@ -57,6 +57,10 @@ namespace Air.UcpAgent.Commands
         public const string PrefabClose = "prefab_close";
         public const string PrefabStageInfo = "prefab_stage_info";
 
+        // --- Batch: several node commands on one target, kept only if all succeed -------
+        public const string PrefabEdit = "prefab_edit";
+        public const string SceneEdit = "scene_edit";
+
         // --- GameObject (scene, or inside a prefab asset via the `prefab` arg) ---------
         public const string GameObjectCreate = "gameobject_create";
         public const string GameObjectDelete = "gameobject_delete";

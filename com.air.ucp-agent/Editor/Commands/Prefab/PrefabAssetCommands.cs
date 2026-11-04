@@ -1,20 +1,24 @@
 using System.Collections.Generic;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Prefab;
+using Air.UcpAgent.Editor.Services.Objects;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class PrefabCreateCommand : EditorActionCommand<PrefabCreateParams>
+    public sealed class PrefabCreateCommand : EditTargetCommand<PrefabCreateParams>
     {
         public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCreateParams>(
             CommandNames.PrefabCreate,
             CommandHostScope.Editor,
             "Save a node as a new prefab asset (inside another prefab this creates a nested prefab)");
 
-        protected override Dictionary<string, object> Execute(PrefabCreateParams p) =>
-            PrefabAssetService.Create(p);
+        // Writes a new prefab asset at once; a batch could not take that back.
+        public override bool Batchable => false;
+
+        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabCreateParams p) =>
+            PrefabAssetService.Create(scope, p);
     }
 
     public sealed class PrefabCreateEmptyCommand : EditorActionCommand<PrefabCreateEmptyParams>

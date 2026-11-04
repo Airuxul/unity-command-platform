@@ -27,8 +27,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
     /// and they edit the asset, pass nothing and they edit the open scene.
     /// </summary>
     /// <remarks>
-    /// Always use with <c>using</c>. Nothing is written unless <see cref="MarkDirty"/> was called,
-    /// so read-only commands open a scope just as freely as mutating ones.
+    /// Always use with <c>using</c>. <see cref="Dispose"/> only releases what was loaded; writes are
+    /// persisted by <see cref="Commit"/> and undone by <see cref="Revert"/>, which
+    /// <see cref="EditBatch.Run{T}"/> calls. Read-only callers just open and dispose.
     /// </remarks>
     public sealed class EditTargetScope : IDisposable
     {
@@ -37,6 +38,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
         bool _ownsPrefabContents;
         bool _dirty;
         bool _disposed;
+        int _undoGroup = -1;
+        bool _stageHadUnsavedChanges;
 
         public EditTargetKind Kind { get; private set; }
 
@@ -45,7 +48,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         public Scene Scene { get; private set; }
 
-        /// <summary>True when edits persist straight to a prefab asset on <see cref="Dispose"/>.</summary>
+        /// <summary>True when <see cref="Commit"/> writes a prefab asset rather than marking a scene dirty.</summary>
         public bool IsPrefabContent => Kind != EditTargetKind.Scene;
 
         EditTargetScope()
@@ -57,7 +60,27 @@ namespace Air.UcpAgent.Editor.Services.Objects
         /// explicit <paramref name="sceneName"/>, then the open Prefab Mode stage, then the
         /// active scene.
         /// </summary>
-        public static EditTargetScope Open(string prefabPath, string sceneName = null)
+        public static EditTargetScope Open(string prefabPath, string sceneName = null) =>
+            BeginUndoGroup(Resolve(prefabPath, sceneName));
+
+        /// <summary>A loaded scene only — never the Prefab Mode stage, whatever is open.</summary>
+        public static EditTargetScope OpenScene(string sceneName) => BeginUndoGroup(LoadedScene(sceneName));
+
+        static EditTargetScope BeginUndoGroup(EditTargetScope scope)
+        {
+            if (scope.SupportsUndo)
+            {
+                // Everything recorded from here on belongs to this scope: Revert undoes exactly that,
+                // Commit folds it into one undo step.
+                Undo.IncrementCurrentGroup();
+                Undo.SetCurrentGroupName("ucp edit");
+                scope._undoGroup = Undo.GetCurrentGroup();
+            }
+
+            return scope;
+        }
+
+        static EditTargetScope Resolve(string prefabPath, string sceneName)
         {
             if (!string.IsNullOrWhiteSpace(prefabPath))
                 return OpenPrefab(AssetPaths.RequirePrefabPath(prefabPath, "prefab"));
@@ -69,7 +92,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     return FromStage(stage);
             }
 
-            return OpenScene(sceneName);
+            return LoadedScene(sceneName);
         }
 
         static EditTargetScope OpenPrefab(string prefabPath)
@@ -119,9 +142,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 _prefabRoot = stage.prefabContentsRoot,
                 _stage = stage,
                 _ownsPrefabContents = false,
+                _stageHadUnsavedChanges = stage.scene.isDirty,
             };
 
-        static EditTargetScope OpenScene(string sceneName)
+        static EditTargetScope LoadedScene(string sceneName)
         {
             var scene = string.IsNullOrWhiteSpace(sceneName)
                 ? SceneManager.GetActiveScene()
@@ -170,8 +194,57 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 ? _prefabRoot
                 : throw new InvalidOperationException("This edit target is a scene, not a prefab.");
 
-        /// <summary>Marks the target as changed so <see cref="Dispose"/> persists it.</summary>
+        /// <summary>Marks the target as changed so <see cref="Commit"/> persists it.</summary>
         public void MarkDirty() => _dirty = true;
+
+        /// <summary>
+        /// Persists the changes: a prefab target is saved to its asset, a scene is marked dirty
+        /// (writing the scene file is scene_save's job). No-op when nothing was marked dirty.
+        /// </summary>
+        public void Commit()
+        {
+            if (!_dirty)
+                return;
+
+            // Saving the stage writes everything in it, including the user's own pending edits.
+            if (_stageHadUnsavedChanges)
+            {
+                throw new InvalidOperationException(
+                    $"'{PrefabPath}' is open in Prefab Mode with unsaved changes. Save or discard them first (prefab_save / prefab_close).");
+            }
+
+            if (_undoGroup >= 0)
+                Undo.CollapseUndoOperations(_undoGroup);
+
+            if (!IsPrefabContent)
+            {
+                // MarkSceneDirty throws "This cannot be used during play mode", and play-mode
+                // changes are discarded when play stops anyway.
+                if (Scene.IsValid() && !EditorApplication.isPlayingOrWillChangePlaymode)
+                    EditorSceneManager.MarkSceneDirty(Scene);
+                return;
+            }
+
+            PrefabUtility.SaveAsPrefabAsset(_prefabRoot, PrefabPath, out var saved);
+            if (!saved)
+                throw new InvalidOperationException($"Failed to save prefab '{PrefabPath}'.");
+
+            // Saving the asset does not clear the stage's own dirty flag, and a dirty stage makes
+            // Unity raise a modal prompt the next time Prefab Mode is left — which would block the
+            // Editor main thread, and with it the agent's poll loop.
+            _stage?.ClearDirtiness();
+        }
+
+        /// <summary>
+        /// Drops the changes. Off-screen prefab contents need nothing (they are discarded on
+        /// <see cref="Dispose"/>); scenes and the Prefab Mode stage roll back their undo group.
+        /// Play Mode records no undo, so a failed play-mode edit stays until play stops.
+        /// </summary>
+        public void Revert()
+        {
+            if (_undoGroup >= 0)
+                Undo.RevertAllDownToGroup(_undoGroup);
+        }
 
         /// <summary>
         /// Scenes and the Prefab Mode stage have a live undo stack; contents loaded via
@@ -206,38 +279,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 return;
             _disposed = true;
 
-            if (!IsPrefabContent)
-            {
-                // MarkSceneDirty throws "This cannot be used during play mode". Since Dispose runs
-                // after the payload is built, that turned a successful write into a reported
-                // failure — the worst outcome, because the caller retries an edit that already
-                // landed. Play-mode changes are discarded when play stops, so there is nothing to
-                // mark dirty anyway.
-                if (_dirty && Scene.IsValid() && !EditorApplication.isPlayingOrWillChangePlaymode)
-                    EditorSceneManager.MarkSceneDirty(Scene);
-                return;
-            }
-
-            try
-            {
-                if (_dirty && _prefabRoot != null && !string.IsNullOrEmpty(PrefabPath))
-                {
-                    PrefabUtility.SaveAsPrefabAsset(_prefabRoot, PrefabPath, out var saved);
-                    if (!saved)
-                        throw new InvalidOperationException($"Failed to save prefab '{PrefabPath}'.");
-
-                    // Saving the asset does not clear the stage's own dirty flag, and a dirty stage
-                    // makes Unity raise a modal prompt the next time Prefab Mode is left — which
-                    // would block the Editor main thread, and with it the agent's poll loop.
-                    _stage?.ClearDirtiness();
-                }
-            }
-            finally
-            {
-                if (_ownsPrefabContents && _prefabRoot != null)
-                    PrefabUtility.UnloadPrefabContents(_prefabRoot);
-                _prefabRoot = null;
-            }
+            if (_ownsPrefabContents && _prefabRoot != null)
+                PrefabUtility.UnloadPrefabContents(_prefabRoot);
+            _prefabRoot = null;
         }
     }
 }

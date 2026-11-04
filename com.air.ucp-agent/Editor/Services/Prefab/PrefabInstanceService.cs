@@ -17,12 +17,10 @@ namespace Air.UcpAgent.Editor.Services.Prefab
     /// </summary>
     public static class PrefabInstanceService
     {
-        public static Dictionary<string, object> Instantiate(PrefabInstantiateParams p)
+        public static Dictionary<string, object> Instantiate(EditTargetScope scope, PrefabInstantiateParams p)
         {
             var sourcePath = AssetPaths.RequireExisting(p.Source, "source");
             var sourceAsset = AssetPaths.RequireAsset<GameObject>(sourcePath, "source");
-
-            using var scope = NodeTargets.Open(p);
 
             if (scope.IsPrefabContent &&
                 string.Equals(scope.PrefabPath, sourcePath, StringComparison.OrdinalIgnoreCase))
@@ -36,6 +34,9 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             var instance = PrefabUtility.InstantiatePrefab(sourceAsset, scope.Scene) as GameObject;
             if (instance == null)
                 throw new InvalidOperationException($"Could not instantiate '{sourcePath}'.");
+
+            // Registered before anything below can throw, so a failed instantiate is undone with the rest.
+            NodeTargets.RegisterCreated(scope, instance, "ucp prefab_instantiate");
 
             if (parent != null)
                 instance.transform.SetParent(parent, worldPositionStays: false);
@@ -53,7 +54,6 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (p.Index.HasValue)
                 transform.SetSiblingIndex(Mathf.Max(0, p.Index.Value));
 
-            NodeTargets.RegisterCreated(scope, instance, "ucp prefab_instantiate");
             scope.MarkDirty();
 
             return new Dictionary<string, object>
@@ -69,9 +69,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
-        public static Dictionary<string, object> Apply(PrefabOverrideParams p)
+        public static Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverrideParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
@@ -106,9 +105,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
-        public static Dictionary<string, object> Revert(PrefabOverrideParams p)
+        public static Dictionary<string, object> Revert(EditTargetScope scope, PrefabOverrideParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
@@ -143,9 +141,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
-        public static Dictionary<string, object> Overrides(PrefabOverridesParams p)
+        public static Dictionary<string, object> Overrides(EditTargetScope scope, PrefabOverridesParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
@@ -224,9 +221,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
-        public static Dictionary<string, object> Unpack(PrefabUnpackParams p)
+        public static Dictionary<string, object> Unpack(EditTargetScope scope, PrefabUnpackParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
@@ -258,12 +254,11 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         /// with <c>ReplacePrefabAssetOfPrefabInstance</c> so this works on every supported Unity
         /// version; instance overrides are not carried across.
         /// </summary>
-        public static Dictionary<string, object> Replace(PrefabReplaceParams p)
+        public static Dictionary<string, object> Replace(EditTargetScope scope, PrefabReplaceParams p)
         {
             var newPath = AssetPaths.RequireExisting(p.Path, "path");
             var newAsset = AssetPaths.RequireAsset<GameObject>(newPath, "path");
 
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var (root, oldPath) = RequireInstance(node.gameObject);
 
@@ -271,6 +266,12 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             {
                 throw new InvalidOperationException(
                     $"'{GameObjectPath.Of(root.transform)}' is already an instance of '{newPath}'.");
+            }
+
+            if (scope.IsPrefabContent && root == scope.PrefabRoot)
+            {
+                throw new InvalidOperationException(
+                    $"'{root.name}' is the root of '{scope.PrefabPath}' itself and cannot be replaced. Create a variant of '{newPath}' instead (prefab_create_variant).");
             }
 
             var keepTransform = p.KeepTransform ?? true;
@@ -287,6 +288,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (replacement == null)
                 throw new InvalidOperationException($"Could not instantiate '{newPath}'.");
 
+            NodeTargets.RegisterCreated(scope, replacement, "ucp prefab_replace");
+
             if (parent != null)
                 replacement.transform.SetParent(parent, worldPositionStays: false);
 
@@ -302,7 +305,6 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
             NodeTargets.Destroy(scope, root);
             replacement.transform.SetSiblingIndex(siblingIndex);
-            NodeTargets.RegisterCreated(scope, replacement, "ucp prefab_replace");
             scope.MarkDirty();
 
             return new Dictionary<string, object>
@@ -317,9 +319,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
-        public static Dictionary<string, object> Info(PrefabInstanceParams p)
+        public static Dictionary<string, object> Info(EditTargetScope scope, PrefabInstanceParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var go = node.gameObject;
 

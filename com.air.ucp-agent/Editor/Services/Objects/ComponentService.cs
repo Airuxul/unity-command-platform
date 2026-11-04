@@ -14,9 +14,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
     /// </summary>
     public static class ComponentService
     {
-        public static Dictionary<string, object> Add(ComponentAddParams p)
+        public static Dictionary<string, object> Add(EditTargetScope scope, ComponentAddParams p)
         {
-            using var scope = NodeTargets.Open(p);
             // Hold the GameObject, not its Transform: adding a component that requires a
             // RectTransform (any UI component) makes Unity swap the Transform instance, leaving a
             // cached reference pointing at a destroyed object.
@@ -53,9 +52,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Remove(ComponentRemoveParams p)
+        public static Dictionary<string, object> Remove(EditTargetScope scope, ComponentRemoveParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var component = Require(node.gameObject, p.Component, p.Index);
 
@@ -75,9 +73,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> List(ComponentListParams p)
+        public static Dictionary<string, object> List(EditTargetScope scope, ComponentListParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
 
             var components = new List<object>();
@@ -117,9 +114,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Get(ComponentGetParams p)
+        public static Dictionary<string, object> Get(EditTargetScope scope, ComponentGetParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var component = Require(node.gameObject, p.Component, p.Index);
 
@@ -161,9 +157,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Set(ComponentSetParams p)
+        public static Dictionary<string, object> Set(EditTargetScope scope, ComponentSetParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var component = Require(node.gameObject, p.Component, p.Index);
 

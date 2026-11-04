@@ -18,12 +18,11 @@ namespace Air.UcpAgent.Editor.Services.Objects
         const int DefaultTreeDepth = 3;
         const int DefaultFindLimit = 200;
 
-        public static Dictionary<string, object> Create(GameObjectCreateParams p)
+        public static Dictionary<string, object> Create(EditTargetScope scope, GameObjectCreateParams p)
         {
             if (string.IsNullOrWhiteSpace(p.Name))
                 throw new ArgumentException("Parameter 'name' is required.");
 
-            using var scope = NodeTargets.Open(p);
             var parent = GameObjectPath.ResolveParent(scope, p.Parent);
 
             var created = Primitives.Create(p.Primitive);
@@ -33,6 +32,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 created.transform.SetParent(parent, worldPositionStays: false);
             else if (!scope.IsPrefabContent)
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(created, scope.Scene);
+
+            // Registered before anything below can throw, so a failed create is undone with the rest.
+            NodeTargets.RegisterCreated(scope, created, "ucp gameobject_create");
 
             // Never hold a Transform across AddComponent: a component that requires a RectTransform
             // (any UI component) makes Unity swap the Transform instance, and the old reference is
@@ -59,7 +61,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 added.Add(type.Name);
             }
 
-            NodeTargets.RegisterCreated(scope, created, "ucp gameobject_create");
             scope.MarkDirty();
 
             return Payload(scope, new Dictionary<string, object>
@@ -75,9 +76,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Delete(NodeParams p)
+        public static Dictionary<string, object> Delete(EditTargetScope scope, NodeParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
 
             if (scope.IsPrefabContent && node.parent == null)
@@ -99,9 +99,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Duplicate(GameObjectDuplicateParams p)
+        public static Dictionary<string, object> Duplicate(EditTargetScope scope, GameObjectDuplicateParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var parent = string.IsNullOrWhiteSpace(p.Parent)
                 ? node.parent
@@ -130,9 +129,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Rename(GameObjectRenameParams p)
+        public static Dictionary<string, object> Rename(EditTargetScope scope, GameObjectRenameParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var previous = node.name;
 
@@ -148,9 +146,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Reparent(GameObjectReparentParams p)
+        public static Dictionary<string, object> Reparent(EditTargetScope scope, GameObjectReparentParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
 
             if (scope.IsPrefabContent && node.parent == null)
@@ -201,9 +198,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> SetTransform(GameObjectTransformParams p)
+        public static Dictionary<string, object> SetTransform(EditTargetScope scope, GameObjectTransformParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var world = string.Equals(p.Space, "world", StringComparison.OrdinalIgnoreCase);
 
@@ -259,9 +255,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return payload;
         }
 
-        public static Dictionary<string, object> Activate(GameObjectActivateParams p)
+        public static Dictionary<string, object> Activate(EditTargetScope scope, GameObjectActivateParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var target = p.Active ?? !node.gameObject.activeSelf;
 
@@ -277,9 +272,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> SetTag(GameObjectTagParams p)
+        public static Dictionary<string, object> SetTag(EditTargetScope scope, GameObjectTagParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var tag = RequireTag(p.Tag);
 
@@ -300,9 +294,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> SetLayer(GameObjectLayerParams p)
+        public static Dictionary<string, object> SetLayer(EditTargetScope scope, GameObjectLayerParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var layer = NodeTargets.RequireLayer(p.Layer);
 
@@ -324,9 +317,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Info(NodeParams p)
+        public static Dictionary<string, object> Info(EditTargetScope scope, NodeParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var node = NodeTargets.Require(scope, p);
             var go = node.gameObject;
 
@@ -381,9 +373,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return payload;
         }
 
-        public static Dictionary<string, object> Tree(GameObjectTreeParams p)
+        public static Dictionary<string, object> Tree(EditTargetScope scope, GameObjectTreeParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var depth = p.Depth ?? DefaultTreeDepth;
             var withComponents = p.Components ?? true;
             var includeInactive = p.IncludeInactive ?? true;
@@ -415,9 +406,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             });
         }
 
-        public static Dictionary<string, object> Find(GameObjectFindParams p)
+        public static Dictionary<string, object> Find(EditTargetScope scope, GameObjectFindParams p)
         {
-            using var scope = NodeTargets.Open(p);
             var limit = p.Limit ?? DefaultFindLimit;
             var includeInactive = p.IncludeInactive ?? true;
             var componentType = string.IsNullOrWhiteSpace(p.Component)

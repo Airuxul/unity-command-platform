@@ -134,9 +134,21 @@ export async function releaseScratchScenes(): Promise<void> {
   }
 }
 
+/**
+ * Leaves Prefab Mode only when it holds a scratch prefab. Closing with force discards unsaved
+ * changes, so a prefab the user has open must never be closed by the suite.
+ */
+export async function releaseScratchStage(): Promise<void> {
+  const info = await run("prefab_stage_info");
+  const path = ((info.data ?? {}) as Record<string, unknown>).path;
+  if (typeof path === "string" && path.startsWith(`${SCRATCH_FOLDER}/`)) {
+    await run("prefab_close", { save: false, force: true });
+  }
+}
+
 export async function cleanupScratch(): Promise<void> {
   // Prefab Mode and loaded scenes both pin assets in the scratch folder.
-  await run("prefab_close", { save: false, force: true });
+  await releaseScratchStage();
   await releaseScratchScenes();
 
   const result = await run("asset_delete", { path: SCRATCH_FOLDER });

@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { SCRATCH_FOLDER, cleanupScratch, fails, ok, run } from "./helpers/content-scenario.js";
+import {
+  SCRATCH_FOLDER,
+  cleanupScratch,
+  fails,
+  ok,
+  releaseScratchStage,
+  run,
+} from "./helpers/content-scenario.js";
 import { hasReadyEditorSession } from "./helpers/editor-commands.js";
 
 /**
@@ -37,7 +44,7 @@ describe.skipIf(!runEditorTests)("prefab content commands (Unity required)", () 
   afterAll(async () => {
     // Prefab Mode has to be left before the scratch folder can be deleted, and before anything
     // else can change scenes.
-    await run("prefab_close", { save: false, force: true });
+    await releaseScratchStage();
     await run("scene_close", { scene: SCRATCH_SCENE, force: true });
     await cleanupScratch();
   });

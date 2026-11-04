@@ -301,7 +301,11 @@ check("error messages are actionable", async () => {
 
 /** Prefab Mode and loaded scenes both pin assets, so release them before deleting. */
 async function cleanup() {
-  await run("prefab_close", { save: false, force: true });
+  // Closing with force discards unsaved changes, so only ever close a prefab of our own.
+  const stage = await run("prefab_stage_info");
+  if (stage.data?.path?.startsWith(`${FOLDER}/`)) {
+    await run("prefab_close", { save: false, force: true });
+  }
 
   const info = await run("scene_info");
   const loaded = (info.data?.loaded_scenes ?? []).filter((s) => s.path?.startsWith(`${FOLDER}/`));

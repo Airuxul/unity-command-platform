@@ -150,6 +150,7 @@ namespace Air.UcpAgent.Editor.Services.Assets
         public static Dictionary<string, object> CreateFolder(AssetCreateFolderParams p)
         {
             var path = AssetPaths.RequireProjectPath(p.Path, "path");
+            AssetPaths.RequireUnderAssets(path, "path");
             var existed = AssetDatabase.IsValidFolder(path);
 
             AssetPaths.EnsureFolder(path);
@@ -166,31 +167,32 @@ namespace Air.UcpAgent.Editor.Services.Assets
         public static Dictionary<string, object> Delete(AssetDeleteParams p)
         {
             var path = AssetPaths.RequireExisting(p.Path, "path");
+            AssetPaths.RequireUnderAssets(path, "path");
             // Covers deleting a folder that contains the prefab currently open in Prefab Mode.
             Prefab.PrefabStageService.RequireNotOpenInStage(path, "deleted");
             var guid = AssetDatabase.AssetPathToGUID(path);
             var wasFolder = AssetDatabase.IsValidFolder(path);
 
-            if (!AssetDatabase.DeleteAsset(path))
-                throw new InvalidOperationException($"Could not delete '{path}'.");
+            AssetPaths.Trash(path);
 
             return new Dictionary<string, object>
             {
                 ["path"] = path,
                 ["guid"] = guid,
                 ["was_folder"] = wasFolder,
-                ["deleted"] = true,
+                ["trashed"] = true,
             };
         }
 
         public static Dictionary<string, object> Move(AssetMoveParams p)
         {
             var source = AssetPaths.RequireExisting(p.Path, "path");
+            AssetPaths.RequireUnderAssets(source, "path");
             Prefab.PrefabStageService.RequireNotOpenInStage(source, "moved");
             var target = AssetPaths.RequireProjectPath(p.Target, "target");
 
+            AssetPaths.RequireNewAssetPath(target, "target");
             AssetPaths.EnsureParentFolder(target);
-            AssetPaths.RequireFreeOrOverwrite(target, p.Overwrite);
 
             var error = AssetDatabase.MoveAsset(source, target);
             if (!string.IsNullOrEmpty(error))
@@ -210,8 +212,8 @@ namespace Air.UcpAgent.Editor.Services.Assets
             var source = AssetPaths.RequireExisting(p.Path, "path");
             var target = AssetPaths.RequireProjectPath(p.Target, "target");
 
+            AssetPaths.RequireNewAssetPath(target, "target");
             AssetPaths.EnsureParentFolder(target);
-            AssetPaths.RequireFreeOrOverwrite(target, p.Overwrite);
 
             if (!AssetDatabase.CopyAsset(source, target))
                 throw new InvalidOperationException($"Could not copy '{source}' to '{target}'.");

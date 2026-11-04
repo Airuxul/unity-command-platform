@@ -29,8 +29,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             var node = NodeTargets.Require(scope, p);
             var connect = p.Connect ?? true;
 
+            AssetPaths.RequireNewAssetPath(path, "path");
             AssetPaths.EnsureParentFolder(path);
-            AssetPaths.RequireFreeOrOverwrite(path, p.Overwrite);
 
             GameObject asset;
             bool saved;
@@ -69,8 +69,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ? Path.GetFileNameWithoutExtension(path)
                 : p.Name.Trim();
 
+            AssetPaths.RequireNewAssetPath(path, "path");
             AssetPaths.EnsureParentFolder(path);
-            AssetPaths.RequireFreeOrOverwrite(path, p.Overwrite);
 
             var added = new List<string>();
             GameObject asset;
@@ -117,8 +117,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (string.Equals(basePath, target, StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("A variant cannot be written over its own base prefab.");
 
+            AssetPaths.RequireNewAssetPath(target, "target");
             AssetPaths.EnsureParentFolder(target);
-            AssetPaths.RequireFreeOrOverwrite(target, p.Overwrite);
 
             GameObject variant;
             using (var staging = PreviewStage.Begin())
@@ -148,18 +148,19 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
         public static Dictionary<string, object> Delete(PrefabPathParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
+            var path = AssetPaths.RequirePrefabPath(p.Path, "path");
+            AssetPaths.RequireExisting(path, "path");
+            AssetPaths.RequireUnderAssets(path, "path");
             PrefabStageService.RequireNotOpenInStage(path, "deleted");
             var guid = AssetDatabase.AssetPathToGUID(path);
 
-            if (!AssetDatabase.DeleteAsset(path))
-                throw new InvalidOperationException($"Could not delete '{path}'.");
+            AssetPaths.Trash(path);
 
             return new Dictionary<string, object>
             {
                 ["path"] = path,
                 ["guid"] = guid,
-                ["deleted"] = true,
+                ["trashed"] = true,
             };
         }
 
@@ -168,8 +169,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             var source = AssetPaths.RequireExisting(p.Path, "path");
             var target = AssetPaths.RequirePrefabPath(p.Target, "target");
 
+            AssetPaths.RequireNewAssetPath(target, "target");
             AssetPaths.EnsureParentFolder(target);
-            AssetPaths.RequireFreeOrOverwrite(target, p.Overwrite);
 
             if (!AssetDatabase.CopyAsset(source, target))
                 throw new InvalidOperationException($"Could not copy '{source}' to '{target}'.");
@@ -187,11 +188,12 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         public static Dictionary<string, object> Move(PrefabCopyParams p)
         {
             var source = AssetPaths.RequireExisting(p.Path, "path");
+            AssetPaths.RequireUnderAssets(source, "path");
             PrefabStageService.RequireNotOpenInStage(source, "moved");
             var target = AssetPaths.RequirePrefabPath(p.Target, "target");
 
+            AssetPaths.RequireNewAssetPath(target, "target");
             AssetPaths.EnsureParentFolder(target);
-            AssetPaths.RequireFreeOrOverwrite(target, p.Overwrite);
 
             var error = AssetDatabase.MoveAsset(source, target);
             if (!string.IsNullOrEmpty(error))

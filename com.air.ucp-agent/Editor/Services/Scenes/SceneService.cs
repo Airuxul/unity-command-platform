@@ -55,15 +55,20 @@ namespace Air.UcpAgent.Editor.Services.Scenes
                 ? NewSceneMode.Additive
                 : NewSceneMode.Single;
 
+            string savedTo = null;
+            if (!string.IsNullOrWhiteSpace(p.Path))
+            {
+                savedTo = RequireScenePath(p.Path, "path");
+                AssetPaths.RequireNewAssetPath(savedTo, "path");
+            }
+
             if (mode == NewSceneMode.Single)
                 RequireNoUnsavedChanges(p.Force, "Creating a scene in single mode closes them.");
 
             var scene = EditorSceneManager.NewScene(setup, mode);
 
-            string savedTo = null;
-            if (!string.IsNullOrWhiteSpace(p.Path))
+            if (savedTo != null)
             {
-                savedTo = RequireScenePath(p.Path, "path");
                 AssetPaths.EnsureParentFolder(savedTo);
                 if (!EditorSceneManager.SaveScene(scene, savedTo))
                     throw new InvalidOperationException($"Unity could not save the new scene to '{savedTo}'.");
@@ -85,6 +90,18 @@ namespace Air.UcpAgent.Editor.Services.Scenes
 
             if (p.All)
             {
+                // SaveOpenScenes asks for a path in a modal dialog for every untitled scene, which
+                // would block the Editor main thread and with it the agent.
+                var untitled = LoadedScenes()
+                    .Where(s => s["path"] == null && s["dirty"] is true)
+                    .Select(s => (string)s["name"])
+                    .ToArray();
+                if (untitled.Length > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Never-saved scenes: {string.Join(", ", untitled)}. Save each with scene_save_as first.");
+                }
+
                 if (!EditorSceneManager.SaveOpenScenes())
                     throw new InvalidOperationException("Unity could not save the open scenes.");
 
@@ -118,6 +135,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
             RequireEditMode("save a scene");
 
             var path = RequireScenePath(p.Path, "path");
+            AssetPaths.RequireNewAssetPath(path, "path");
             var scene = Resolve(p.Scene);
             var previous = scene.path;
 
@@ -314,11 +332,16 @@ namespace Air.UcpAgent.Editor.Services.Scenes
             // An open Prefab Mode stage counts: changing scenes leaves the stage, and Unity prompts
             // for unsaved prefab changes with a modal that would block the agent's poll loop.
             var stage = PrefabStageUtility.GetCurrentPrefabStage();
-            if (stage != null && stage.scene.isDirty && !force)
+            if (stage != null && stage.scene.isDirty)
             {
-                throw new InvalidOperationException(
-                    $"'{stage.assetPath}' is open in Prefab Mode with unsaved changes. " +
-                    "Run prefab_save or prefab_close first, or pass force=true to discard them.");
+                if (!force)
+                {
+                    throw new InvalidOperationException(
+                        $"'{stage.assetPath}' is open in Prefab Mode with unsaved changes. " +
+                        "Run prefab_save or prefab_close first, or pass force=true to discard them.");
+                }
+
+                stage.ClearDirtiness();
             }
 
             if (force)

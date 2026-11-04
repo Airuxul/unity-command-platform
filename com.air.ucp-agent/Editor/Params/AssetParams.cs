@@ -60,9 +60,6 @@ namespace Air.UcpAgent.Params
     {
         [CliParam(Description = "destination path", Required = true, AlternateKeys = "output,destination,to")]
         public string Target { get; set; }
-
-        [CliParam(Description = "replace the destination if it already exists")]
-        public bool Overwrite { get; set; }
     }
 
     public sealed class AssetDependenciesParams : AssetPathParams

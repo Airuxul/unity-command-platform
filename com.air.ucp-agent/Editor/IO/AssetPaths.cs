@@ -39,6 +39,9 @@ namespace Air.UcpAgent.Editor.IO
                     normalized = normalized.Substring(projectRoot.Length + 1);
             }
 
+            if (Array.IndexOf(normalized.Split('/'), "..") >= 0)
+                throw new ArgumentException($"Parameter '{paramName}' must not contain '..', got '{path}'.");
+
             if (!normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) &&
                 !normalized.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(normalized, "Assets", StringComparison.OrdinalIgnoreCase))
@@ -152,20 +155,35 @@ namespace Air.UcpAgent.Editor.IO
             return normalized;
         }
 
-        /// <summary>Refuses to overwrite unless the caller opted in.</summary>
-        public static void RequireFreeOrOverwrite(string normalizedPath, bool overwrite)
+        /// <summary>
+        /// Requires a path under <c>Assets/</c>. Commands may read anywhere in the project, but only
+        /// create, move or delete there: never the Assets folder itself, never a package.
+        /// </summary>
+        public static void RequireUnderAssets(string normalizedPath, string paramName)
         {
-            if (!Exists(normalizedPath))
-                return;
-
-            if (!overwrite)
+            if (!normalizedPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException(
-                    $"'{normalizedPath}' already exists. Pass overwrite=true to replace it.");
+                throw new ArgumentException(
+                    $"Parameter '{paramName}' must be under Assets/ to be created, moved or deleted, got '{normalizedPath}'.");
             }
+        }
 
-            if (!AssetDatabase.DeleteAsset(normalizedPath))
-                throw new InvalidOperationException($"Could not delete existing asset '{normalizedPath}'.");
+        /// <summary>
+        /// Requires a writable path where nothing exists yet. There is no overwrite: replacing an
+        /// asset gives it a new GUID and breaks every reference to it, so the caller deletes it first.
+        /// </summary>
+        public static void RequireNewAssetPath(string normalizedPath, string paramName)
+        {
+            RequireUnderAssets(normalizedPath, paramName);
+            if (Exists(normalizedPath))
+                throw new InvalidOperationException($"'{normalizedPath}' already exists. Delete it first to replace it.");
+        }
+
+        /// <summary>Moves to the OS trash rather than deleting, so a wrong delete can be recovered.</summary>
+        public static void Trash(string normalizedPath)
+        {
+            if (!AssetDatabase.MoveAssetToTrash(normalizedPath))
+                throw new InvalidOperationException($"Could not move '{normalizedPath}' to the trash.");
         }
     }
 }

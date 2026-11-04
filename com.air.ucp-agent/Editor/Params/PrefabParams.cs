@@ -16,9 +16,6 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "destination prefab path", Required = true,
             AlternateKeys = "output,destination,to")]
         public string Target { get; set; }
-
-        [CliParam(Description = "replace the destination if it already exists")]
-        public bool Overwrite { get; set; }
     }
 
     public sealed class PrefabCreateParams : NodeTargetParams
@@ -26,9 +23,6 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "prefab asset path to write, e.g. Assets/Prefabs/Player.prefab",
             Required = true, AlternateKeys = "output,to")]
         public string Path { get; set; }
-
-        [CliParam(Description = "replace the prefab if it already exists")]
-        public bool Overwrite { get; set; }
 
         [CliParam(Description = "leave the source node linked to the new prefab as an instance (default: true)")]
         public bool? Connect { get; set; }
@@ -49,9 +43,6 @@ namespace Air.UcpAgent.Params
 
         [CliParam(Description = "component type names to add to the root")]
         public string[] Components { get; set; }
-
-        [CliParam(Description = "replace the prefab if it already exists")]
-        public bool Overwrite { get; set; }
     }
 
     public sealed class PrefabVariantParams : PrefabPathParams
@@ -59,9 +50,6 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "variant asset path to write", Required = true,
             AlternateKeys = "output,to")]
         public string Target { get; set; }
-
-        [CliParam(Description = "replace the variant if it already exists")]
-        public bool Overwrite { get; set; }
     }
 
     public sealed class PrefabListParams
@@ -102,7 +90,7 @@ namespace Air.UcpAgent.Params
     public sealed class PrefabInstantiateParams : EditTargetParams
     {
         [CliParam(Description = "prefab asset to instantiate", Required = true,
-            AlternateKeys = "prefab_path,asset,path")]
+            AlternateKeys = "asset,path")]
         public string Source { get; set; }
 
         [CliParam(Description = "parent node path (omit for top level / prefab root)")]
@@ -165,7 +153,7 @@ namespace Air.UcpAgent.Params
     public sealed class PrefabReplaceParams : PrefabInstanceParams
     {
         [CliParam(Description = "prefab asset to swap in", Required = true,
-            AlternateKeys = "prefab_path,to")]
+            AlternateKeys = "to")]
         public string Path { get; set; }
 
         [CliParam(Description = "keep the instance's current transform values (default: true)")]

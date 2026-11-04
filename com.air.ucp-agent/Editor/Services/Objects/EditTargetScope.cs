@@ -198,6 +198,12 @@ namespace Air.UcpAgent.Editor.Services.Objects
         public void MarkDirty() => _dirty = true;
 
         /// <summary>
+        /// Whether <see cref="Revert"/> really takes changes back: off-screen prefab contents are
+        /// just not saved, the rest needs an undo group, which Play Mode does not record.
+        /// </summary>
+        public bool CanRevert => Kind == EditTargetKind.PrefabAsset || _undoGroup >= 0;
+
+        /// <summary>
         /// Persists the changes: a prefab target is saved to its asset, a scene is marked dirty
         /// (writing the scene file is scene_save's job). No-op when nothing was marked dirty.
         /// </summary>

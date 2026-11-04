@@ -19,14 +19,18 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         static Dictionary<string, IEditTargetCommand> _commands;
 
-        public static T Run<T>(EditTargetScope scope, Func<EditTargetScope, T> body)
+        /// <param name="keep">False runs <paramref name="body"/> for real and then reverts: a dry run.</param>
+        public static T Run<T>(EditTargetScope scope, Func<EditTargetScope, T> body, bool keep = true)
         {
             using (scope)
             {
                 try
                 {
                     var result = body(scope);
-                    scope.Commit();
+                    if (keep)
+                        scope.Commit();
+                    else
+                        scope.Revert();
                     return result;
                 }
                 catch
@@ -39,13 +43,25 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         /// <summary>
         /// Runs <paramref name="ops"/> in order against one target and persists once. Every op is
-        /// resolved before the target is opened, so a typo in the last op costs nothing.
+        /// resolved before the target is opened, so a typo in the last op costs nothing. With
+        /// <paramref name="dryRun"/> every op still runs, so the results show what would happen,
+        /// and then nothing is kept.
         /// </summary>
-        public static Dictionary<string, object> RunOps(Func<EditTargetScope> openTarget, IReadOnlyList<EditBatchOp> ops)
+        public static Dictionary<string, object> RunOps(
+            Func<EditTargetScope> openTarget,
+            IReadOnlyList<EditBatchOp> ops,
+            bool dryRun)
         {
             var resolved = Resolve(ops);
+            var target = openTarget();
+            if (dryRun && !target.CanRevert)
+            {
+                target.Dispose();
+                throw new InvalidOperationException(
+                    "dry_run needs undo to take the ops back, and Play Mode records none. Stop play first.");
+            }
 
-            return Run(openTarget(), scope =>
+            return Run(target, scope =>
             {
                 var results = new List<Dictionary<string, object>>(resolved.Count);
                 for (var i = 0; i < resolved.Count; i++)
@@ -69,9 +85,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 return new Dictionary<string, object>
                 {
                     ["target"] = scope.Describe(),
+                    ["dry_run"] = dryRun,
                     ["results"] = results,
                 };
-            });
+            }, keep: !dryRun);
         }
 
         static List<(IEditTargetCommand command, object args)> Resolve(IReadOnlyList<EditBatchOp> ops)

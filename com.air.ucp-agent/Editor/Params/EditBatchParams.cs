@@ -12,6 +12,10 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; "
             + "saved once if all succeed, nothing kept if one fails", Required = true)]
         public List<EditBatchOp> Ops { get; set; }
+
+        [CliParam("dry_run", Description = "run every op and report the results, then keep nothing",
+            AlternateKeys = "dryrun")]
+        public bool DryRun { get; set; }
     }
 
     public sealed class SceneEditParams
@@ -22,5 +26,9 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; "
             + "undone together if one fails", Required = true)]
         public List<EditBatchOp> Ops { get; set; }
+
+        [CliParam("dry_run", Description = "run every op and report the results, then keep nothing",
+            AlternateKeys = "dryrun")]
+        public bool DryRun { get; set; }
     }
 }

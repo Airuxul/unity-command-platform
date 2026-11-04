@@ -14,7 +14,7 @@ namespace Air.UcpAgent.Editor.Commands
             "Run several node commands (gameobject_*, component_*, prefab instance) on one prefab asset, saved once");
 
         protected override Dictionary<string, object> Execute(PrefabEditParams p) =>
-            EditBatch.RunOps(() => EditTargetScope.Open(p.Prefab), p.Ops);
+            EditBatch.RunOps(() => EditTargetScope.Open(p.Prefab), p.Ops, p.DryRun);
     }
 
     public sealed class SceneEditCommand : EditorActionCommand<SceneEditParams>
@@ -25,6 +25,6 @@ namespace Air.UcpAgent.Editor.Commands
             "Run several node commands (gameobject_*, component_*, prefab instance) on one loaded scene as one undo step");
 
         protected override Dictionary<string, object> Execute(SceneEditParams p) =>
-            EditBatch.RunOps(() => EditTargetScope.OpenScene(p.Scene), p.Ops);
+            EditBatch.RunOps(() => EditTargetScope.OpenScene(p.Scene), p.Ops, p.DryRun);
     }
 }

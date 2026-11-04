@@ -103,6 +103,30 @@ describe.skipIf(!runEditorTests)("batch edits (Unity required)", () => {
     expect(prefabBytes().equals(before)).toBe(true);
   });
 
+  it("dry_run reports every op's real result and keeps nothing", async () => {
+    const before = prefabBytes();
+
+    const preview = await ok("prefab_edit", {
+      prefab: PREFAB,
+      dry_run: true,
+      ops: [
+        { command: "gameobject_create", args: { parent: "Batch", name: "Preview" } },
+        { command: "component_add", args: { node: "Batch/Preview", component: "Image" } },
+      ],
+    });
+    expect(preview.dry_run).toBe(true);
+    const results = preview.results as Array<{ data: Record<string, unknown> }>;
+    expect(results[0].data.node).toBe("Batch/Preview");
+    expect(prefabBytes().equals(before)).toBe(true);
+
+    await ok("scene_edit", {
+      scene: SCENE,
+      dry_run: true,
+      ops: [{ command: "gameobject_create", args: { name: "PreviewProbe" } }],
+    });
+    expect(await findInScene("PreviewProbe")).toBe(0);
+  });
+
   it("undoes a failed scene batch", async () => {
     await fails("scene_edit", {
       scene: SCENE,

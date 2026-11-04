@@ -26,6 +26,9 @@ export const SCENARIO_COMMANDS: readonly string[] = [
   "prefab_unpack",
   "prefab_replace",
   "prefab_instance_info",
+  // batches
+  "prefab_edit",
+  "scene_edit",
   // prefab mode
   "prefab_open",
   "prefab_save",

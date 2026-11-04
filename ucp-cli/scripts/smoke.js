@@ -107,7 +107,7 @@ function check(label, body) {
 check("help", async () => {
   const data = await ok("help");
   const names = (data.commands ?? []).map((c) => c.name);
-  eq(names.length, 79, "command count");
+  eq(names.length, 82, "command count");
   eq(names.includes("manage"), false, "'manage' should be gone");
   const aliases = Object.keys(data.alias_to_command ?? {});
   eq(aliases.length, 5, "alias count");

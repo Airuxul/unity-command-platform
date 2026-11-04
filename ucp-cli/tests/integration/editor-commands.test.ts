@@ -55,7 +55,7 @@ describe("editor command catalog", () => {
 
   it("lists each command once", () => {
     expect(new Set(ALL_EDITOR_COMMANDS).size).toBe(ALL_EDITOR_COMMANDS.length);
-    expect(ALL_EDITOR_COMMANDS.length).toBe(79);
+    expect(ALL_EDITOR_COMMANDS.length).toBe(82);
   });
 });
 

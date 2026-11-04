@@ -135,6 +135,15 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     },
   },
   {
+    type: "ui_snapshot",
+    description: "ui_snapshot is rejected outside play mode",
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.ok).toBe(false);
+      expect(String(r.message ?? r.error)).toContain("play mode");
+    },
+  },
+  {
     type: "pause",
     description: "pause is rejected outside play mode",
     expectFailure: true,
@@ -319,6 +328,7 @@ export const ALL_EDITOR_COMMANDS: readonly string[] = [
   "screenshot",
   "state",
   "stop",
+  "ui_snapshot",
   // project settings
   "layer_add",
   "layer_list",
@@ -333,6 +343,7 @@ export const ALL_EDITOR_COMMANDS: readonly string[] = [
   "prefab_create_variant",
   "prefab_delete",
   "prefab_duplicate",
+  "prefab_edit",
   "prefab_info",
   "prefab_list",
   "prefab_move",
@@ -371,6 +382,7 @@ export const ALL_EDITOR_COMMANDS: readonly string[] = [
   "component_set",
   // scenes
   "scene_close",
+  "scene_edit",
   "scene_info",
   "scene_list",
   "scene_new",

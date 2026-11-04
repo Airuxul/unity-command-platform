@@ -38,9 +38,15 @@ namespace Air.UcpAgent.Runtime
             public UcpCommand Command;
         }
 
+        /// <remarks>
+        /// Starts only in the Editor and in Development Builds. A release Player would otherwise
+        /// expose every runtime command a game registers (GM commands included) on an open port.
+        /// Define <c>UCP_RUNTIME_AGENT</c> in Player Settings to opt a release build in anyway.
+        /// </remarks>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD || UCP_RUNTIME_AGENT
             if (!Application.isPlaying || _instance != null)
                 return;
 
@@ -48,6 +54,7 @@ namespace Air.UcpAgent.Runtime
             go.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(go);
             _instance = go.AddComponent<RuntimeAgentHost>();
+#endif
         }
 
         void Awake()
@@ -242,6 +249,17 @@ namespace Air.UcpAgent.Runtime
             if (request.Url == null)
             {
                 WriteNotFound(context);
+                return;
+            }
+
+            // A web page the user has open can POST here too; browsers mark such requests with
+            // Origin, and ucp-host never sends one.
+            if (!string.IsNullOrEmpty(request.Headers["Origin"]))
+            {
+                WriteJsonResponse(
+                    context,
+                    403,
+                    new UcpResult { success = false, error = "forbidden_origin", message = "Browser requests are refused." });
                 return;
             }
 

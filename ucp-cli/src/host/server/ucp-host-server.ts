@@ -29,6 +29,18 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+/**
+ * Refuses requests a web browser could have sent. Binding to 127.0.0.1 does not stop a page the
+ * user has open from POSTing here (a text/plain fetch needs no preflight), and `exec` runs any C#
+ * in the Editor. Browsers always send `Origin` on such a POST, and a DNS-rebinding page arrives
+ * with its own host name instead of 127.0.0.1. ucp-cli sends neither.
+ */
+export function isLocalClientRequest(headers: http.IncomingHttpHeaders, port: number): boolean {
+  if (headers.origin !== undefined) return false;
+  const host = headers.host ?? "";
+  return host === `127.0.0.1:${port}` || host === `localhost:${port}`;
+}
+
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -101,6 +113,15 @@ export class UcpHostServer {
   async #handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${this.port}`);
     const method = req.method ?? "GET";
+
+    if (!isLocalClientRequest(req.headers, this.port)) {
+      this.logger.warn("rejected non-local request", {
+        origin: req.headers.origin,
+        host: req.headers.host,
+      });
+      sendJson(res, 403, { ok: false, error: "forbidden_origin" });
+      return;
+    }
 
     if (method === "GET" && url.pathname === "/health") {
       sendJson(res, 200, { ok: true, pid: process.pid, port: this.port });

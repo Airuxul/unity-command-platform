@@ -53,6 +53,13 @@ namespace Air.UcpAgent.Runtime.CmdPanel
 
         void Awake()
         {
+            // The panel survives scene loads, so a scene that also contains one would add a second.
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             Instance = this;
             EnsureOverlayCanvas();
             if (!_initialized)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Air.UcpAgent.Editor.Services.Objects;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,7 +12,7 @@ namespace Air.UcpAgent.Editor.Services
         public static Dictionary<string, object> Capture()
         {
             if (!EditorApplication.isPlaying)
-                throw new InvalidOperationException("ui.snapshot runs in play mode. Run play first.");
+                throw new InvalidOperationException("ui_snapshot runs in play mode. Run play first.");
 
             var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>(true);
             var list = new List<Canvas>();
@@ -49,7 +50,7 @@ namespace Air.UcpAgent.Editor.Services
         {
             return new Dictionary<string, object>
             {
-                ["path"] = HierarchyEdit.PathOf(canvas.transform, null),
+                ["path"] = GameObjectPath.Of(canvas.transform),
                 ["name"] = canvas.name,
                 ["active"] = canvas.gameObject.activeInHierarchy,
                 ["render_mode"] = canvas.renderMode.ToString(),
@@ -90,10 +91,10 @@ namespace Air.UcpAgent.Editor.Services
                 var button = buttons[i];
                 rows.Add(new Dictionary<string, object>
                 {
-                    ["path"] = HierarchyEdit.PathOf(button.transform, null),
+                    ["path"] = GameObjectPath.Of(button.transform),
                     ["name"] = button.name,
                     ["text"] = ButtonText(button, tmpType),
-                    ["interactable"] = button.interactable,
+                    ["interactable"] = button.IsInteractable(),
                     ["active"] = button.gameObject.activeInHierarchy,
                 });
             }
@@ -119,7 +120,7 @@ namespace Air.UcpAgent.Editor.Services
         {
             return new Dictionary<string, object>
             {
-                ["path"] = HierarchyEdit.PathOf(node, null),
+                ["path"] = GameObjectPath.Of(node),
                 ["name"] = node.name,
                 ["text"] = text ?? "",
                 ["active"] = active,

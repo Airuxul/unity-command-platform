@@ -4,7 +4,6 @@ namespace Air.UcpAgent.Commands
     /// <summary>Built-in ucp-cli command names for ucp-agent.</summary>
     public static class CommandNames
     {
-        public const string Asset = "asset";
         // --- Agent / editor lifecycle -------------------------------------------------
         public const string Build = "build";
         public const string Compile = "compile";
@@ -16,17 +15,12 @@ namespace Air.UcpAgent.Commands
         public const string Pause = "pause";
         public const string Ping = "ping";
         public const string Play = "play";
-        public const string PrefabEdit = "prefab.edit";
-        public const string PrefabRead = "prefab.read";
         public const string Profiler = "profiler";
         public const string Refresh = "refresh";
         public const string Reserialize = "reserialize";
-        public const string SceneEdit = "scene.edit";
-        public const string SceneRead = "scene.read";
         public const string Screenshot = "screenshot";
         public const string State = "state";
         public const string Stop = "stop";
-        public const string UiSnapshot = "ui.snapshot";
 
         // --- Project settings: tags / layers / tools -----------------------------------
         public const string TagList = "tag_list";
@@ -108,5 +102,8 @@ namespace Air.UcpAgent.Commands
         public const string SelectionGet = "selection_get";
         public const string SelectionSet = "selection_set";
         public const string SelectionClear = "selection_clear";
+
+        // --- Play Mode UI --------------------------------------------------------------
+        public const string UiSnapshot = "ui_snapshot";
     }
 }

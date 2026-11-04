@@ -53,13 +53,14 @@ cd ucp-cli
 
 - **No profiles**, no `POST /list`, no `~/.unity-cmd/`.
 - **Command names:** lowercase `{domain}_{operation}`; constants in `CommandNames.cs`.
-- **Command catalog:** `ucp-cli run help` (Editor scope) — 79 commands, generated from discovery.
+- **Command catalog:** `ucp-cli run help` (Editor scope) — 82 commands, generated from discovery.
 - **Add command:** constant in `CommandNames.cs` + params in `Editor/Params/` + logic in
   `Editor/Services/` + an `EditorActionCommand<T>` shell in `Editor/Commands/`. See
   [MAINTENANCE.md](MAINTENANCE.md).
 - **Editing project content:** `gameobject_*` / `component_*` take an optional `prefab` argument —
   with it they edit that prefab asset in place, without it the open scene. Same commands, one
-  implementation (`Editor/Services/Objects/EditTargetScope.cs`).
+  implementation (`Editor/Services/Objects/EditTargetScope.cs`). For several edits, use
+  `prefab_edit` / `scene_edit` with `ops: [{command, args}]`: one save, nothing kept on failure.
 - **After C# changes:** recompile in Unity before live CLI tests.
 - **State field:** `agent_state` in `run state` response.
 

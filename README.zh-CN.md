@@ -129,7 +129,7 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 ucp-cli run help          # 列出全部命令、说明与参数
 ```
 
-Editor 侧共 79 个命令，按操作对象分组：
+Editor 侧共 82 个命令，按操作对象分组：
 
 | 命令族 | 覆盖范围 |
 |--------|----------|
@@ -142,6 +142,8 @@ Editor 侧共 79 个命令，按操作对象分组：
 | `asset_*`（9 个） | 列表、搜索、详情、建目录、删除、移动、复制、依赖、GUID |
 | `selection_*`（3 个） | 读取与设置编辑器选中项 |
 | `tag_*` `layer_*` `tool_set`（7 个） | 工程 Tag/Layer 表与当前变换工具 |
+| `prefab_edit` `scene_edit` | 在一个 Prefab 或场景上连续执行多条节点命令，全部成功才保留 |
+| `ui_snapshot` | 仅 Play Mode：列出 Canvas、文本，以及每个按钮能否点击 |
 
 ### 一套命令，两个作用域
 
@@ -156,6 +158,21 @@ ucp-cli run component_add --args '{"node":"Player/Body","component":"Rigidbody"}
 # 改磁盘上的 Prefab 资产
 ucp-cli run component_add --args '{"prefab":"Assets/P/Player.prefab","node":"Player/Body","component":"Rigidbody"}'
 ```
+
+### 批量编辑
+
+`prefab_edit` / `scene_edit` 在同一个目标上按顺序执行一组节点命令（`gameobject_*`、
+`component_*`、Prefab 实例命令），op 直接用这些命令的名字和参数。Prefab 只保存一次；任何一个 op
+失败就什么都不保留：Prefab 文件不变，场景整体撤销。所有 op 在打开目标之前就先校验。单条命令也按
+同一规则执行，相当于只有一个 op 的批量。
+
+```powershell
+ucp-cli run prefab_edit --args '{"prefab":"Assets/UI/Page.prefab","ops":[
+  {"command":"gameobject_create","args":{"parent":"Page","name":"Card"}},
+  {"command":"component_add","args":{"node":"Page/Card","component":"Image"}}]}'
+```
+
+op 里不能带 `prefab` / `scene`，目标只在批量命令上指定。
 
 对象引用类属性可以用资产路径、GUID、节点路径或 instance id 赋值；`component_get` 读回的格式
 与 `component_set` 接受的格式完全一致，可以直接改完塞回去。

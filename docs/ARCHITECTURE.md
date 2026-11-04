@@ -79,6 +79,7 @@ ucp-host reads result → ucp-cli prints JSON
 | `CliCommandDiscovery` | Register all `Editor/Commands/**` |
 | `EditorJobStateManager` | Deferred compile/play/stop |
 | `EditorActionCommand<T>` | Command shell: service payload → result, exception → error |
+| `EditTargetCommand<T>` + `EditBatch` | Node commands: `Apply(scope, p)`; the batch opens the target, commits or reverts |
 
 ### Content command layer (`Editor/Services/`)
 

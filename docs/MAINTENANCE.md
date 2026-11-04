@@ -16,7 +16,9 @@
    and throwing `ArgumentException` / `InvalidOperationException` on bad input.
 4. Add a command class in `Editor/Commands/` (namespace `Air.UcpAgent.Editor.Commands` regardless
    of subfolder) inheriting `EditorActionCommand<TParams>` — descriptor plus one line forwarding
-   to the service.
+   to the service. If it works inside a scene or prefab, inherit `EditTargetCommand<TParams>`
+   and implement `Apply(scope, p)` instead; the service takes the scope as its first argument and
+   never opens or saves one itself. That makes it usable in `prefab_edit` / `scene_edit` too.
 5. Recompile Unity — `CliCommandDiscovery` picks it up automatically.
 6. Test: `ucp-cli run <name> [--args '{}']`, then `ucp-cli run help` to check the catalog entry.
 7. Check nothing else broke: `cd ucp-cli && npm run smoke -- --project <path>` (~3-4 min, 18
@@ -76,10 +78,20 @@ Rules when extending them:
 
 If a prefab is already open in Prefab Mode, `EditTargetScope` reuses the live stage root rather than
 loading a second copy — otherwise a write would land on disk while the UI kept showing stale state.
+A write is refused if that stage already had unsaved changes, because saving the stage would write
+them too.
+
+`EditTargetScope.Dispose` only releases what it loaded. Writes are persisted by `Commit` and undone
+by `Revert` (an undo group for scenes and the stage; off-screen prefab contents are simply not
+saved), and only `EditBatch.Run` calls them.
+
+Asset writes follow `AssetPaths`: create, move and delete only under `Assets/`, never `..`, never
+over an existing asset (a replaced asset gets a new GUID and breaks references), and deletes go to
+the OS trash.
 
 Play Mode needs two things switched off, both of which Unity rejects there: undo registration
 (`SerializedObject.ApplyModifiedProperties`) and `EditorSceneManager.MarkSceneDirty`.
-`EditTargetScope.SupportsUndo` and its `Dispose` both check
+`EditTargetScope.SupportsUndo` and its `Commit` both check
 `EditorApplication.isPlayingOrWillChangePlaymode` for exactly this reason — without the second
 check a write would land and *then* throw, reporting a success as a failure.
 

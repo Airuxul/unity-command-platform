@@ -129,7 +129,7 @@ The catalog is generated from the agent itself, so there is no checked-in comman
 ucp-cli run help          # every command, its description and its parameters
 ```
 
-79 Editor commands, grouped by what they address:
+82 Editor commands, grouped by what they address:
 
 | Family | What it covers |
 |--------|----------------|
@@ -142,6 +142,8 @@ ucp-cli run help          # every command, its description and its parameters
 | `asset_*` (9) | List, find, info, folders, delete, move, duplicate, dependencies, GUIDs |
 | `selection_*` (3) | Read and drive the Editor selection |
 | `tag_*` `layer_*` `tool_set` (7) | Project tag/layer tables and the active transform tool |
+| `prefab_edit` `scene_edit` | Several node commands on one prefab or scene, kept only if all succeed |
+| `ui_snapshot` | Play Mode only: canvases, text, and whether each button can be clicked |
 
 ### One command set, two scopes
 
@@ -156,6 +158,21 @@ ucp-cli run component_add --args '{"node":"Player/Body","component":"Rigidbody"}
 # edit the asset on disk
 ucp-cli run component_add --args '{"prefab":"Assets/P/Player.prefab","node":"Player/Body","component":"Rigidbody"}'
 ```
+
+### Batches
+
+`prefab_edit` and `scene_edit` run a list of the same node commands (`gameobject_*`,
+`component_*`, prefab instance commands) against one target. The prefab is saved once; if any op
+fails, nothing is kept: the prefab file is untouched and a scene is undone. Every op is checked
+before the target is opened. A single command follows the same rule, as a batch of one.
+
+```powershell
+ucp-cli run prefab_edit --args '{"prefab":"Assets/UI/Page.prefab","ops":[
+  {"command":"gameobject_create","args":{"parent":"Page","name":"Card"}},
+  {"command":"component_add","args":{"node":"Page/Card","component":"Image"}}]}'
+```
+
+Ops never carry `prefab` / `scene`; the target belongs to the batch.
 
 Object-reference properties accept an asset path, a GUID, a node path or an instance id, and
 `component_get` returns values in exactly the shape `component_set` takes back.

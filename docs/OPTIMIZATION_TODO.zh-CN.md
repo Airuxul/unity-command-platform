@@ -22,7 +22,7 @@ ID 接着 [TODO.zh-CN.md](../TODO.zh-CN.md) 的编号往下排。已有条目（
 |----|------|-------------|------|------|
 | AGENT-11 | Runtime agent 只在编辑器和开发包里启用 | `RuntimeAgentHost` 靠 `[RuntimeInitializeOnLoadMethod]` 无条件自启动（`RuntimeAgentHost.cs:41`）；Runtime asmdef 没有 `defineConstraints`。结果：正式包的 Player 也会开 `HttpListener`，`UCP_RUNTIME_BIND` 还能绑到非 loopback 地址，且无鉴权（`:369`） | 1. 包一层 `UNITY_EDITOR \|\| DEVELOPMENT_BUILD`，再加一个默认关闭的 opt-in 开关<br>2. bind 到非 loopback 地址时强制要求 token | 打 Release 包后 6620 端口不监听 |
 | CLI-05 | 给 host 加本机 token | `ucp-host-server.ts:80` 只绑了 127.0.0.1，没有鉴权。本机任何进程都能调 `exec`，也就是在 Editor 里执行任意 C# | host 启动时生成随机 token 写进 `~/.ucp/host.json`；CLI 读出来放进请求头；不带 token 返回 401 | 不带 token 的 curl 请求被拒 |
-| AGENT-15 | 命令设计统一 | 本地未提交的是 79 个细粒度命令（`prefab_*`、`gameobject_*` 等），远程是 20 个命令加 `prefab.edit` / `scene.edit` 批量 ops，两套已分叉 | 保留远程的批量 ops。细粒度命令最多做成 CLI 侧别名，展开成单条 op | 只剩一套实现；README、TODO 与 `help` 输出一致 |
+| AGENT-15 | 命令设计统一（已完成） | 两套已合并：`HierarchyEdit` 那套 op 能映射的只有约 15 条命令，且值解析、路径解析、Undo 都弱于服务层；其余约 55 条命令没有 op 可对应 | 批量命令 `prefab_edit` / `scene_edit` 为主入口，op 直接复用命令名和参数（同 unity-mcp `batch_execute`）；Unity 端只留服务层一套实现，单条命令就是只有一个 op 的批量，失败不保存 | 只剩一套实现；README、TODO 与 `help` 输出一致（82 个命令） |
 
 ## P0：Unity 在后台时的响应
 

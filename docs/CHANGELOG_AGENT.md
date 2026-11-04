@@ -2,11 +2,16 @@
 
 ## Unreleased — content command surface (agent 0.4.0)
 
-Editor commands **15 → 79**. The agent could drive the Editor but could not touch project content;
+Editor commands **15 → 82**. The agent could drive the Editor but could not touch project content;
 the only escape hatch was `exec`. Command set modelled on
 [CoplayDev/unity-mcp](https://github.com/CoplayDev/unity-mcp), reshaped to one operation per command.
 
 **New families**
+
+- `prefab_edit` / `scene_edit` — run several node commands on one target; kept only if all
+  succeed. They replace `prefab.edit` / `scene.edit` / `HierarchyEdit` from `efa91f9`, whose op
+  vocabulary duplicated the commands. `prefab.read` / `scene.read` / `asset` are covered by
+  `prefab_tree`, `gameobject_*`, `component_get` and `asset_*`; `ui.snapshot` is now `ui_snapshot`.
 
 - `prefab_*` (20) — assets (create, create_empty, create_variant, delete, duplicate, move, list,
   info, tree), instances (instantiate, apply, revert, overrides, unpack, replace, instance_info),
@@ -52,10 +57,21 @@ the only escape hatch was `exec`. Command set modelled on
   that requires a `RectTransform` makes Unity swap the Transform instance, and both methods were
   holding the old, now-destroyed reference. They hold the GameObject now.
 - Play Mode writes to scene objects failed: Unity rejects undo registration there, and
-  `MarkSceneDirty` in `EditTargetScope.Dispose` threw *after* the write had landed — reporting a
+  `MarkSceneDirty` in `EditTargetScope.Dispose` (now `Commit`) threw *after* the write had landed — reporting a
   successful edit as a failure. Both are now skipped in Play Mode.
 
+- A failed node command no longer leaves half an edit (an orphan from `gameobject_create`, a
+  component from `component_add`): every node command is a batch of one and reverts on failure.
+- `overwrite` is gone. It deleted the target first, so the replacement got a new GUID, and a move
+  onto its own path deleted the source. Asset writes are limited to `Assets/`, reject `..`, and
+  deletes go to the trash.
+- `scene_save all` raised Unity's save dialog for untitled scenes, which blocks the Editor; it
+  refuses them now. `force` clears a dirty Prefab Mode stage so leaving it does not prompt.
+
 **Infrastructure**
+
+- `EditTargetCommand<TParams>` + `EditBatch` — node commands implement `Apply(scope, p)`; the
+  batch owns open / commit / revert.
 
 - `EditorActionCommand<TParams>` — command shell; services return payloads and throw for errors.
 - `EditTargetScope` — the scene-or-prefab-asset abstraction that lets the content commands exist

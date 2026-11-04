@@ -70,7 +70,9 @@ Host submodules (match [01_Architecture.md](../../01_Architecture.md)):
 ## Unity (`com.air.ucp-agent`)
 
 Single command track: **`CliCommand`** under `Editor/Commands/`. Editor commands normally inherit
-`EditorActionCommand<TParams>` (thin shell) and delegate to a service.
+`EditorActionCommand<TParams>` (thin shell) and delegate to a service. Commands that work inside a
+scene or prefab inherit `EditTargetCommand<TParams>` instead and only implement
+`Apply(scope, p)`; `EditBatch` opens the target, commits on success and reverts on failure.
 
 | Path | Namespace |
 |------|-----------|
@@ -92,6 +94,11 @@ Deferred commands (`compile`, `play`, `stop`) use `EditorJobStateManager`; bridg
 `gameobject_reparent`. No multi-action `action` dispatchers. Use `aliases` for a synonym
 (`prefab_move` → `prefab_rename`) rather than a second class; aliases are dispatched and advertised
 as capabilities.
+
+Batching reuses command names: `prefab_edit` / `scene_edit` take
+`ops: [{command, args}]` where `command` is any batchable `EditTargetCommand`. Do not add a second
+op vocabulary. A command that also writes outside its target (it could not be taken back if a
+later op failed) overrides `Batchable => false`.
 
 **Legacy (removed in 0.4.0):** `manage` (its actions became `pause`, `tag_add`, `tag_remove`,
 `tag_list`, `layer_add`, `layer_remove`, `layer_list`, `tool_set`).

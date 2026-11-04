@@ -24,14 +24,6 @@ namespace Air.UcpAgent.Editor.Services
             !string.IsNullOrEmpty(commandId)
             && string.Equals(_activeCommandId, commandId, StringComparison.Ordinal);
 
-        internal static void SetActiveCommandForTests(string commandId) => _activeCommandId = commandId;
-
-        internal static void ClearActiveCommandForTests()
-        {
-            _activeCommandId = null;
-            _compilationContext = null;
-        }
-
         public static void RequestWithCompletion(string commandId)
         {
             if (string.IsNullOrEmpty(commandId))

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Invoke;
 
@@ -11,7 +12,7 @@ namespace Air.UcpAgent.Editor.Commands
     /// </summary>
     /// <remarks>
     /// Shares the <c>help</c> name with the Runtime-scope command; the host kind picks which one
-    /// runs (<see cref="InvokeAvailability.IsAvailableForHost"/>).
+    /// runs (<see cref="CommandRegistry.Find"/> is per host).
     /// </remarks>
     public sealed class HelpEditorCommand : EditorActionCommand
     {
@@ -21,6 +22,6 @@ namespace Air.UcpAgent.Editor.Commands
             "List every editor command with its description and parameters",
             aliases: new[] { "commands" });
 
-        protected override Dictionary<string, object> Execute() => InvokeCatalog.BuildResponse("editor");
+        protected override Dictionary<string, object> Execute() => InvokeCatalog.BuildResponse(CommandRegistry.EditorHost);
     }
 }

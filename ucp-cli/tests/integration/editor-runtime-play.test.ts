@@ -49,6 +49,20 @@ describe.skipIf(!runEditorTests)("editor + runtime play workflow (Unity required
     expect((runtimeEcho.data as Record<string, unknown>)?.channel).toBe("runtime");
     expect((runtimeEcho.data as Record<string, unknown>)?.message).toBe("runtime-in-play");
 
+    // Locks the runtime surface the same way catalog.test.ts locks the editor one.
+    const runtimeHelp = await runUcpCommand("help", { sessionType: "runtime" });
+    expect(runtimeHelp.ok).toBe(true);
+    const health = (await fetch(`http://127.0.0.1:${runtimeSession.runtimePort}/health`).then((r) =>
+      r.json(),
+    )) as { capabilities: string[] };
+    const surface = {
+      help_message: runtimeHelp.message,
+      capabilities: [...health.capabilities].sort(),
+    };
+    await expect(`${JSON.stringify(surface, null, 2)}\n`).toMatchFileSnapshot(
+      "./__snapshots__/catalog.runtime.json",
+    );
+
     const stop = await runUcpCommand("stop", { sessionType: "editor", timeout: 60_000 });
     expect(stop.ok).toBe(true);
 

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Air.UcpAgent.Cli;
-using Air.UcpAgent.Invoke;
+using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Runtime.Shell
 {
@@ -138,30 +138,8 @@ namespace Air.UcpAgent.Runtime.Shell
             return result;
         }
 
-        public static string ResolveRuntimeCommand(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-                return null;
-
-            var handler = CliCommandDiscovery.FindForHost(name.Trim(), "runtime");
-            if (handler != null && InvokeAvailability.IsAvailableForHost(handler.Scope, "runtime"))
-                return handler.Name;
-
-            foreach (var candidate in CliCommandDiscovery.Handlers)
-            {
-                if (!InvokeAvailability.IsAvailableForHost(candidate.Scope, "runtime"))
-                    continue;
-
-                if (candidate.Aliases != null &&
-                    candidate.Aliases.Any(alias =>
-                        string.Equals(alias, name, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return candidate.Name;
-                }
-            }
-
-            return null;
-        }
+        public static string ResolveRuntimeCommand(string name) =>
+            CommandRegistry.Find(CommandRegistry.RuntimeHost, name)?.Name;
     }
 
     public sealed class ShellCompletionCandidate
@@ -187,7 +165,7 @@ namespace Air.UcpAgent.Runtime.Shell
             if (string.IsNullOrEmpty(commandName))
                 return CompleteCommandNames(tokenValue);
 
-            var handler = CliCommandDiscovery.FindForHost(commandName, "runtime");
+            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, commandName);
             if (handler == null)
                 return new List<ShellCompletionCandidate>();
 
@@ -205,11 +183,8 @@ namespace Air.UcpAgent.Runtime.Shell
             var matches = new List<ShellCompletionCandidate>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var handler in CliCommandDiscovery.Handlers)
+            foreach (var handler in CommandRegistry.ForHost(CommandRegistry.RuntimeHost))
             {
-                if (!InvokeAvailability.IsAvailableForHost(handler.Scope, "runtime"))
-                    continue;
-
                 TryAddName(matches, seen, handler.Name, prefix);
                 if (handler.Aliases == null)
                     continue;
@@ -243,7 +218,7 @@ namespace Air.UcpAgent.Runtime.Shell
         }
 
         static List<ShellCompletionCandidate> CompleteParameters(
-            IInvokeHandler handler,
+            CommandEntry handler,
             string input,
             int tokenStart,
             string tokenValue)
@@ -278,7 +253,7 @@ namespace Air.UcpAgent.Runtime.Shell
         }
 
         static List<ShellCompletionCandidate> CompleteParameterValue(
-            IInvokeHandler handler,
+            CommandEntry handler,
             string input,
             int tokenStart,
             string tokenValue)
@@ -445,7 +420,7 @@ namespace Air.UcpAgent.Runtime.Shell
             if (string.IsNullOrEmpty(commandName))
                 return BuildUnknownOrMatchingCommandHints(first);
 
-            var handler = CliCommandDiscovery.FindForHost(commandName, "runtime");
+            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, commandName);
             if (handler == null)
                 return BuildUnknownOrMatchingCommandHints(first);
 
@@ -540,8 +515,7 @@ namespace Air.UcpAgent.Runtime.Shell
 
         static List<string> ListAllCommands()
         {
-            return CliCommandDiscovery.Handlers
-                .Where(h => InvokeAvailability.IsAvailableForHost(h.Scope, "runtime"))
+            return CommandRegistry.ForHost(CommandRegistry.RuntimeHost)
                 .OrderBy(h => h.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(FormatHandlerHint)
                 .ToList();
@@ -549,8 +523,7 @@ namespace Air.UcpAgent.Runtime.Shell
 
         static List<string> ListCommandsMatching(string prefix)
         {
-            return CliCommandDiscovery.Handlers
-                .Where(h => InvokeAvailability.IsAvailableForHost(h.Scope, "runtime"))
+            return CommandRegistry.ForHost(CommandRegistry.RuntimeHost)
                 .Where(h => h.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
                             (h.Aliases ?? Array.Empty<string>()).Any(a =>
                                 a.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
@@ -559,7 +532,7 @@ namespace Air.UcpAgent.Runtime.Shell
                 .ToList();
         }
 
-        static string FormatHandlerHint(IInvokeHandler handler)
+        static string FormatHandlerHint(CommandEntry handler)
         {
             var paramText = handler.ParamDescriptions != null && handler.ParamDescriptions.Length > 0
                 ? " " + string.Join(" ", handler.ParamDescriptions)
@@ -589,30 +562,26 @@ namespace Air.UcpAgent.Runtime.Shell
             if (parse == null || !parse.IsValid)
                 return null;
 
-            var handler = CliCommandDiscovery.FindForHost(parse.CommandName, "runtime");
+            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, parse.CommandName);
             if (handler?.ParamType == null)
                 return null;
 
-            var (_, error) = InvokeParameterBinding.BindRequired(handler.ParamType, parse.Args);
+            var (_, error) = CliParamBinder.Bind(handler.ParamType, parse.Args);
             return error;
         }
     }
 
     public static class ShellCommandMatcher
     {
-        public static IEnumerable<IInvokeHandler> GetRuntimeHandlers()
+        public static IEnumerable<CommandEntry> GetRuntimeHandlers()
         {
-            foreach (var handler in CliCommandDiscovery.Handlers)
-            {
-                if (InvokeAvailability.IsAvailableForHost(handler.Scope, "runtime"))
-                    yield return handler;
-            }
+            return CommandRegistry.ForHost(CommandRegistry.RuntimeHost);
         }
 
-        public static List<IInvokeHandler> RankSimilar(string input, int maxResults = 5)
+        public static List<CommandEntry> RankSimilar(string input, int maxResults = 5)
         {
             if (string.IsNullOrWhiteSpace(input))
-                return new List<IInvokeHandler>();
+                return new List<CommandEntry>();
 
             var query = input.Trim();
             return GetRuntimeHandlers()
@@ -625,7 +594,7 @@ namespace Air.UcpAgent.Runtime.Shell
                 .ToList();
         }
 
-        static int Score(string query, IInvokeHandler handler)
+        static int Score(string query, CommandEntry handler)
         {
             var best = ScoreName(query, handler.Name);
             foreach (var alias in handler.Aliases ?? Array.Empty<string>())

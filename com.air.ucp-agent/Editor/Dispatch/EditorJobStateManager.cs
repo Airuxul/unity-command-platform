@@ -1,29 +1,49 @@
-using Air.UcpAgent.Job;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Cli;
+using Air.UcpAgent.Invoke;
+using Air.UcpAgent.Job;
 using UnityEditor;
 using UnityEngine;
-using Air.UcpAgent.Invoke;
-using Air.UcpAgent;
-using Air.UcpAgent.Execution;
 
 namespace Air.UcpAgent
 {
     /// <summary>
-    /// In-memory editor jobs with SessionState + <see cref="EditorJobLedger"/> (disk) for domain reload.
+    /// Jobs of deferred editor commands, kept in memory, SessionState and <see cref="EditorJobLedger"/>
+    /// so they survive the domain reload a compile or Play Mode entry causes. A job lives from the
+    /// moment its command defers until <see cref="Editor.EditorAgentBootstrap"/> has written its result.
     /// </summary>
     [InitializeOnLoad]
     public static class EditorJobStateManager
     {
-        private const string SessionKey = "Air.UcpAgent.Jobs";
-        private static readonly Dictionary<string, ICompletionPolicy> Policies = new()
+        const string SessionKey = "Air.UcpAgent.Jobs";
+
+        /// <summary>Records from before 0.5 carry no deadline; they keep the old no-progress rule.</summary>
+        const int LegacyNoProgressTimeoutMs = 20000;
+
+        /// <summary>
+        /// A finished job older than this has no caller left (ucp-host drops results after 10 min).
+        /// Versions before 0.5 never removed jobs, so the first reload after an upgrade finds them all.
+        /// </summary>
+        const long FinishedRetentionMs = 10 * 60_000;
+
+        const string TimeoutError = "Command timed out before it finished.";
+        const string LegacyTimeoutError = "Command timed out without progress (20s).";
+        const string ReloadOrphanError =
+            "Command lost after domain reload (no completion policy to resume).";
+
+        static readonly Dictionary<string, ICompletionPolicy> Policies = new()
         {
             { InvokeCompletionCatalog.CompletionCompilation, new Completion.CompilationPolicy() },
             { InvokeCompletionCatalog.CompletionEnterPlay, new Completion.EnterPlayModePolicy() },
             { InvokeCompletionCatalog.CompletionExitPlay, new Completion.ExitPlayModePolicy() },
         };
-        private static Dictionary<string, InvokeJobRecord> _commands = new();
+
+        static Dictionary<string, InvokeJobRecord> _commands = new();
+
+        /// <summary>The <see cref="IDeferredJobs"/> the command executor uses on the Editor host.</summary>
+        public static readonly IDeferredJobs Jobs = new JobStore();
 
         static EditorJobStateManager()
         {
@@ -47,57 +67,33 @@ namespace Air.UcpAgent
             return fromDisk;
         }
 
-        public static InvokeJobRecord Create(string command, string completionKind, string requestId)
-        {
-            var entry = JobStateCore.Create(
-                _commands,
-                command,
-                completionKind,
-                requestId,
-                JobStateCore.UtcNowMs,
-                Save);
-            EditorJobLedger.Persist(entry);
-            return entry;
-        }
-
         public static void Fail(string id, string error)
         {
-            var command = Get(id);
-            if (command == null || JobStateCore.ShouldSkip(command))
+            var job = Get(id);
+            if (job == null || IsFinished(job))
                 return;
 
-            JobStateCore.MarkFailed(command, error, JobStateCore.UtcNowMs(), Save);
+            Finish(job, InvokeJobStatus.Failed, error, null);
         }
 
         public static void MarkRunning(string id)
         {
-            var command = Get(id);
-            if (command == null || JobStateCore.ShouldSkip(command))
+            var job = Get(id);
+            if (job == null || IsFinished(job))
                 return;
 
-            command.Status = InvokeJobStatus.Running;
-            command.UpdatedAtUtcMs = JobStateCore.UtcNowMs();
-            Save();
-        }
-
-        public static void SetCompletionKind(string id, string completionKind)
-        {
-            var command = Get(id);
-            if (command == null || JobStateCore.ShouldSkip(command))
-                return;
-
-            command.CompletionKind = completionKind ?? "";
-            command.UpdatedAtUtcMs = JobStateCore.UtcNowMs();
+            job.Status = InvokeJobStatus.Running;
+            job.UpdatedAtUtcMs = UtcNowMs();
             Save();
         }
 
         public static void Succeed(string id, object result)
         {
-            var command = Get(id);
-            if (command == null || JobStateCore.ShouldSkip(command))
+            var job = Get(id);
+            if (job == null || IsFinished(job))
                 return;
 
-            JobStateCore.MarkSucceeded(command, result, JobStateCore.UtcNowMs(), true, Save);
+            Finish(job, InvokeJobStatus.Succeeded, null, result);
         }
 
         /// <summary>The live job created for a file-queue command, if one exists.</summary>
@@ -106,6 +102,10 @@ namespace Air.UcpAgent
             if (string.IsNullOrEmpty(requestId))
                 return null;
 
+            if (_commands.TryGetValue(requestId, out var byId))
+                return byId;
+
+            // Jobs created before 0.5 have a generated id; only RequestId matches the queue file.
             foreach (var job in _commands.Values)
             {
                 if (string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
@@ -119,30 +119,58 @@ namespace Air.UcpAgent
         public static IReadOnlyList<InvokeJobRecord> FinishedJobs() =>
             _commands.Count == 0
                 ? Array.Empty<InvokeJobRecord>()
-                : _commands.Values.Where(JobStateCore.ShouldSkip).ToList();
+                : _commands.Values.Where(IsFinished).ToList();
 
-        /// <summary>
-        /// Forgets a job once its result is delivered. Without this every command stayed in memory,
-        /// SessionState and ~/.ucp/jobs forever, and each Save rewrote all of them.
-        /// </summary>
+        /// <summary>Forgets a job once its result is delivered.</summary>
         public static void Remove(string id)
         {
-            if (string.IsNullOrEmpty(id))
+            if (string.IsNullOrEmpty(id) || !_commands.Remove(id))
                 return;
 
-            _commands.Remove(id);
             EditorJobLedger.Delete(id);
             SaveSession();
         }
 
-        /// <summary>Flush all in-flight jobs to disk before domain reload.</summary>
-        public static void FlushToLedger() => EditorJobLedger.FlushAll(_commands.Values);
+        static void Begin(string id, string command, string completionKind, int timeoutMs)
+        {
+            if (string.IsNullOrEmpty(id))
+                throw new ArgumentException("A deferred command needs an id.", nameof(id));
+
+            var kind = string.IsNullOrEmpty(completionKind)
+                ? InvokeCompletionCatalog.CompletionDeferred
+                : completionKind;
+            if (kind != InvokeCompletionCatalog.CompletionDeferred && !Policies.ContainsKey(kind))
+                throw new InvalidOperationException($"No completion policy for '{kind}'.");
+
+            var now = UtcNowMs();
+            if (!_commands.TryGetValue(id, out var job))
+            {
+                job = new InvokeJobRecord
+                {
+                    Id = id,
+                    RequestId = id,
+                    Command = command,
+                    Status = InvokeJobStatus.Pending,
+                    CreatedAtUtcMs = now,
+                };
+                _commands[id] = job;
+            }
+
+            job.CompletionKind = kind;
+            job.UpdatedAtUtcMs = now;
+            if (timeoutMs > 0)
+                job.DeadlineUtcMs = now + timeoutMs;
+
+            // Synchronously: the domain may reload as soon as the command returns.
+            Save();
+        }
 
         /// <summary>SessionState + disk merge after domain reload.</summary>
-        public static void Reload()
+        static void Reload()
         {
             LoadFromSession();
             EditorJobLedger.MergePendingInto(_commands);
+            DropUndeliverable();
             // Anything else on disk is corrupt, or finished in an earlier editor session whose
             // caller is long gone.
             EditorJobLedger.DeleteAllExcept(_commands.Keys);
@@ -150,81 +178,125 @@ namespace Air.UcpAgent
             Save();
         }
 
-        /// <summary>P1: pending/running jobs without a completion policy cannot resume after reload.</summary>
-        static void OrphanJobsAfterDomainReload()
+        static void DropUndeliverable()
         {
-            var now = JobStateCore.UtcNowMs();
-            foreach (var command in _commands.Values.ToList())
+            var cutoff = UtcNowMs() - FinishedRetentionMs;
+            foreach (var job in _commands.Values.ToList())
             {
-                if (JobStateCore.ShouldSkip(command))
+                if (!IsFinished(job))
                     continue;
 
-                if (command.Status is not (InvokeJobStatus.Pending or InvokeJobStatus.Running))
-                    continue;
-
-                var kind = command.CompletionKind ?? "";
-                if (Policies.ContainsKey(kind))
-                    continue;
-
-                if (string.Equals(kind, InvokeCompletionCatalog.CompletionDeferred, StringComparison.Ordinal))
-                    continue;
-
-                JobStateCore.MarkOrphaned(
-                    command,
-                    JobStateCore.ReloadOrphanErrorMessage,
-                    now,
-                    Save);
+                // Before 0.5 every synchronous command also got a job ("started"), already delivered
+                // when it ran. Only deferred jobs can still owe their caller a result.
+                var deliveredWhenRun = job.DeadlineUtcMs == 0 && !Policies.ContainsKey(job.CompletionKind ?? "");
+                if (deliveredWhenRun || job.UpdatedAtUtcMs < cutoff)
+                    _commands.Remove(job.Id);
             }
         }
 
-        private static void Tick()
+        /// <summary>
+        /// A job without a completion policy was completed by callbacks that died with the old
+        /// domain, so it can never finish now.
+        /// </summary>
+        static void OrphanJobsAfterDomainReload()
+        {
+            foreach (var job in _commands.Values.ToList())
+            {
+                if (IsFinished(job) || Policies.ContainsKey(job.CompletionKind ?? ""))
+                    continue;
+
+                Finish(job, InvokeJobStatus.Orphaned, ReloadOrphanError, null);
+            }
+        }
+
+        static void Tick()
         {
             if (_commands.Count == 0)
                 return;
 
+            var now = UtcNowMs();
             var state = EditorStateProvider.Capture();
-            JobStateCore.TickJobs(
-                _commands.Values,
-                Save,
-                command => ResolveTryComplete(command, state),
-                command => $"No completion policy for '{command.CompletionKind}'.",
-                command => string.IsNullOrEmpty(command.CompletionKind)
-                    || string.Equals(
-                        command.CompletionKind,
-                        InvokeCompletionCatalog.CompletionDeferred,
-                        StringComparison.Ordinal),
-                // Keeps the result in SessionState too, so a reload before delivery does not lose it.
-                serializeResultJson: true);
+            foreach (var job in _commands.Values.ToList())
+            {
+                if (IsFinished(job))
+                    continue;
+
+                if (TimedOut(job, now, out var timeoutError))
+                {
+                    Finish(job, InvokeJobStatus.Orphaned, timeoutError, null);
+                    continue;
+                }
+
+                if (!Policies.TryGetValue(job.CompletionKind ?? "", out var policy))
+                {
+                    // CompletionDeferred: the command completes it from a callback.
+                    MarkPendingAsRunning(job, now);
+                    continue;
+                }
+
+                if (policy.TryComplete(job, state, out var result, out var error))
+                {
+                    if (string.IsNullOrEmpty(error))
+                        Finish(job, InvokeJobStatus.Succeeded, null, result);
+                    else
+                        Finish(job, InvokeJobStatus.Failed, error, null);
+                }
+                else
+                {
+                    MarkPendingAsRunning(job, now);
+                }
+            }
         }
 
-        private static JobStateCore.TryCompleteJob ResolveTryComplete(
-            InvokeJobRecord command,
-            EditorStateSnapshot state)
+        static bool TimedOut(InvokeJobRecord job, long now, out string error)
         {
-            if (!Policies.TryGetValue(command.CompletionKind ?? "", out var policy))
-                return null;
+            if (job.DeadlineUtcMs > 0)
+            {
+                error = TimeoutError;
+                return now > job.DeadlineUtcMs;
+            }
 
-            return (InvokeJobRecord current, out object result, out string error) =>
-                policy.TryComplete(current, state, out result, out error);
+            error = LegacyTimeoutError;
+            return now - job.UpdatedAtUtcMs > LegacyNoProgressTimeoutMs;
         }
 
-        private static void LoadFromSession()
+        static void MarkPendingAsRunning(InvokeJobRecord job, long now)
         {
+            if (job.Status != InvokeJobStatus.Pending)
+                return;
+
+            job.Status = InvokeJobStatus.Running;
+            job.UpdatedAtUtcMs = now;
+            Save();
+        }
+
+        static void Finish(InvokeJobRecord job, InvokeJobStatus status, string error, object result)
+        {
+            job.Status = status;
+            job.Error = error;
+            job.Result = result;
+            // Kept as JSON too, so a reload between finishing and delivery does not lose it.
+            job.ResultJson = result != null ? UcpJson.Serialize(result) : "";
+            job.UpdatedAtUtcMs = UtcNowMs();
+            Save();
+        }
+
+        static bool IsFinished(InvokeJobRecord job) =>
+            job.Status is InvokeJobStatus.Succeeded or InvokeJobStatus.Failed or InvokeJobStatus.Orphaned;
+
+        static long UtcNowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        static void LoadFromSession()
+        {
+            _commands = new Dictionary<string, InvokeJobRecord>();
             var json = SessionState.GetString(SessionKey, "");
             if (string.IsNullOrEmpty(json))
-            {
-                _commands = new Dictionary<string, InvokeJobRecord>();
                 return;
-            }
 
             try
             {
                 var wrapper = JsonUtility.FromJson<InvokeJobListWrapper>(json);
-                _commands = new Dictionary<string, InvokeJobRecord>();
-                if (wrapper?.Items == null)
-                    return;
-
-                foreach (var item in wrapper.Items)
+                foreach (var item in wrapper?.Items ?? new List<InvokeJobRecord>())
                 {
                     if (!string.IsNullOrEmpty(item?.Id))
                         _commands[item.Id] = item;
@@ -236,7 +308,7 @@ namespace Air.UcpAgent
             }
         }
 
-        private static void Save()
+        static void Save()
         {
             if (!MainThread.IsCurrent)
             {
@@ -250,10 +322,22 @@ namespace Air.UcpAgent
                 EditorJobLedger.Persist(job);
         }
 
-        private static void SaveSession()
+        static void SaveSession()
         {
             var wrapper = new InvokeJobListWrapper { Items = _commands.Values.ToList() };
             SessionState.SetString(SessionKey, JsonUtility.ToJson(wrapper));
+        }
+
+        sealed class JobStore : IDeferredJobs
+        {
+            public void Begin(string id, string command, string completionKind, int timeoutMs) =>
+                EditorJobStateManager.Begin(id, command, completionKind, timeoutMs);
+
+            public bool Has(string id) => !string.IsNullOrEmpty(id) && _commands.ContainsKey(id);
+            public void Remove(string id) => EditorJobStateManager.Remove(id);
+            public void MarkRunning(string id) => EditorJobStateManager.MarkRunning(id);
+            public void Succeed(string id, object result) => EditorJobStateManager.Succeed(id, result);
+            public void Fail(string id, string error) => EditorJobStateManager.Fail(id, error);
         }
     }
 }

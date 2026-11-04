@@ -8,43 +8,25 @@ namespace Air.UcpAgent
     /// </summary>
     public static class UcpLog
     {
-        static bool _enabled = true;
-
         /// <summary>When false, <see cref="Log"/>, <see cref="LogWarning"/>, and <see cref="LogError"/> are no-ops.</summary>
-        public static bool Enabled
-        {
-            get => _enabled;
-            set => _enabled = value;
-        }
+        public static bool Enabled { get; set; } = true;
 
         public static void Log(string message)
         {
-            if (!Enabled || string.IsNullOrEmpty(message))
-                return;
-
-            Debug.Log(message);
+            if (Enabled && !string.IsNullOrEmpty(message))
+                Debug.Log(message);
         }
 
         public static void LogWarning(string message)
         {
-            if (!Enabled || string.IsNullOrEmpty(message))
-                return;
-
-            Debug.LogWarning(message);
+            if (Enabled && !string.IsNullOrEmpty(message))
+                Debug.LogWarning(message);
         }
 
         public static void LogError(string message)
         {
-            if (!Enabled || string.IsNullOrEmpty(message))
-                return;
-
-            Debug.LogError(message);
+            if (Enabled && !string.IsNullOrEmpty(message))
+                Debug.LogError(message);
         }
-
-        /// <summary>Callback for <c>Action&lt;string&gt;</c> lifecycle hooks.</summary>
-        public static void LogCallback(string message) => Log(message);
-
-        /// <summary>Callback for error lifecycle hooks.</summary>
-        public static void LogErrorCallback(string message) => LogError(message);
     }
 }

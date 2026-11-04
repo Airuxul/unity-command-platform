@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Air.UcpAgent.Editor.Commands;
-using Air.UcpAgent.Invoke;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Params;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -112,7 +112,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 }
 
                 var values = ops[i].Args?.ToObject<Dictionary<string, object>>() ?? new Dictionary<string, object>();
-                var (args, error) = InvokeParameterBinding.BindRequired(command.ParamsType, values);
+                var (args, error) = CliParamBinder.Bind(command.ParamsType, values);
                 if (error != null)
                     throw new ArgumentException($"ops[{i}] {name}: {error}");
 
@@ -129,18 +129,21 @@ namespace Air.UcpAgent.Editor.Services.Objects
         static IEnumerable<string> BatchableNames() =>
             Commands().Values.Where(c => c.Batchable).Select(c => c.Name).Distinct().OrderBy(n => n);
 
+        /// <summary>
+        /// The registry's Editor commands that work inside one edit target, keyed by name and alias.
+        /// </summary>
         static Dictionary<string, IEditTargetCommand> Commands()
         {
             if (_commands != null)
                 return _commands;
 
             var map = new Dictionary<string, IEditTargetCommand>(StringComparer.OrdinalIgnoreCase);
-            foreach (var type in typeof(EditBatch).Assembly.GetTypes())
+            foreach (var entry in CommandRegistry.ForHost(CommandRegistry.EditorHost))
             {
-                if (type.IsAbstract || !typeof(IEditTargetCommand).IsAssignableFrom(type))
+                if (!typeof(IEditTargetCommand).IsAssignableFrom(entry.CommandType))
                     continue;
 
-                var command = (IEditTargetCommand)Activator.CreateInstance(type);
+                var command = (IEditTargetCommand)entry.Create();
                 map[command.Name] = command;
                 foreach (var alias in command.Aliases)
                     map[alias] = command;

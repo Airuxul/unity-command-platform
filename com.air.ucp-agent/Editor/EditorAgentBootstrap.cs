@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Air.UcpAgent.Dispatch;
-using Air.UcpAgent.Editor.Bridge;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.IO;
 using Air.UcpAgent.Protocol;
 using Newtonsoft.Json;
@@ -14,7 +13,9 @@ namespace Air.UcpAgent.Editor
     [InitializeOnLoad]
     public static class EditorAgentBootstrap
     {
-        static readonly CommandHandlerRegistry Registry = CreateRegistry();
+        static readonly List<string> Capabilities =
+            CommandRegistry.Capabilities(CommandRegistry.EditorHost, includeAliases: true);
+
         static string _projectId;
         static double _nextPoll;
         static double _nextHeartbeat;
@@ -30,13 +31,6 @@ namespace Air.UcpAgent.Editor
             EditorApplication.update += OnUpdate;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterReload;
             EditorApplication.quitting += OnQuitting;
-        }
-
-        static CommandHandlerRegistry CreateRegistry()
-        {
-            var registry = new CommandHandlerRegistry();
-            UcpCommandRegistrar.RegisterEditorCommands(registry);
-            return registry;
         }
 
         static string GetProjectPath() => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
@@ -58,6 +52,8 @@ namespace Air.UcpAgent.Editor
                 WriteSession("ready");
             }
 
+            // Also loads the job store, so a job restored after a reload is known before the first
+            // poll could run its inbox file again.
             DeliverFinishedJobs();
 
             if (now < _nextPoll)
@@ -75,7 +71,7 @@ namespace Air.UcpAgent.Editor
                 path = GetProjectPath().Replace('\\', '/'),
                 type = "editor",
                 status = status,
-                capabilities = new List<string>(Registry.Capabilities),
+                capabilities = new List<string>(Capabilities),
                 updatedAt = DateTime.UtcNow.ToString("o"),
             };
             UcpPaths.WriteJsonAtomic(
@@ -133,7 +129,10 @@ namespace Air.UcpAgent.Editor
                 var outbox = UcpPaths.OutboxFile(_projectId, command.id);
                 if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
                 {
-                    if (TryExecute(command, out var result) && result != null)
+                    var result = CommandExecutor.Execute(
+                        CommandRegistry.EditorHost, command, EditorJobStateManager.Jobs);
+                    // Null: the command continues as a job, delivered by DeliverFinishedJobs.
+                    if (result != null)
                         WriteOutbox(command.id, result);
                 }
 
@@ -149,7 +148,7 @@ namespace Air.UcpAgent.Editor
                 try
                 {
                     if (!string.IsNullOrEmpty(job.RequestId))
-                        WriteOutbox(job.RequestId, UcpResultMapper.FromJob(job.RequestId, job));
+                        WriteOutbox(job.RequestId, UcpResults.FromJob(job.RequestId, job));
                 }
                 catch (Exception ex)
                 {
@@ -181,25 +180,6 @@ namespace Air.UcpAgent.Editor
             {
                 // Retried on the next poll.
             }
-        }
-
-        static bool TryExecute(UcpCommand command, out UcpResult result)
-        {
-            result = null;
-            if (!Registry.Dispatcher.TryGetHandler(command.type, out var handler))
-                return Registry.Dispatcher.TryDispatch(command, out result);
-
-            if (handler is UcpCliCommandHandler bridge)
-            {
-                var execution = bridge.Dispatch(command);
-                if (execution.IsDeferred)
-                    return false;
-
-                result = execution.Result;
-                return result != null;
-            }
-
-            return Registry.Dispatcher.TryDispatch(command, out result);
         }
     }
 }

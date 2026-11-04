@@ -141,15 +141,6 @@ namespace Air.UcpAgent
             }
         }
 
-        public static void FlushAll(IEnumerable<InvokeJobRecord> jobs)
-        {
-            if (jobs == null)
-                return;
-
-            foreach (var job in jobs)
-                Persist(job);
-        }
-
         static InvokeJobRecord ReadFile(string path)
         {
             var json = File.ReadAllText(path);

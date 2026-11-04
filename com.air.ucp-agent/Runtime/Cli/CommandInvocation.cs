@@ -1,0 +1,86 @@
+using System;
+
+namespace Air.UcpAgent.Cli
+{
+    /// <summary>
+    /// Where a deferred command's job lives. The Editor keeps jobs across domain reloads; the
+    /// runtime agent has none, so a command that does not finish synchronously fails there.
+    /// </summary>
+    public interface IDeferredJobs
+    {
+        /// <summary>Creates the job, or retargets an existing one. Throws if the kind has no completion policy.</summary>
+        void Begin(string id, string command, string completionKind, int timeoutMs);
+
+        bool Has(string id);
+        void Remove(string id);
+        void MarkRunning(string id);
+        void Succeed(string id, object result);
+        void Fail(string id, string error);
+    }
+
+    /// <summary>One run of one command: its id, and how it finished.</summary>
+    public sealed class CommandInvocation
+    {
+        readonly IDeferredJobs _jobs;
+
+        public CommandInvocation(string commandId, string command, int timeoutMs, IDeferredJobs jobs)
+        {
+            CommandId = commandId;
+            Command = command;
+            TimeoutMs = timeoutMs;
+            _jobs = jobs;
+        }
+
+        public string CommandId { get; }
+        public string Command { get; }
+        public int TimeoutMs { get; }
+
+        public bool IsCompleted { get; private set; }
+        public object Result { get; private set; }
+        public string Error { get; private set; }
+
+        /// <summary>True once a job exists for this run: it finishes through the job, not synchronously.</summary>
+        public bool HasJob => _jobs != null && _jobs.Has(CommandId);
+
+        /// <summary>Set by the executor once Run returned; completions after that go to the job.</summary>
+        public bool ReturnedFromRun { get; set; }
+
+        public void Succeed(object result)
+        {
+            if (IsCompleted)
+                return;
+
+            IsCompleted = true;
+            Result = result;
+            if (ReturnedFromRun && HasJob)
+                _jobs.Succeed(CommandId, result);
+        }
+
+        public void Fail(string error)
+        {
+            if (IsCompleted)
+                return;
+
+            IsCompleted = true;
+            Error = string.IsNullOrEmpty(error) ? "command_failed" : error;
+            if (ReturnedFromRun && HasJob)
+                _jobs.Fail(CommandId, Error);
+        }
+
+        public void MarkRunning()
+        {
+            if (HasJob)
+                _jobs.MarkRunning(CommandId);
+        }
+
+        public void Defer(string completionKind)
+        {
+            if (IsCompleted)
+                throw new InvalidOperationException($"'{Command}' already completed; it cannot defer.");
+            if (_jobs == null)
+                throw new InvalidOperationException($"'{Command}' cannot defer on this host.");
+
+            _jobs.Begin(CommandId, Command, completionKind, TimeoutMs);
+        }
+    }
+}

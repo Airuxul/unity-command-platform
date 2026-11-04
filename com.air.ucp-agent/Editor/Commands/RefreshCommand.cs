@@ -27,9 +27,7 @@ namespace Air.UcpAgent.Editor.Commands
                 }
 
                 // From here the job completes like `compile`, with the compile result.
-                EditorJobStateManager.SetCompletionKind(
-                    CommandId,
-                    InvokeCompletionCatalog.CompletionCompilation);
+                Defer(InvokeCompletionCatalog.CompletionCompilation);
                 ScriptCompilationService.RequestWithCompletion(CommandId);
             }
             catch (System.Exception ex)

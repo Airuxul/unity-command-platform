@@ -1,6 +1,10 @@
 import { expect } from "vitest";
-import { describeFailure, ensureUcpHost, executeCommand } from "#cli/client/ucp-host-client.js";
-import { DEFAULT_HOST_PORT } from "#shared/index.js";
+import {
+  describeFailure,
+  ensureUcpHost,
+  executeCommand,
+  hostFetch,
+} from "#cli/client/ucp-host-client.js";
 import type { CliResult } from "#shared/types.js";
 
 export interface EditorCommandCase {
@@ -430,10 +434,10 @@ export async function runEditorCommand(testCase: EditorCommandCase): Promise<Cli
   });
 }
 
-export async function hasReadyEditorSession(port = DEFAULT_HOST_PORT): Promise<boolean> {
+export async function hasReadyEditorSession(): Promise<boolean> {
   try {
     await ensureUcpHost({ ucpRoot: process.env.UCP_ROOT });
-    const res = await fetch(`http://127.0.0.1:${port}/sessions`);
+    const res = await hostFetch("/sessions");
     const body = (await res.json()) as {
       sessions?: Array<{ status?: string; type?: string }>;
     };

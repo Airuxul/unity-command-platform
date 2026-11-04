@@ -16,7 +16,7 @@
  * Everything lives under Assets/UcpSmoke and in an additive scratch scene, so the scene the user
  * has open is never closed or modified. Re-runnable: it clears leftovers before it starts.
  */
-import { describeFailure, executeCommandResilient } from "#cli/client/ucp-host-client.js";
+import { describeFailure, executeCommand } from "#cli/client/ucp-host-client.js";
 
 const FOLDER = "Assets/UcpSmoke";
 const PREFAB = `${FOLDER}/Smoke.prefab`;
@@ -41,7 +41,7 @@ function parseArgs(argv) {
 let project;
 
 async function run(type, args = {}, timeout = 60_000) {
-  return executeCommandResilient(type, { project, sessionType: "editor", timeout, args });
+  return executeCommand(type, { project, sessionType: "editor", timeout, args });
 }
 
 /** Runs a command, throwing the agent's own explanation if it refused. */

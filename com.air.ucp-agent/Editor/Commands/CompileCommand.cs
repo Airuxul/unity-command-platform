@@ -15,7 +15,7 @@ namespace Air.UcpAgent.Editor.Commands
             "Import changed files, then compile scripts (deferred)",
             InvokeCompletionCatalog.CompletionCompilation,
             aliases: new[] { "recompile", "reload" },
-            defaultTimeoutMs: 20000);
+            defaultTimeoutMs: 180_000);
 
         public override void Run(CompileParams p)
         {

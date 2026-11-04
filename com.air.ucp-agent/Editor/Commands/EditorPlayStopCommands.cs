@@ -13,7 +13,7 @@ namespace Air.UcpAgent.Editor.Commands
             CommandHostScope.Editor,
             "Enter Play Mode (deferred)",
             InvokeCompletionCatalog.CompletionEnterPlay,
-            defaultTimeoutMs: 20000);
+            defaultTimeoutMs: 120_000);
 
         public override void Run(PlayParams p)
         {
@@ -28,7 +28,7 @@ namespace Air.UcpAgent.Editor.Commands
             CommandHostScope.Editor,
             "Exit Play Mode (deferred)",
             InvokeCompletionCatalog.CompletionExitPlay,
-            defaultTimeoutMs: 20000);
+            defaultTimeoutMs: 120_000);
 
         public override void Run(StopParams p)
         {

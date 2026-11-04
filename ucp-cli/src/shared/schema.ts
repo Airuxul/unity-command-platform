@@ -49,6 +49,9 @@ export const ucpSessionSchema = z.object({
   host: z.string().optional(),
   runtimePort: z.number().optional(),
   queueId: z.string().optional(),
+  pid: z.number().int().positive().nullish(),
+  focused: z.boolean().nullish(),
+  defaultTimeouts: z.record(z.number()).nullish(),
 });
 
 export const ucpResultSchema = z.object({

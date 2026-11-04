@@ -141,7 +141,7 @@
         "recompile",
         "reload"
       ],
-      "default_timeout_ms": 20000,
+      "default_timeout_ms": 180000,
       "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout"
@@ -579,7 +579,7 @@
       "description": "Enter Play Mode (deferred)",
       "completion": "enter_play",
       "aliases": [],
-      "default_timeout_ms": 20000,
+      "default_timeout_ms": 120000,
       "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout (default: 20000)"
@@ -922,7 +922,7 @@
       "description": "Refresh AssetDatabase; use compile=true to request script compilation",
       "completion": null,
       "aliases": [],
-      "default_timeout_ms": 20000,
+      "default_timeout_ms": 180000,
       "allow_connection_retry": true,
       "params": [
         "--compile <bool> also trigger script compilation",
@@ -1120,7 +1120,7 @@
       "description": "Exit Play Mode (deferred)",
       "completion": "exit_play",
       "aliases": [],
-      "default_timeout_ms": 20000,
+      "default_timeout_ms": 120000,
       "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout (default: 20000)"

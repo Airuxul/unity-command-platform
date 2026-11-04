@@ -4,6 +4,7 @@ import type { Logger } from "../../logger/logger.js";
 export class RuntimeHttpAdapter {
   constructor(readonly logger: Logger) {}
 
+  /** Rejects with Error("timeout") after `command.timeout` ms. */
   async dispatch(session: UcpSession, command: UcpCommand): Promise<UcpResult> {
     const port = session.runtimePort;
     if (!port) {
@@ -30,6 +31,9 @@ export class RuntimeHttpAdapter {
         result.error = `http_${res.status}`;
       }
       return result;
+    } catch (err) {
+      if (controller.signal.aborted) throw new Error("timeout");
+      throw err;
     } finally {
       clearTimeout(timer);
     }

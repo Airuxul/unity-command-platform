@@ -13,7 +13,7 @@ namespace Air.UcpAgent.Editor.Commands
             CommandNames.Refresh,
             CommandHostScope.Editor,
             "Refresh AssetDatabase; use compile=true to request script compilation",
-            defaultTimeoutMs: 20000);
+            defaultTimeoutMs: 180_000);
 
         public override void Run(RefreshParams p)
         {

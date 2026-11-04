@@ -1,17 +1,18 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import {
-  DEFAULT_COMMAND_TIMEOUT_MS,
   DEFAULT_HOST_PORT,
-  createCommandId,
+  HOST_TOKEN_HEADER,
+  LONG_POLL_MAX_MS,
   ucpLayout,
   writeJsonAtomic,
 } from "#shared/index.js";
-import { submitCommandSchema, ucpSessionSchema } from "#shared/schema.js";
+import { submitCommandSchema } from "#shared/schema.js";
+import type { QueuedCommand } from "#shared/types.js";
+import type { CommandRunner } from "../commands/command-runner.js";
 import type { Logger } from "../logger/logger.js";
-import type { QueueService } from "../queue/queue-service.js";
-import type { SessionService } from "../session/session-service.js";
-import { probeAllTargets } from "../targets/target-probe.js";
+import { type SessionDirectory, probeAllTargets } from "../sessions/session-directory.js";
 
 function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -41,7 +42,16 @@ export function isLocalClientRequest(headers: http.IncomingHttpHeaders, port: nu
   return host === `127.0.0.1:${port}` || host === `localhost:${port}`;
 }
 
+/** Constant-time, so the token cannot be guessed a character at a time. */
+function tokenMatches(sent: string | string[] | undefined, token: string): boolean {
+  if (typeof sent !== "string") return false;
+  const a = Buffer.from(sent);
+  const b = Buffer.from(token);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
+  if (res.writableEnded || res.destroyed) return;
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json",
@@ -50,34 +60,52 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
   res.end(payload);
 }
 
+function commandBody(entry: QueuedCommand) {
+  return {
+    ok: true,
+    id: entry.command.id,
+    status: entry.status,
+    result: entry.result ?? null,
+    error: entry.error ?? null,
+    hint: entry.hint ?? null,
+    timing: entry.timing ?? null,
+  };
+}
+
 export interface UcpHostServerOptions {
-  queue: QueueService;
-  sessions: SessionService;
+  runner: CommandRunner;
+  sessions: SessionDirectory;
   logger: Logger;
   port?: number;
   ucpRoot?: string;
+  /** dist/build.json of the code this host runs; see readBuildId. */
+  build?: number;
+  /** Fixed in tests; random otherwise. */
+  token?: string;
 }
 
 export class UcpHostServer {
-  queue: QueueService;
-  sessions: SessionService;
-  logger: Logger;
-  port: number;
-  ucpRoot?: string;
+  readonly runner: CommandRunner;
+  readonly sessions: SessionDirectory;
+  readonly logger: Logger;
+  readonly port: number;
+  readonly ucpRoot?: string;
+  readonly build: number;
+  /**
+   * Any local process can reach 127.0.0.1, not only this user's. host.json lives in the user's
+   * home directory, so only the user (and their own processes) can read the token from it.
+   */
+  readonly token: string;
   server: http.Server | null = null;
 
-  constructor({
-    queue,
-    sessions,
-    logger,
-    port = DEFAULT_HOST_PORT,
-    ucpRoot,
-  }: UcpHostServerOptions) {
-    this.queue = queue;
-    this.sessions = sessions;
-    this.logger = logger;
-    this.port = port;
-    this.ucpRoot = ucpRoot;
+  constructor(options: UcpHostServerOptions) {
+    this.runner = options.runner;
+    this.sessions = options.sessions;
+    this.logger = options.logger;
+    this.port = options.port ?? DEFAULT_HOST_PORT;
+    this.ucpRoot = options.ucpRoot;
+    this.build = options.build ?? 0;
+    this.token = options.token ?? crypto.randomBytes(24).toString("hex");
   }
 
   start(): Promise<void> {
@@ -87,6 +115,9 @@ export class UcpHostServer {
         sendJson(res, 500, { ok: false, error: String(err) });
       });
     });
+    // Long polls hold a request for LONG_POLL_MAX_MS; keep Node from cutting them off first.
+    this.server.requestTimeout = 0;
+    this.server.headersTimeout = 60_000;
 
     return new Promise((resolve, reject) => {
       this.server?.listen(this.port, "127.0.0.1", () => {
@@ -95,9 +126,11 @@ export class UcpHostServer {
         writeJsonAtomic(layout.hostJson, {
           pid: process.pid,
           port: this.port,
+          build: this.build,
+          token: this.token,
           startedAt: new Date().toISOString(),
         });
-        this.logger.info("listening", { port: this.port });
+        this.logger.info("listening", { port: this.port, build: this.build });
         resolve();
       });
       this.server?.on("error", reject);
@@ -106,6 +139,7 @@ export class UcpHostServer {
 
   async stop(): Promise<void> {
     return new Promise((resolve) => {
+      this.server?.closeAllConnections?.();
       this.server?.close(() => resolve());
     });
   }
@@ -123,8 +157,24 @@ export class UcpHostServer {
       return;
     }
 
+    // Open, so a CLI can tell a stale host from a live one before it has read host.json.
     if (method === "GET" && url.pathname === "/health") {
-      sendJson(res, 200, { ok: true, pid: process.pid, port: this.port });
+      sendJson(res, 200, {
+        ok: true,
+        pid: process.pid,
+        port: this.port,
+        build: this.build,
+        busy: this.runner.busyCount(),
+      });
+      return;
+    }
+
+    if (!tokenMatches(req.headers[HOST_TOKEN_HEADER], this.token)) {
+      sendJson(res, 401, {
+        ok: false,
+        error: "unauthorized",
+        hint: `Send the token from host.json in the ${HOST_TOKEN_HEADER} header`,
+      });
       return;
     }
 
@@ -140,19 +190,18 @@ export class UcpHostServer {
     }
 
     if (method === "GET" && url.pathname.startsWith("/commands/")) {
-      const id = url.pathname.slice("/commands/".length);
-      const entry = this.queue.get(id);
+      const id = decodeURIComponent(url.pathname.slice("/commands/".length));
+      const requested = Number.parseInt(url.searchParams.get("wait") ?? "0", 10);
+      const waitMs = Number.isFinite(requested)
+        ? Math.min(Math.max(requested, 0), LONG_POLL_MAX_MS)
+        : 0;
+
+      const entry = await this.runner.wait(id, waitMs, (detach) => res.on("close", detach));
       if (!entry) {
         sendJson(res, 404, { ok: false, error: "not_found" });
         return;
       }
-      sendJson(res, 200, {
-        ok: true,
-        id: entry.command.id,
-        status: entry.status,
-        result: entry.result ?? null,
-        error: entry.error ?? null,
-      });
+      sendJson(res, 200, commandBody(entry));
       return;
     }
 
@@ -164,40 +213,17 @@ export class UcpHostServer {
         return;
       }
 
-      const body = parsed.data;
-      const session = this.sessions.resolve({
-        sessionId: body.session ?? body.target,
-        projectPath: body.project,
-        sessionType: body.sessionType,
+      const outcome = await this.runner.submit(parsed.data);
+      if (!outcome.ok) {
+        sendJson(res, 503, { ok: false, error: outcome.error, hint: outcome.hint });
+        return;
+      }
+      sendJson(res, 202, {
+        ok: true,
+        id: outcome.entry.command.id,
+        status: outcome.entry.status,
+        timeout: outcome.entry.command.timeout,
       });
-
-      if (!session) {
-        sendJson(res, 503, {
-          ok: false,
-          error: "no_ready_session",
-          hint: body.sessionType
-            ? `No ready ${body.sessionType} session for this project`
-            : "Open Unity Editor with com.air.ucp-agent installed",
-        });
-        return;
-      }
-
-      const sessionCheck = ucpSessionSchema.safeParse(session);
-      if (!sessionCheck.success) {
-        sendJson(res, 503, { ok: false, error: "invalid_session" });
-        return;
-      }
-
-      const timeout = body.timeout ?? DEFAULT_COMMAND_TIMEOUT_MS;
-      const command = {
-        id: createCommandId(),
-        type: body.type,
-        timeout,
-        args: body.args ?? {},
-      };
-
-      this.queue.enqueue(command, session.id);
-      sendJson(res, 202, { ok: true, id: command.id, status: "queued" });
       return;
     }
 

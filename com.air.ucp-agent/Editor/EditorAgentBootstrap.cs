@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.IO;
 using Air.UcpAgent.Protocol;
@@ -16,6 +17,9 @@ namespace Air.UcpAgent.Editor
         static readonly List<string> Capabilities =
             CommandRegistry.Capabilities(CommandRegistry.EditorHost, includeAliases: true);
 
+        static readonly Dictionary<string, int> DefaultTimeouts = BuildDefaultTimeouts();
+        static readonly int Pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+
         static string _projectId;
         static double _nextPoll;
         static double _nextHeartbeat;
@@ -27,6 +31,7 @@ namespace Air.UcpAgent.Editor
             _projectId = ProjectId.FromPath(GetProjectPath());
             UcpPaths.EnsureDirectory(UcpPaths.InboxDir(_projectId));
             UcpPaths.EnsureDirectory(UcpPaths.OutboxDir(_projectId));
+            RemoveLeftoverClaims();
             WriteSession("ready");
             EditorApplication.update += OnUpdate;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterReload;
@@ -73,6 +78,9 @@ namespace Air.UcpAgent.Editor
                 status = status,
                 capabilities = new List<string>(Capabilities),
                 updatedAt = DateTime.UtcNow.ToString("o"),
+                pid = Pid,
+                focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive,
+                defaultTimeouts = DefaultTimeouts,
             };
             UcpPaths.WriteJsonAtomic(
                 UcpPaths.SessionFile(_projectId),
@@ -102,25 +110,34 @@ namespace Air.UcpAgent.Editor
 
             foreach (var file in files)
             {
+                // Claimed by renaming: ucp-host withdraws a timed-out command by deleting x.json,
+                // so exactly one of the two wins and a withdrawn command never runs.
+                var claimed = Path.ChangeExtension(file, ClaimedExtension);
+                try
+                {
+                    File.Move(file, claimed);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // Withdrawn, or still being written; the next poll sees which.
+                    continue;
+                }
+
                 UcpCommand command;
                 try
                 {
-                    command = JsonConvert.DeserializeObject<UcpCommand>(File.ReadAllText(file));
+                    command = JsonConvert.DeserializeObject<UcpCommand>(File.ReadAllText(claimed));
                 }
-                catch (JsonException ex)
+                catch (Exception ex) when (ex is JsonException || ex is IOException)
                 {
                     Debug.LogWarning("[ucp-agent] dropping unreadable inbox command: " + ex.Message);
-                    TryDelete(file);
-                    continue;
-                }
-                catch (IOException)
-                {
+                    TryDelete(claimed);
                     continue;
                 }
 
                 if (command == null || string.IsNullOrEmpty(command.id))
                 {
-                    TryDelete(file);
+                    TryDelete(claimed);
                     continue;
                 }
 
@@ -136,8 +153,45 @@ namespace Air.UcpAgent.Editor
                         WriteOutbox(command.id, result);
                 }
 
-                TryDelete(file);
+                TryDelete(claimed);
             }
+        }
+
+        const string ClaimedExtension = ".claimed";
+
+        /// <summary>
+        /// A claim outlives its command only if Unity died mid-command: a domain reload never lands
+        /// inside PollInbox. Such a command is not run again.
+        /// </summary>
+        static void RemoveLeftoverClaims()
+        {
+            try
+            {
+                foreach (var file in Directory.GetFiles(UcpPaths.InboxDir(_projectId), "*" + ClaimedExtension))
+                    TryDelete(file);
+            }
+            catch (IOException)
+            {
+                // The host's stale-file sweep removes them later.
+            }
+        }
+
+        static Dictionary<string, int> BuildDefaultTimeouts()
+        {
+            var table = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in CommandRegistry.ForHost(CommandRegistry.EditorHost))
+            {
+                if (entry.DefaultTimeoutMs <= 0)
+                    continue;
+
+                foreach (var key in new[] { entry.Name }.Concat(entry.Aliases))
+                {
+                    if (!string.IsNullOrEmpty(key))
+                        table[key] = entry.DefaultTimeoutMs;
+                }
+            }
+
+            return table;
         }
 
         /// <summary>Writes the outbox of every deferred job that has finished, then forgets the job.</summary>

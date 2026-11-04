@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { probeAllTargets } from "#host/targets/target-probe.js";
+import { probeAllTargets } from "#host/sessions/session-directory.js";
 import { getTarget, loadTargets, removeTarget, upsertTarget } from "#shared/target-store.js";
 import type { EditorTarget, RuntimeTarget } from "#shared/types.js";
 import { fetchUcpHostStatus } from "../client/ucp-host-client.js";

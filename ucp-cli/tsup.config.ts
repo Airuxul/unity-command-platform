@@ -47,4 +47,11 @@ export default defineConfig({
   splitting: false,
   shims: false,
   esbuildPlugins: [ucpAliasPlugin()],
+  // The CLI restarts an idle ucp-host whose build id is older than this (see readBuildId).
+  onSuccess: async () => {
+    fs.writeFileSync(
+      path.join(__dirname, "dist", "build.json"),
+      `${JSON.stringify({ build: Date.now() })}\n`,
+    );
+  },
 });

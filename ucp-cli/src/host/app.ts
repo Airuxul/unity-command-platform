@@ -1,62 +1,69 @@
 import fs from "node:fs";
-import { DEFAULT_HOST_PORT, ucpLayout } from "#shared/index.js";
-import type { LogLevel } from "#shared/types.js";
+import { DEFAULT_HOST_PORT, readBuildId, ucpLayout } from "#shared/index.js";
+import type { LogLevel, UcpCommand, UcpSession } from "#shared/types.js";
 import { EditorFileQueueAdapter } from "./adapter/editor-file-queue/editor-file-queue-adapter.js";
 import { RuntimeHttpAdapter } from "./adapter/runtime-http/runtime-http-adapter.js";
-import { CapabilityRegistry } from "./capability/capability-registry.js";
-import { DiscoveryService } from "./discovery/discovery-service.js";
+import { CommandRunner, type Dispatch } from "./commands/command-runner.js";
 import { Logger } from "./logger/logger.js";
-import { QueueService } from "./queue/queue-service.js";
-import { TransportRouter } from "./router/transport-router.js";
-import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { UcpHostServer } from "./server/ucp-host-server.js";
-import { SessionService } from "./session/session-service.js";
+import { SessionDirectory } from "./sessions/session-directory.js";
 
 export interface UcpHostOptions {
   port?: number;
   ucpRoot?: string;
   logLevel?: LogLevel;
+  build?: number;
+  token?: string;
 }
 
 export interface UcpHost {
   logger: Logger;
-  sessions: SessionService;
-  queue: QueueService;
-  discovery: DiscoveryService;
-  scheduler: SchedulerService;
+  sessions: SessionDirectory;
+  runner: CommandRunner;
   server: UcpHostServer;
+  stop(): Promise<void>;
+}
+
+export function createDispatch(logger: Logger, ucpRoot?: string): Dispatch {
+  const editor = new EditorFileQueueAdapter(logger, ucpRoot);
+  const runtime = new RuntimeHttpAdapter(logger);
+  return (session: UcpSession, command: UcpCommand) =>
+    session.type === "editor"
+      ? editor.dispatch(session, command)
+      : runtime.dispatch(session, command);
 }
 
 export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHost> {
   const ucpRoot = options.ucpRoot;
-  const layout = ucpLayout(ucpRoot);
-  fs.mkdirSync(layout.root, { recursive: true });
+  fs.mkdirSync(ucpLayout(ucpRoot).root, { recursive: true });
 
   const logger = new Logger({ level: options.logLevel ?? "info" });
-  const sessions = new SessionService(logger);
-  const queue = new QueueService(logger);
-  const discovery = new DiscoveryService(sessions, logger, ucpRoot);
-  const capabilities = new CapabilityRegistry();
-  const editorAdapter = new EditorFileQueueAdapter(logger, ucpRoot);
-  const runtimeAdapter = new RuntimeHttpAdapter(logger);
-  const router = new TransportRouter({
-    capabilities,
-    editorAdapter,
-    runtimeAdapter,
-    logger,
-  });
-  const scheduler = new SchedulerService({ queue, router, sessions, logger });
+  const sessions = new SessionDirectory(logger, ucpRoot);
+  const runner = new CommandRunner(sessions, createDispatch(logger, ucpRoot), logger);
   const server = new UcpHostServer({
-    queue,
+    runner,
     sessions,
     logger,
     port: options.port ?? DEFAULT_HOST_PORT,
     ucpRoot,
+    build: options.build ?? readBuildId(),
+    token: options.token,
   });
 
-  discovery.start();
-  scheduler.start();
+  sessions.start();
+  await sessions.scan();
+  runner.start();
   await server.start();
 
-  return { logger, sessions, queue, discovery, scheduler, server };
+  return {
+    logger,
+    sessions,
+    runner,
+    server,
+    async stop() {
+      await server.stop();
+      runner.stop();
+      sessions.stop();
+    },
+  };
 }

@@ -1,13 +1,13 @@
-export type CommandStatus =
-  | "created"
-  | "queued"
-  | "dispatching"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "timeout";
+export type CommandStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "timeout";
 
+export const TERMINAL_STATUSES: readonly CommandStatus[] = [
+  "completed",
+  "failed",
+  "cancelled",
+  "timeout",
+];
+
+/** `busy`: an editor whose heartbeat stopped (importing, compiling, a modal dialog). */
 export type SessionStatus = "offline" | "ready" | "busy";
 
 export type SessionType = "editor" | "runtime";
@@ -39,6 +39,11 @@ export interface UcpSession {
   host?: string;
   runtimePort?: number;
   queueId?: string;
+  /** Editor process id; agents before 0.5 do not write it. */
+  pid?: number;
+  focused?: boolean;
+  /** Commands whose descriptor declares a default timeout, by name and alias. */
+  defaultTimeouts?: Record<string, number>;
 }
 
 export interface EditorTarget {
@@ -74,10 +79,26 @@ export interface QueuedCommand {
   status: CommandStatus;
   sessionId: string;
   result?: UcpResult;
+  /** Host-level failure code (timeout, no_ready_session, ...); the agent's own goes in result. */
   error?: string;
+  hint?: string;
   createdAt: number;
+  /** createdAt + timeout: time spent queued counts against the caller's timeout. */
+  deadline: number;
+  /** When it was handed to Unity. */
+  startedAt?: number;
   completedAt?: number;
-  attempts: number;
+  waitedForSession?: boolean;
+  timing?: CommandTiming;
+}
+
+/** Where a command's time went; see CommandRunner. */
+export interface CommandTiming {
+  total_ms: number;
+  queued_ms: number;
+  waited_for_session: boolean;
+  unity_ms?: number;
+  run_ms?: number;
 }
 
 export interface CliResult {
@@ -86,6 +107,7 @@ export interface CliResult {
   message?: string;
   error_code?: string;
   hint?: string;
+  timing?: CommandTiming;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";

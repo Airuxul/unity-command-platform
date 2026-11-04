@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { describeFailure, executeCommandResilient } from "#cli/client/ucp-host-client.js";
+import { describeFailure, executeCommand } from "#cli/client/ucp-host-client.js";
 import type { CliResult } from "#shared/types.js";
 import { gameDemoProjectPath } from "./editor-commands.js";
 
@@ -82,9 +82,8 @@ export async function run(
   args: Record<string, unknown> = {},
   timeout = 30_000,
 ): Promise<CliResult> {
-  // executeCommandResilient rides out the Editor going briefly unresponsive while it imports
-  // assets — a scheduling artefact that would otherwise make this suite flaky.
-  return executeCommandResilient(type, {
+  // A busy Editor (importing assets) is waited for by the host, so no retry is needed here.
+  return executeCommand(type, {
     project: gameDemoProjectPath(),
     sessionType: "editor",
     timeout,

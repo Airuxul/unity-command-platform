@@ -1,0 +1,353 @@
+import fs from "node:fs";
+import path from "node:path";
+import {
+  loadTargets,
+  projectIdFromPath,
+  readJsonFile,
+  sessionFilePath,
+  ucpLayout,
+} from "#shared/index.js";
+import { ucpSessionSchema } from "#shared/schema.js";
+import type {
+  EditorTarget,
+  RuntimeTarget,
+  SessionType,
+  UcpSession,
+  UcpTarget,
+  UcpTargetStatus,
+} from "#shared/types.js";
+import type { Logger } from "../logger/logger.js";
+
+/** The agent writes its session file every 2 s; past this the Editor is not ticking. */
+export const STALE_MS = 30_000;
+const PROBE_TIMEOUT_MS = 3_000;
+const WATCH_DEBOUNCE_MS = 100;
+const POLL_INTERVAL_MS = 2_000;
+
+export interface RuntimeHealthResponse {
+  ok?: boolean;
+  type?: string;
+  capabilities?: string[];
+  name?: string;
+  path?: string;
+  product?: string;
+}
+
+export interface SessionCriteria {
+  sessionId?: string;
+  projectPath?: string;
+  sessionType?: SessionType;
+}
+
+/** Whether a process exists. EPERM means it does, owned by someone else. */
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+export function discoverEditorTargetsFromSessions(ucpRoot?: string): EditorTarget[] {
+  const { sessionsDir } = ucpLayout(ucpRoot);
+  if (!fs.existsSync(sessionsDir)) return [];
+
+  const targets: EditorTarget[] = [];
+  for (const file of fs.readdirSync(sessionsDir).filter((f) => f.endsWith(".json"))) {
+    if (file.includes("-runtime")) continue;
+
+    const data = readJsonFile(path.join(sessionsDir, file));
+    const parsed = ucpSessionSchema.safeParse(data);
+    if (!parsed.success || parsed.data.type !== "editor") continue;
+
+    const session = parsed.data;
+    const queueId = file.replace(/\.json$/, "");
+    targets.push({
+      id: `editor-${queueId}`,
+      type: "editor",
+      name: session.name,
+      projectPath: session.path,
+      queueId,
+    });
+  }
+  return targets;
+}
+
+export function mergeTargets(configured: UcpTarget[], ucpRoot?: string): UcpTarget[] {
+  const result: UcpTarget[] = [...configured];
+  const configuredQueueIds = new Set(
+    configured
+      .filter((t): t is EditorTarget => t.type === "editor")
+      .map((t) => t.queueId ?? projectIdFromPath(t.projectPath)),
+  );
+
+  for (const auto of discoverEditorTargetsFromSessions(ucpRoot)) {
+    const queueId = auto.queueId ?? projectIdFromPath(auto.projectPath);
+    if (!configuredQueueIds.has(queueId)) {
+      result.push(auto);
+    }
+  }
+
+  return result;
+}
+
+export function listConfiguredAndDiscoveredTargets(ucpRoot?: string): UcpTarget[] {
+  return mergeTargets(loadTargets(ucpRoot), ucpRoot);
+}
+
+/**
+ * An editor whose heartbeat is late is `busy` while its process lives (importing, compiling, a
+ * modal dialog), and `offline` once it is gone. Agents before 0.5 write no pid, so a late one of
+ * theirs can only be called offline.
+ */
+export function readEditorSession(target: EditorTarget, ucpRoot?: string): UcpSession {
+  const queueId = target.queueId ?? projectIdFromPath(target.projectPath);
+  const parsed = ucpSessionSchema.safeParse(readJsonFile(sessionFilePath(queueId, ucpRoot)));
+  const base = {
+    id: target.id,
+    name: target.name ?? path.basename(target.projectPath),
+    path: target.projectPath,
+    type: "editor" as const,
+    queueId,
+    capabilities: [] as string[],
+    updatedAt: new Date().toISOString(),
+  };
+  if (!parsed.success) return { ...base, status: "offline" };
+
+  const file = parsed.data;
+  const updatedAt = Date.parse(file.updatedAt || "");
+  const fresh = Number.isFinite(updatedAt) && Date.now() - updatedAt <= STALE_MS;
+  const alive = file.pid ? isPidAlive(file.pid) : fresh;
+  const status =
+    file.status === "offline" || !alive
+      ? "offline"
+      : fresh && file.status === "ready"
+        ? "ready"
+        : "busy";
+
+  return {
+    ...base,
+    name: target.name ?? file.name,
+    path: target.projectPath,
+    status,
+    capabilities: file.capabilities ?? [],
+    updatedAt: file.updatedAt,
+    pid: file.pid ?? undefined,
+    focused: file.focused ?? undefined,
+    defaultTimeouts: file.defaultTimeouts ?? undefined,
+  };
+}
+
+export async function probeRuntimeTarget(target: RuntimeTarget): Promise<UcpTargetStatus> {
+  const now = new Date().toISOString();
+  const url = `http://${target.host}:${target.port}/health`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+    const body = (await res.json()) as RuntimeHealthResponse;
+    const ready = res.ok && body?.ok === true;
+
+    return {
+      target,
+      status: ready ? "ready" : "offline",
+      reachable: res.ok,
+      capabilities: Array.isArray(body?.capabilities) ? body.capabilities : [],
+      probedAt: now,
+      error: ready ? undefined : String(body?.type ?? "runtime_not_ready"),
+    };
+  } catch (err) {
+    return {
+      target,
+      status: "offline",
+      reachable: false,
+      capabilities: [],
+      probedAt: now,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function probeTarget(target: UcpTarget, ucpRoot?: string): Promise<UcpTargetStatus> {
+  if (target.type === "runtime") return probeRuntimeTarget(target);
+
+  const session = readEditorSession(target, ucpRoot);
+  return {
+    target,
+    status: session.status,
+    reachable: session.status !== "offline",
+    capabilities: session.capabilities,
+    probedAt: new Date().toISOString(),
+    error: session.status === "ready" ? undefined : `editor_${session.status}`,
+  };
+}
+
+export async function probeAllTargets(ucpRoot?: string): Promise<UcpTargetStatus[]> {
+  const targets = listConfiguredAndDiscoveredTargets(ucpRoot);
+  return Promise.all(targets.map((target) => probeTarget(target, ucpRoot)));
+}
+
+async function readSession(target: UcpTarget, ucpRoot?: string): Promise<UcpSession> {
+  if (target.type === "editor") return readEditorSession(target, ucpRoot);
+
+  const status = await probeRuntimeTarget(target);
+  return {
+    id: target.id,
+    name: target.name ?? `${target.host}:${target.port}`,
+    path: target.projectPath ?? "",
+    type: "runtime",
+    status: status.status,
+    capabilities: status.capabilities,
+    updatedAt: status.probedAt,
+    host: target.host,
+    runtimePort: target.port,
+  };
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").toLowerCase();
+}
+
+/**
+ * Every editor and runtime the host can reach, rescanned when a session file or targets.json
+ * changes (debounced) and every 2 s in case fs.watch misses an event.
+ */
+export class SessionDirectory {
+  #sessions = new Map<string, UcpSession>();
+  #listeners = new Set<() => void>();
+  #watchers: fs.FSWatcher[] = [];
+  #pollTimer: ReturnType<typeof setInterval> | null = null;
+  #debounce: ReturnType<typeof setTimeout> | null = null;
+  #scanning: Promise<void> | null = null;
+  #rescan = false;
+
+  constructor(
+    readonly logger: Logger,
+    readonly ucpRoot?: string,
+  ) {}
+
+  start(): void {
+    const { root, sessionsDir } = ucpLayout(this.ucpRoot);
+    fs.mkdirSync(sessionsDir, { recursive: true });
+    void this.scan();
+
+    const watch = (dir: string, accept: (name: string) => boolean) => {
+      try {
+        const watcher = fs.watch(dir, (_, name) => {
+          if (!name || accept(String(name))) this.#scheduleScan();
+        });
+        watcher.on("error", () => {});
+        this.#watchers.push(watcher);
+      } catch {
+        this.logger.warn("fs.watch unavailable; relying on the poll", { dir });
+      }
+    };
+    watch(sessionsDir, (name) => name.endsWith(".json"));
+    watch(root, (name) => name === "targets.json");
+
+    this.#pollTimer = setInterval(() => void this.scan(), POLL_INTERVAL_MS);
+  }
+
+  stop(): void {
+    for (const watcher of this.#watchers) watcher.close();
+    this.#watchers = [];
+    if (this.#pollTimer) clearInterval(this.#pollTimer);
+    if (this.#debounce) clearTimeout(this.#debounce);
+  }
+
+  /** Rereads everything; a call during a scan runs one more scan after it. */
+  scan(): Promise<void> {
+    if (this.#scanning) {
+      this.#rescan = true;
+      return this.#scanning;
+    }
+    this.#scanning = (async () => {
+      try {
+        do {
+          this.#rescan = false;
+          const targets = listConfiguredAndDiscoveredTargets(this.ucpRoot);
+          const sessions = await Promise.all(targets.map((t) => readSession(t, this.ucpRoot)));
+          this.#sessions = new Map(sessions.map((s) => [s.id, s]));
+          for (const listener of this.#listeners) listener();
+        } while (this.#rescan);
+      } catch (err) {
+        this.logger.warn("session scan failed", { error: String(err) });
+      } finally {
+        this.#scanning = null;
+      }
+    })();
+    return this.#scanning;
+  }
+
+  #scheduleScan(): void {
+    if (this.#debounce) clearTimeout(this.#debounce);
+    this.#debounce = setTimeout(() => {
+      this.#debounce = null;
+      void this.scan();
+    }, WATCH_DEBOUNCE_MS);
+  }
+
+  /** Called after every scan. Returns the unsubscribe. */
+  onChange(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  /**
+   * Rereads one session now. A runtime has no session file to watch, so between polls its cached
+   * state can be up to 2 s old, e.g. still "ready" just after play mode stopped.
+   */
+  async refresh(id: string): Promise<UcpSession | null> {
+    const target = listConfiguredAndDiscoveredTargets(this.ucpRoot).find((t) => t.id === id);
+    if (!target) return this.get(id);
+    const session = await readSession(target, this.ucpRoot);
+    this.#sessions.set(id, session);
+    for (const listener of this.#listeners) listener();
+    return session;
+  }
+
+  /** Test hook: replaces what the last scan found. */
+  set(sessions: UcpSession[]): void {
+    this.#sessions = new Map(sessions.map((s) => [s.id, s]));
+    for (const listener of this.#listeners) listener();
+  }
+
+  list(): UcpSession[] {
+    return [...this.#sessions.values()];
+  }
+
+  get(id: string): UcpSession | null {
+    return this.#sessions.get(id) ?? null;
+  }
+
+  /**
+   * Picks the session a submit is meant for among those `accept` lets through. With a project and
+   * no session type the editor wins; otherwise the choice must be unambiguous.
+   */
+  resolve(criteria: SessionCriteria, accept: (s: UcpSession) => boolean): UcpSession | null {
+    if (criteria.sessionId) {
+      const found = this.get(criteria.sessionId);
+      return found && accept(found) ? found : null;
+    }
+
+    const candidates = this.list().filter(accept);
+
+    if (criteria.projectPath) {
+      const normalized = normalizePath(criteria.projectPath);
+      const matches = candidates.filter((s) => normalizePath(s.path) === normalized);
+      if (criteria.sessionType) {
+        return matches.find((s) => s.type === criteria.sessionType) ?? null;
+      }
+      const editor = matches.find((s) => s.type === "editor");
+      if (editor) return editor;
+      return matches.length === 1 ? matches[0] : null;
+    }
+
+    if (criteria.sessionType) {
+      const typed = candidates.filter((s) => s.type === criteria.sessionType);
+      return typed.length === 1 ? typed[0] : null;
+    }
+
+    return candidates.length === 1 ? candidates[0] : null;
+  }
+}

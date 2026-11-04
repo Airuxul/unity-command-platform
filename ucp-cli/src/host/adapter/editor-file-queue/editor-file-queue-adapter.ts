@@ -22,6 +22,7 @@ export class EditorFileQueueAdapter {
     readonly ucpRoot?: string,
   ) {}
 
+  /** Rejects with Error("timeout") after `command.timeout` ms. */
   async dispatch(session: UcpSession, command: UcpCommand): Promise<UcpResult> {
     const queueId = session.queueId ?? session.id;
     const layout = queueLayout(queueId, this.ucpRoot);
@@ -37,34 +38,15 @@ export class EditorFileQueueAdapter {
     this.logger.debug("editor adapter enqueued", { id: command.id, inbox: inboxPath });
 
     try {
-      return await this.#waitForOutbox(outboxPath, command.timeout);
+      return await waitForFile(layout.outbox, `${command.id}.json`, command.timeout);
     } finally {
-      // Inbox first: the agent runs any inbox file that has no outbox, so removing the outbox
-      // first would let it run the command again. On timeout this also withdraws a command the
-      // agent has not picked up yet, so it cannot run after the caller gave up.
+      // The agent claims a command by renaming x.json to x.claimed before running it, so this
+      // either withdraws a command it has not picked up yet or finds it already claimed: never
+      // both. Inbox first anyway, for agents before 0.5, which run any inbox file without an
+      // outbox and would run it again if the outbox went first.
       removeFile(inboxPath);
       removeFile(outboxPath);
     }
-  }
-
-  #waitForOutbox(outboxPath: string, timeoutMs: number): Promise<UcpResult> {
-    const started = Date.now();
-    return new Promise((resolve, reject) => {
-      const tick = () => {
-        const elapsed = Date.now() - started;
-        if (elapsed >= timeoutMs) {
-          reject(new Error("timeout"));
-          return;
-        }
-        const data = readJsonFile(outboxPath);
-        if (data && isUcpResult(data)) {
-          resolve(data);
-          return;
-        }
-        setTimeout(tick, OUTBOX_POLL_INTERVAL_MS);
-      };
-      tick();
-    });
   }
 
   /** Removes results that arrived after their caller timed out, and inbox files nobody claimed. */
@@ -84,6 +66,39 @@ export class EditorFileQueueAdapter {
       }
     }
   }
+}
+
+/** Watches for the result file; the poll backs up fs.watch, which can miss or merge events. */
+function waitForFile(dir: string, name: string, timeoutMs: number): Promise<UcpResult> {
+  const file = path.join(dir, name);
+  return new Promise((resolve, reject) => {
+    let watcher: fs.FSWatcher | null = null;
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      watcher?.close();
+      fn();
+    };
+    const check = () => {
+      const data = readJsonFile(file);
+      if (data && isUcpResult(data)) settle(() => resolve(data));
+    };
+
+    const poll = setInterval(check, OUTBOX_POLL_INTERVAL_MS);
+    const timer = setTimeout(() => settle(() => reject(new Error("timeout"))), timeoutMs);
+    try {
+      watcher = fs.watch(dir, (_, changed) => {
+        if (!changed || String(changed) === name) check();
+      });
+      watcher.on("error", () => {});
+    } catch {
+      // Poll only.
+    }
+    check();
+  });
 }
 
 function removeFile(file: string): void {

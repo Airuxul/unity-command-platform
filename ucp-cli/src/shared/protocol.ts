@@ -4,6 +4,9 @@ export const DEFAULT_HOST_PORT = 6610;
 export const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 export const HOST_START_TIMEOUT_MS = 15_000;
 export const OUTBOX_POLL_INTERVAL_MS = 100;
+/** Longest a GET /commands/:id?wait= is held open; well under fetch's 300 s headers timeout. */
+export const LONG_POLL_MAX_MS = 25_000;
+export const HOST_TOKEN_HEADER = "x-ucp-token";
 
 export function createCommandId(prefix = "cmd"): string {
   const rand = Math.random().toString(36).slice(2, 10);

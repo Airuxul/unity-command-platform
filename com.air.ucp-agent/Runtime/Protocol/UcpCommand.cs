@@ -30,5 +30,14 @@ namespace Air.UcpAgent.Protocol
         public List<string> capabilities = new List<string>();
         public string updatedAt;
         public int runtimePort;
+
+        /// <summary>Lets ucp-host tell a busy Editor (wait for it) from one that has exited (fail).</summary>
+        public int pid;
+
+        /// <summary>Unity ticks about 10 times a second in the background; ucp-host says so on a timeout.</summary>
+        public bool focused;
+
+        /// <summary>Commands that declare a default timeout, by name and alias; used when the caller sets none.</summary>
+        public Dictionary<string, int> defaultTimeouts;
     }
 }

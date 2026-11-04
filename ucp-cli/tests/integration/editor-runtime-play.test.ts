@@ -63,8 +63,18 @@ describe.skipIf(!runEditorTests)("editor + runtime play workflow (Unity required
       "./__snapshots__/catalog.runtime.json",
     );
 
-    const stop = await runUcpCommand("stop", { sessionType: "editor", timeout: 60_000 });
+    // Sessions run side by side, so a runtime command can overlap the editor's stop. It has to
+    // answer or fail cleanly, not hang until its timeout once the runtime listener goes away.
+    const [stop, overlapping] = await Promise.all([
+      runUcpCommand("stop", { sessionType: "editor", timeout: 60_000 }),
+      runUcpCommand("echo", {
+        sessionType: "runtime",
+        args: { message: "during-stop" },
+        timeout: 20_000,
+      }),
+    ]);
     expect(stop.ok).toBe(true);
+    expect(overlapping.error_code).not.toBe("timeout");
 
     await waitForPlayMode("edit", 60_000);
     await waitForRuntimeSessionAbsent(undefined, 60_000);

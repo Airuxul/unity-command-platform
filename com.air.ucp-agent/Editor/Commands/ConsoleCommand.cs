@@ -36,11 +36,13 @@ namespace Air.UcpAgent.Editor.Commands
                 TypeFilter = p.Type ?? "error,warning",
                 MaxEntries = p.Lines,
                 Stacktrace = stacktrace,
-            });
+            }, out var matched);
 
             var data = new Dictionary<string, object>
             {
                 ["count"] = entries.Count,
+                ["matched"] = matched,
+                ["truncated"] = matched > entries.Count,
                 ["entries"] = entries,
                 ["types"] = p.Type ?? "error,warning",
                 ["stacktrace"] = stacktrace,

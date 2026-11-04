@@ -62,13 +62,17 @@ namespace Air.UcpAgent.Editor.Services
             _clear.Invoke(null, null);
         }
 
-        public static List<Dictionary<string, object>> Read(ConsoleReadOptions options)
+        /// <param name="matched">Distinct entries that passed the filter, before the limit.</param>
+        public static List<Dictionary<string, object>> Read(ConsoleReadOptions options, out int matched)
         {
             EnsureReady();
             var types = ParseTypes(options.TypeFilter);
             var stacktrace = (options.Stacktrace ?? "user").ToLowerInvariant();
             var max = options.MaxEntries;
+            // A log line repeated every frame would otherwise fill the whole limit with copies.
+            // Identical entries are merged where they first appear and counted.
             var entries = new List<Dictionary<string, object>>();
+            var byKey = new Dictionary<string, Dictionary<string, object>>();
 
             try
             {
@@ -88,11 +92,22 @@ namespace Air.UcpAgent.Editor.Services
                     if (!WantsType(types, logType))
                         continue;
 
+                    var type = LogTypeToString(logType);
+                    var formatted = FormatMessage(message, stacktrace);
+                    var key = type + "\n" + formatted;
+                    if (byKey.TryGetValue(key, out var seen))
+                    {
+                        seen["count"] = (int)seen["count"] + 1;
+                        continue;
+                    }
+
                     var item = new Dictionary<string, object>
                     {
-                        ["type"] = LogTypeToString(logType),
-                        ["message"] = FormatMessage(message, stacktrace),
+                        ["type"] = type,
+                        ["message"] = formatted,
+                        ["count"] = 1,
                     };
+                    byKey[key] = item;
 
                     if (_fileField != null)
                     {
@@ -109,8 +124,6 @@ namespace Air.UcpAgent.Editor.Services
                     }
 
                     entries.Add(item);
-                    if (max.HasValue && entries.Count >= max.Value)
-                        break;
                 }
             }
             finally
@@ -124,6 +137,11 @@ namespace Air.UcpAgent.Editor.Services
                     // ignored
                 }
             }
+
+            // The limit keeps the newest entries: the oldest ones are rarely what a caller is after.
+            matched = entries.Count;
+            if (max.HasValue && max.Value >= 0 && entries.Count > max.Value)
+                entries.RemoveRange(0, entries.Count - max.Value);
 
             return entries;
         }

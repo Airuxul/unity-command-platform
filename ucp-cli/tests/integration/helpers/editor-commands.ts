@@ -52,7 +52,11 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     assert: (r) => {
       expect(r.ok).toBe(true);
       const data = r.data as Record<string, unknown> | null;
-      expect(Array.isArray(data?.entries)).toBe(true);
+      const entries = data?.entries as Array<Record<string, unknown>>;
+      expect(entries.length).toBeLessThanOrEqual(5);
+      // Repeats are merged, so each entry carries how many times it was logged.
+      for (const entry of entries) expect(Number(entry.count)).toBeGreaterThanOrEqual(1);
+      expect(data?.truncated).toBe(Number(data?.matched) > entries.length);
     },
   },
   {

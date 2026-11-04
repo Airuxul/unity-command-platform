@@ -51,7 +51,7 @@ namespace Air.UcpAgent
                     TypeFilter = "error,warning",
                     MaxEntries = 5,
                     Stacktrace = "none",
-                });
+                }, out _);
                 manifest["recent_console"] = entries;
                 manifest["recent_console_count"] = entries.Count;
             }

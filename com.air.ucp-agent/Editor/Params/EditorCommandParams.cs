@@ -133,7 +133,7 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "log types to fetch", AllowedValues = "error|warning|log")]
         public string Type { get; set; } = "error,warning";
 
-        [CliParam(Description = "max entries", AlternateKeys = "count")]
+        [CliParam(Description = "max entries, newest kept; identical entries are merged and counted", AlternateKeys = "count")]
         public int? Lines { get; set; }
 
         [CliParam(Description = "clear the console")]

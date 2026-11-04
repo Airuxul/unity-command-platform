@@ -10,7 +10,6 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Implemented stack and data flow |
 | [MAINTENANCE.md](MAINTENANCE.md) | Extend commands, bump versions, tests |
 | [AGENTS.md](AGENTS.md) | Agent / automation entry |
-| [TODO.md](TODO.md) | Backlog (English) |
 | [../TODO.zh-CN.md](../TODO.zh-CN.md) | Backlog (Chinese) |
 | [RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md) | FileQueue reliability (Chinese) |
 | [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | How to maintain docs |

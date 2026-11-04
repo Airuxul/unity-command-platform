@@ -21,8 +21,7 @@ This file is the agent entrypoint for **this** repository (`ucp-cli` + `com.air.
 |------|----------|
 | [README.md](../README.md) | English |
 | [README.zh-CN.md](../README.zh-CN.md) | Chinese |
-| [TODO.zh-CN.md](../TODO.zh-CN.md) | Chinese backlog |
-| [docs/TODO.md](TODO.md) | English backlog |
+| [TODO.zh-CN.md](../TODO.zh-CN.md) | Backlog (Chinese, the only TODO doc) |
 
 ## Agent documentation
 

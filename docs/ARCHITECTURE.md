@@ -114,4 +114,4 @@ dispatch like real names.
 - Real `build` pipeline (skeleton command)
 - Cloud / SSH / ADB adapters (architecture §13)
 - Test Runner and Package Manager commands — both are async and need the deferred-job pipeline
-  (`docs/TODO.md` AGENT-05 / AGENT-06)
+  (`TODO.zh-CN.md` AGENT-05 / AGENT-06)

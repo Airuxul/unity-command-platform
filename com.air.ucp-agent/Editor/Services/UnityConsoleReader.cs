@@ -20,7 +20,11 @@ namespace Air.UcpAgent.Editor.Services
         private static FieldInfo _fileField;
         private static FieldInfo _lineField;
         private static Type _logEntryType;
+        private static PropertyInfo _consoleFlags;
         private static string _initError;
+
+        // ConsoleWindow.ConsoleFlags LogLevelLog | LogLevelWarning | LogLevelError.
+        private const int ShowAllLevels = (1 << 7) | (1 << 8) | (1 << 9);
 
         static UnityConsoleReader()
         {
@@ -38,6 +42,8 @@ namespace Air.UcpAgent.Editor.Services
                 _clear = RequireMethod(logEntriesType, "Clear", sf);
                 _getCount = RequireMethod(logEntriesType, "GetCount", sf);
                 _getEntry = RequireMethod(logEntriesType, "GetEntryInternal", sf);
+                // Optional: without it the read sees only the levels the Console window shows.
+                _consoleFlags = logEntriesType.GetProperty("consoleFlags", sf);
 
                 _logEntryType = editorAssembly.GetType("UnityEditor.LogEntry")
                     ?? throw new InvalidOperationException("UnityEditor.LogEntry not found");
@@ -73,6 +79,14 @@ namespace Air.UcpAgent.Editor.Services
             // Identical entries are merged where they first appear and counted.
             var entries = new List<Dictionary<string, object>>();
             var byKey = new Dictionary<string, Dictionary<string, object>>();
+
+            // LogEntries only lists the levels toggled on in the Console window; with the warning
+            // toggle off, type=warning returned nothing. Turned on for the read, then restored.
+            var savedFlags = (int?)_consoleFlags?.GetValue(null);
+            if (savedFlags.HasValue && (savedFlags.Value & ShowAllLevels) != ShowAllLevels)
+                _consoleFlags.SetValue(null, savedFlags.Value | ShowAllLevels);
+            else
+                savedFlags = null;
 
             try
             {
@@ -136,6 +150,9 @@ namespace Air.UcpAgent.Editor.Services
                 {
                     // ignored
                 }
+
+                if (savedFlags.HasValue)
+                    _consoleFlags.SetValue(null, savedFlags.Value);
             }
 
             // The limit keeps the newest entries: the oldest ones are rarely what a caller is after.
@@ -194,6 +211,7 @@ namespace Air.UcpAgent.Editor.Services
         {
             switch (mode)
             {
+                case "all":
                 case "full":
                     return message;
                 case "user":

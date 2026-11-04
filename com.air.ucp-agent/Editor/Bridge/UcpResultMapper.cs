@@ -44,7 +44,7 @@ namespace Air.UcpAgent.Editor.Bridge
 
             if (job.Status == InvokeJobStatus.Succeeded)
             {
-                var (data, code, message) = Unwrap(job.Result);
+                var (data, code, message) = Unwrap(job.Result ?? FromJson(job.ResultJson));
                 return new UcpResult
                 {
                     id = commandId,
@@ -71,6 +71,31 @@ namespace Air.UcpAgent.Editor.Bridge
                 return (invoke.Payload, invoke.Code, invoke.Message);
 
             return (result, null, null);
+        }
+
+        /// <summary>
+        /// A job that finished just before a domain reload comes back with only ResultJson. An
+        /// InvokeResult serialised there is turned back into one so its payload is not nested.
+        /// </summary>
+        static object FromJson(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            var token = JToken.Parse(json);
+            if (token is JObject obj && obj.ContainsKey(nameof(InvokeResult.Payload)))
+            {
+                return new InvokeResult
+                {
+                    Code = (string)obj[nameof(InvokeResult.Code)],
+                    Message = (string)obj[nameof(InvokeResult.Message)],
+                    Payload = obj[nameof(InvokeResult.Payload)] is { Type: not JTokenType.Null } payload
+                        ? payload
+                        : null,
+                };
+            }
+
+            return token;
         }
 
         static Dictionary<string, object> ToDictionary(object value)

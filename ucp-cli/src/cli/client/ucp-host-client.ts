@@ -171,8 +171,7 @@ export function describeFailure(result: CliResult): string {
  * Submit-time failures that mean "Unity is momentarily not answering", not "the command is wrong".
  * The Editor stops ticking while it imports assets, so its heartbeat stops too; once it is
  * `STALE_MS` behind, the host rejects at submit (see host/targets/target-probe.ts and
- * host/server/ucp-host-server.ts). The host's RetryPolicy only covers dispatch of an already-queued
- * command, so nothing retries this today.
+ * host/server/ucp-host-server.ts). Nothing in the host retries this.
  */
 const TRANSIENT_SUBMIT_ERRORS = new Set(["no_ready_session", "invalid_session", "failed"]);
 

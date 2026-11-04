@@ -2,8 +2,11 @@ namespace Air.UcpAgent.Params
 {
     public sealed class ReserializeParams
     {
-        [CliParam(Description = "comma-separated asset paths (omit for whole project)", AlternateKeys = "path")]
+        [CliParam(Description = "comma-separated asset paths", AlternateKeys = "path")]
         public string Paths { get; set; }
+
+        [CliParam(Description = "reserialize the entire project (required when paths is empty)")]
+        public bool All { get; set; }
     }
 
     public sealed class MenuParams

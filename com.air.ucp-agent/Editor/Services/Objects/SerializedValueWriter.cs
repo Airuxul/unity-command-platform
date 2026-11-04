@@ -134,6 +134,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             context ??= new Context();
             var where = property.propertyPath;
+            RequireNotTruncated(value, where);
 
             switch (property.propertyType)
             {
@@ -257,6 +258,15 @@ namespace Air.UcpAgent.Editor.Services.Objects
             }
         }
 
+        static void RequireNotTruncated(JToken value, string where)
+        {
+            if (value is JObject obj && obj.ContainsKey(SerializedValueReader.TruncatedKey))
+            {
+                throw new ArgumentException(
+                    $"Value for '{where}' is a truncated read ({obj[SerializedValueReader.TruncatedHintKey]}); read it again in full before writing it back.");
+            }
+        }
+
         static void WriteGeneric(SerializedProperty property, JToken value, Context context)
         {
             if (property.isArray)
@@ -266,6 +276,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     throw new ArgumentException(
                         $"Property '{property.propertyPath}' is an array; value must be a JSON array.");
                 }
+
+                // Checked before resizing: writing a truncated read back would silently drop the tail.
+                foreach (var element in array)
+                    RequireNotTruncated(element, property.propertyPath);
 
                 property.arraySize = array.Count;
                 for (var i = 0; i < array.Count; i++)

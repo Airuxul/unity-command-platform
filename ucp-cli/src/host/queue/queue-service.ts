@@ -1,12 +1,16 @@
 import type { CommandStatus, QueuedCommand, UcpCommand, UcpResult } from "#shared/types.js";
 import type { Logger } from "../logger/logger.js";
 
+/** How long a finished command stays readable by GET /commands/:id; the CLI polls it within ms. */
+export const FINISHED_RETENTION_MS = 10 * 60_000;
+
 export class QueueService {
   #commands = new Map<string, QueuedCommand>();
 
   constructor(readonly logger: Logger) {}
 
   enqueue(command: UcpCommand, sessionId: string): QueuedCommand {
+    this.#pruneFinished(Date.now());
     const entry: QueuedCommand = {
       command,
       status: "queued",
@@ -46,6 +50,14 @@ export class QueueService {
       entry.completedAt = Date.now();
     }
     return entry;
+  }
+
+  #pruneFinished(now: number): void {
+    for (const [id, entry] of this.#commands) {
+      if (entry.completedAt !== undefined && now - entry.completedAt > FINISHED_RETENTION_MS) {
+        this.#commands.delete(id);
+      }
+    }
   }
 
   incrementAttempts(id: string): QueuedCommand | null {

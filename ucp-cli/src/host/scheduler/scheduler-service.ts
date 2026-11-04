@@ -1,6 +1,6 @@
+import type { UcpResult } from "#shared/types.js";
 import type { Logger } from "../logger/logger.js";
 import type { QueueService } from "../queue/queue-service.js";
-import type { RetryPolicy } from "../retry/retry-policy.js";
 import type { TransportRouter } from "../router/transport-router.js";
 import type { SessionService } from "../session/session-service.js";
 
@@ -8,7 +8,6 @@ export interface SchedulerServiceDeps {
   queue: QueueService;
   router: TransportRouter;
   sessions: SessionService;
-  retry: RetryPolicy;
   logger: Logger;
 }
 
@@ -16,15 +15,13 @@ export class SchedulerService {
   readonly queue: QueueService;
   readonly router: TransportRouter;
   readonly sessions: SessionService;
-  readonly retry: RetryPolicy;
   readonly logger: Logger;
   running = false;
 
-  constructor({ queue, router, sessions, retry, logger }: SchedulerServiceDeps) {
+  constructor({ queue, router, sessions, logger }: SchedulerServiceDeps) {
     this.queue = queue;
     this.router = router;
     this.sessions = sessions;
-    this.retry = retry;
     this.logger = logger;
   }
 
@@ -64,22 +61,32 @@ export class SchedulerService {
 
     try {
       this.queue.updateStatus(commandId, "running");
-      const result = await this.retry.executeWithTimeout(entry.command.timeout, () =>
+      const result = await withTimeout(entry.command.timeout, () =>
         this.router.route(session, entry.command),
       );
       this.queue.updateStatus(commandId, "completed", { result });
       this.logger.info("command completed", { id: commandId, type: entry.command.type });
     } catch (err) {
+      // Never re-dispatched: a timed-out command may still be running in Unity, and a second
+      // dispatch would run a non-idempotent command (gameobject_create, asset_delete, exec) twice.
       const message = err instanceof Error ? err.message : String(err);
-      if (message === "timeout" && this.retry.shouldRetry(entry.attempts)) {
-        this.logger.warn("command timeout, retrying", { id: commandId, attempts: entry.attempts });
-        await this.retry.waitBeforeRetry(entry.attempts);
-        this.queue.updateStatus(commandId, "queued");
-        return;
-      }
       const status = message === "timeout" ? "timeout" : "failed";
       this.queue.updateStatus(commandId, status, { error: message });
       this.logger.error("command failed", { id: commandId, error: message });
     }
+  }
+}
+
+async function withTimeout(timeoutMs: number, fn: () => Promise<UcpResult>): Promise<UcpResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<UcpResult>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

@@ -21,6 +21,10 @@ namespace Air.UcpAgent.Editor.Services
 
             if (paths.Length == 0)
             {
+                // Rewrites every asset file in the project; a forgotten 'paths' must not do that.
+                if (!p.All)
+                    throw new ArgumentException("Pass 'paths', or all=true to reserialize the entire project.");
+
                 AssetDatabase.ForceReserializeAssets();
                 UcpLog.Log("[ucp-agent] ForceReserializeAssets: entire project");
                 return new Dictionary<string, object>

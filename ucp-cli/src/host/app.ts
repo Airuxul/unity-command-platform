@@ -7,7 +7,6 @@ import { CapabilityRegistry } from "./capability/capability-registry.js";
 import { DiscoveryService } from "./discovery/discovery-service.js";
 import { Logger } from "./logger/logger.js";
 import { QueueService } from "./queue/queue-service.js";
-import { RetryPolicy } from "./retry/retry-policy.js";
 import { TransportRouter } from "./router/transport-router.js";
 import { SchedulerService } from "./scheduler/scheduler-service.js";
 import { UcpHostServer } from "./server/ucp-host-server.js";
@@ -46,8 +45,7 @@ export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHo
     runtimeAdapter,
     logger,
   });
-  const retry = new RetryPolicy();
-  const scheduler = new SchedulerService({ queue, router, sessions, retry, logger });
+  const scheduler = new SchedulerService({ queue, router, sessions, logger });
   const server = new UcpHostServer({
     queue,
     sessions,

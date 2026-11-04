@@ -65,7 +65,8 @@ describe.skipIf(!runEditorTests)("batch edits (Unity required)", () => {
     ]);
 
     const info = await ok("gameobject_info", { prefab: PREFAB, node: "Batch/Card" });
-    expect(info.components).toContain("Image");
+    const types = (info.components as Array<{ type: string }>).map((c) => c.type);
+    expect(types).toContain("Image");
   });
 
   it("keeps nothing when an op fails, and says which one", async () => {

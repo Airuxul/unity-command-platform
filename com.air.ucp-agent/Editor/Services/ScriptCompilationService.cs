@@ -32,15 +32,10 @@ namespace Air.UcpAgent.Editor.Services
             _compilationContext = null;
         }
 
-        public static void RequestWithCompletion(
-            string commandId,
-            Action<object> completeSuccess,
-            Action<string> completeFail = null)
+        public static void RequestWithCompletion(string commandId)
         {
             if (string.IsNullOrEmpty(commandId))
                 throw new ArgumentException("commandId is required", nameof(commandId));
-            if (completeSuccess == null)
-                throw new ArgumentNullException(nameof(completeSuccess));
 
             _activeCommandId = commandId;
             _compilationContext = null;

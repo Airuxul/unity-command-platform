@@ -58,8 +58,7 @@ namespace Air.UcpAgent.Editor
                 WriteSession("ready");
             }
 
-            if (PendingDeferredCommands.HasPending)
-                PendingDeferredCommands.Tick();
+            DeliverFinishedJobs();
 
             if (now < _nextPoll)
                 return;
@@ -112,23 +111,75 @@ namespace Air.UcpAgent.Editor
                 {
                     command = JsonConvert.DeserializeObject<UcpCommand>(File.ReadAllText(file));
                 }
-                catch (Exception ex)
+                catch (JsonException ex)
                 {
-                    Debug.LogWarning("[ucp-agent] failed to read inbox command: " + ex.Message);
+                    Debug.LogWarning("[ucp-agent] dropping unreadable inbox command: " + ex.Message);
+                    TryDelete(file);
+                    continue;
+                }
+                catch (IOException)
+                {
                     continue;
                 }
 
                 if (command == null || string.IsNullOrEmpty(command.id))
+                {
+                    TryDelete(file);
                     continue;
+                }
 
+                // An inbox file is only ever executed once. Before this, a deferred command's file
+                // stayed in the inbox, and the first poll after a domain reload ran it again.
                 var outbox = UcpPaths.OutboxFile(_projectId, command.id);
-                if (File.Exists(outbox))
-                    continue;
+                if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
+                {
+                    if (TryExecute(command, out var result) && result != null)
+                        WriteOutbox(command.id, result);
+                }
 
-                if (!TryExecute(command, out var result) || result == null)
-                    continue;
+                TryDelete(file);
+            }
+        }
 
-                UcpPaths.WriteJsonAtomic(outbox, JsonConvert.SerializeObject(result, Formatting.Indented));
+        /// <summary>Writes the outbox of every deferred job that has finished, then forgets the job.</summary>
+        static void DeliverFinishedJobs()
+        {
+            foreach (var job in EditorJobStateManager.FinishedJobs())
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(job.RequestId))
+                        WriteOutbox(job.RequestId, UcpResultMapper.FromJob(job.RequestId, job));
+                }
+                catch (Exception ex)
+                {
+                    // Kept, so the next frame tries again.
+                    Debug.LogWarning($"[ucp-agent] could not deliver result of '{job.Command}': {ex.Message}");
+                    continue;
+                }
+
+                EditorJobStateManager.Remove(job.Id);
+            }
+        }
+
+        static void WriteOutbox(string commandId, UcpResult result) =>
+            UcpPaths.WriteJsonAtomic(
+                UcpPaths.OutboxFile(_projectId, commandId),
+                JsonConvert.SerializeObject(result, Formatting.Indented));
+
+        static void TryDelete(string path)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException)
+            {
+                // Retried on the next poll.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Retried on the next poll.
             }
         }
 
@@ -140,7 +191,7 @@ namespace Air.UcpAgent.Editor
 
             if (handler is UcpCliCommandHandler bridge)
             {
-                var execution = bridge.Execute(command, _projectId);
+                var execution = bridge.Dispatch(command);
                 if (execution.IsDeferred)
                     return false;
 

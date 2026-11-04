@@ -48,12 +48,8 @@ namespace Air.UcpAgent.Editor.Services.Scenes
         {
             RequireEditMode("create a scene");
 
-            var setup = string.Equals(p.Setup, "empty", StringComparison.OrdinalIgnoreCase)
-                ? NewSceneSetup.EmptyScene
-                : NewSceneSetup.DefaultGameObjects;
-            var mode = string.Equals(p.Mode, "additive", StringComparison.OrdinalIgnoreCase)
-                ? NewSceneMode.Additive
-                : NewSceneMode.Single;
+            var setup = ParseNewSetup(p.Setup);
+            var mode = ParseNewMode(p.Mode);
 
             string savedTo = null;
             if (!string.IsNullOrWhiteSpace(p.Path))
@@ -297,6 +293,29 @@ namespace Air.UcpAgent.Editor.Services.Scenes
 
             throw new ArgumentException(
                 $"Scene '{nameOrPath}' is not loaded. Loaded: {(loaded.Count == 0 ? "(none)" : string.Join(", ", loaded))}.");
+        }
+
+        // A typo must not fall back to Single: that closes every open scene.
+        static NewSceneMode ParseNewMode(string mode)
+        {
+            var value = string.IsNullOrWhiteSpace(mode) ? "single" : mode.Trim().ToLowerInvariant();
+            return value switch
+            {
+                "single" => NewSceneMode.Single,
+                "additive" => NewSceneMode.Additive,
+                _ => throw new ArgumentException($"Unknown mode '{mode}'. Valid: single, additive."),
+            };
+        }
+
+        static NewSceneSetup ParseNewSetup(string setup)
+        {
+            var value = string.IsNullOrWhiteSpace(setup) ? "default" : setup.Trim().ToLowerInvariant();
+            return value switch
+            {
+                "default" => NewSceneSetup.DefaultGameObjects,
+                "empty" => NewSceneSetup.EmptyScene,
+                _ => throw new ArgumentException($"Unknown setup '{setup}'. Valid: default, empty."),
+            };
         }
 
         static OpenSceneMode ParseOpenMode(string mode)

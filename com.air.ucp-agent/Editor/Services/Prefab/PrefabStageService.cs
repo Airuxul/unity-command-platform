@@ -45,7 +45,9 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             GameObject context = null;
             if (!string.IsNullOrWhiteSpace(p.Node))
             {
-                using var scope = EditTargetScope.Open(null, null);
+                // The context instance lives in the scene; Open(null, null) would search the stage
+                // that is about to be replaced when Prefab Mode is already open.
+                using var scope = EditTargetScope.OpenScene(null);
                 context = GameObjectPath.Require(scope, p.Node, "node").gameObject;
             }
 

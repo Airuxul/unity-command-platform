@@ -78,7 +78,7 @@ namespace Air.UcpAgent
                     var job = ReadFile(file);
                     if (job == null || string.IsNullOrEmpty(job.Id))
                     {
-                        TryDeleteCorruptFile(file);
+                        TryDeleteFile(file);
                         continue;
                     }
 
@@ -100,7 +100,16 @@ namespace Air.UcpAgent
             }
         }
 
-        public static void PurgeCorruptFiles()
+        public static void Delete(string commandId)
+        {
+            if (string.IsNullOrEmpty(commandId))
+                return;
+
+            TryDeleteFile(Path.Combine(EditorProjectPaths.JobsDirectory(), $"{commandId}.json"));
+        }
+
+        /// <summary>Deletes every job file whose id is not in <paramref name="keepIds"/>.</summary>
+        public static void DeleteAllExcept(ICollection<string> keepIds)
         {
             try
             {
@@ -110,18 +119,17 @@ namespace Air.UcpAgent
 
                 foreach (var file in Directory.GetFiles(dir, "*.json"))
                 {
-                    var job = ReadFile(file);
-                    if (job == null || string.IsNullOrEmpty(job.Id))
-                        TryDeleteCorruptFile(file);
+                    if (!keepIds.Contains(Path.GetFileNameWithoutExtension(file)))
+                        TryDeleteFile(file);
                 }
             }
             catch (Exception ex)
             {
-                UcpLog.LogWarning($"[ucp-agent] EditorJobLedger.PurgeCorruptFiles failed: {ex.Message}");
+                UcpLog.LogWarning($"[ucp-agent] EditorJobLedger.DeleteAllExcept failed: {ex.Message}");
             }
         }
 
-        static void TryDeleteCorruptFile(string path)
+        static void TryDeleteFile(string path)
         {
             try
             {

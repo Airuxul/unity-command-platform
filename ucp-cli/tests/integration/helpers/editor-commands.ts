@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { ensureUcpHost, executeCommand } from "#cli/client/ucp-host-client.js";
+import { describeFailure, ensureUcpHost, executeCommand } from "#cli/client/ucp-host-client.js";
 import { DEFAULT_HOST_PORT } from "#shared/index.js";
 import type { CliResult } from "#shared/types.js";
 
@@ -244,12 +244,11 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
   },
   {
     type: "reserialize",
-    description: "reserialize project metadata only (empty path list)",
+    description: "an empty path list no longer means the whole project",
     args: { paths: "" },
-    timeout: 120_000,
-    skip: true,
+    expectFailure: true,
     assert: (r) => {
-      expect(r.ok).toBe(true);
+      expect(describeFailure(r)).toContain("all=true");
     },
   },
   {

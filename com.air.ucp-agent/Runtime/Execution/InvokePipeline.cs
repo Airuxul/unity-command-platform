@@ -27,11 +27,14 @@ namespace Air.UcpAgent.Execution
             Func<InvokeRequest, string, (string commandId, InvokeContext context)> createContext,
             Action<InvokeContext, Dictionary<string, object>> execute)
         {
+            // Outside the try so a failure still reports the job it created, and the host can drop it.
+            string commandId = null;
             try
             {
                 var completion = InvokeCompletionCatalog.GetCompletionKind(request.Command)
                     ?? InvokeCompletionCatalog.CompletionDeferred;
-                var (commandId, context) = createContext(request, completion);
+                InvokeContext context;
+                (commandId, context) = createContext(request, completion);
 
                 execute(context, request.Parameters);
 
@@ -54,7 +57,7 @@ namespace Air.UcpAgent.Execution
             }
             catch (Exception ex)
             {
-                return BuildFailure(ex.Message, request.RequestId, null);
+                return BuildFailure(ex.Message, request.RequestId, commandId);
             }
         }
 
@@ -86,6 +89,7 @@ namespace Air.UcpAgent.Execution
             {
                 StatusCode = ok ? 200 : 400,
                 Body = body,
+                CommandId = commandId,
             };
         }
 
@@ -100,7 +104,7 @@ namespace Air.UcpAgent.Execution
             if (!string.IsNullOrEmpty(commandId))
                 body["command_id"] = commandId;
 
-            return new PostResult { StatusCode = 400, Body = body };
+            return new PostResult { StatusCode = 400, Body = body, CommandId = commandId };
         }
 
         private static (object data, string code, string message) UnwrapResult(object result)

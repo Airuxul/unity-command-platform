@@ -146,6 +146,17 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             };
         }
 
+        /// <summary>Copying a non-prefab to a .prefab path would produce a broken asset with a prefab name.</summary>
+        static string RequirePrefabSource(string path)
+        {
+            var source = AssetPaths.RequirePrefabPath(path, "path");
+            var asset = AssetPaths.RequireAsset<GameObject>(source, "path");
+            if (PrefabUtility.GetPrefabAssetType(asset) == PrefabAssetType.NotAPrefab)
+                throw new ArgumentException($"'{source}' is not a prefab asset.");
+
+            return source;
+        }
+
         public static Dictionary<string, object> Delete(PrefabPathParams p)
         {
             var path = AssetPaths.RequirePrefabPath(p.Path, "path");
@@ -166,7 +177,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
         public static Dictionary<string, object> Duplicate(PrefabCopyParams p)
         {
-            var source = AssetPaths.RequireExisting(p.Path, "path");
+            var source = RequirePrefabSource(p.Path);
             var target = AssetPaths.RequirePrefabPath(p.Target, "target");
 
             AssetPaths.RequireNewAssetPath(target, "target");
@@ -187,7 +198,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
         public static Dictionary<string, object> Move(PrefabCopyParams p)
         {
-            var source = AssetPaths.RequireExisting(p.Path, "path");
+            var source = RequirePrefabSource(p.Path);
             AssetPaths.RequireUnderAssets(source, "path");
             PrefabStageService.RequireNotOpenInStage(source, "moved");
             var target = AssetPaths.RequirePrefabPath(p.Target, "target");

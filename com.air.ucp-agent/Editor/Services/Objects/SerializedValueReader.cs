@@ -225,7 +225,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     elements.Add(ReadProperty(property.GetArrayElementAtIndex(i), options, depth + 1));
 
                 if (property.arraySize > kept)
-                    elements.Add($"… {property.arraySize - kept} more");
+                    elements.Add(Truncated(
+                        $"{property.arrayElementType}[{property.arraySize}]",
+                        $"{property.arraySize - kept} more; raise 'max_array' to read them all"));
 
                 return elements;
             }
@@ -251,12 +253,17 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return result;
         }
 
-        static Dictionary<string, object> Truncated(string type) =>
+        /// <summary>Key that marks a value the read did not fully expand; the writer refuses it.</summary>
+        public const string TruncatedKey = "__truncated";
+        public const string TruncatedTypeKey = "__type";
+        public const string TruncatedHintKey = "__hint";
+
+        static Dictionary<string, object> Truncated(string type, string hint = "raise 'depth' to expand") =>
             new Dictionary<string, object>
             {
-                ["__type"] = type,
-                ["__truncated"] = true,
-                ["__hint"] = "raise 'depth' to expand",
+                [TruncatedTypeKey] = type,
+                [TruncatedKey] = true,
+                [TruncatedHintKey] = hint,
             };
 
         /// <summary>Stable identity block for an object reference, shared by reads and info commands.</summary>

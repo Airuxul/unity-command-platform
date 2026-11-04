@@ -100,15 +100,52 @@ namespace Air.UcpAgent
             JobStateCore.MarkSucceeded(command, result, JobStateCore.UtcNowMs(), true, Save);
         }
 
+        /// <summary>The live job created for a file-queue command, if one exists.</summary>
+        public static InvokeJobRecord FindByRequestId(string requestId)
+        {
+            if (string.IsNullOrEmpty(requestId))
+                return null;
+
+            foreach (var job in _commands.Values)
+            {
+                if (string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
+                    return job;
+            }
+
+            return null;
+        }
+
+        /// <summary>Finished jobs whose result has not been delivered yet. Polled every frame.</summary>
+        public static IReadOnlyList<InvokeJobRecord> FinishedJobs() =>
+            _commands.Count == 0
+                ? Array.Empty<InvokeJobRecord>()
+                : _commands.Values.Where(JobStateCore.ShouldSkip).ToList();
+
+        /// <summary>
+        /// Forgets a job once its result is delivered. Without this every command stayed in memory,
+        /// SessionState and ~/.ucp/jobs forever, and each Save rewrote all of them.
+        /// </summary>
+        public static void Remove(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return;
+
+            _commands.Remove(id);
+            EditorJobLedger.Delete(id);
+            SaveSession();
+        }
+
         /// <summary>Flush all in-flight jobs to disk before domain reload.</summary>
         public static void FlushToLedger() => EditorJobLedger.FlushAll(_commands.Values);
 
         /// <summary>SessionState + disk merge after domain reload.</summary>
         public static void Reload()
         {
-            EditorJobLedger.PurgeCorruptFiles();
             LoadFromSession();
             EditorJobLedger.MergePendingInto(_commands);
+            // Anything else on disk is corrupt, or finished in an earlier editor session whose
+            // caller is long gone.
+            EditorJobLedger.DeleteAllExcept(_commands.Keys);
             OrphanJobsAfterDomainReload();
             Save();
         }
@@ -156,7 +193,8 @@ namespace Air.UcpAgent
                         command.CompletionKind,
                         InvokeCompletionCatalog.CompletionDeferred,
                         StringComparison.Ordinal),
-                serializeResultJson: false);
+                // Keeps the result in SessionState too, so a reload before delivery does not lose it.
+                serializeResultJson: true);
         }
 
         private static JobStateCore.TryCompleteJob ResolveTryComplete(
@@ -206,11 +244,16 @@ namespace Air.UcpAgent
                 return;
             }
 
-            var wrapper = new InvokeJobListWrapper { Items = _commands.Values.ToList() };
-            SessionState.SetString(SessionKey, JsonUtility.ToJson(wrapper));
+            SaveSession();
 
             foreach (var job in _commands.Values)
                 EditorJobLedger.Persist(job);
+        }
+
+        private static void SaveSession()
+        {
+            var wrapper = new InvokeJobListWrapper { Items = _commands.Values.ToList() };
+            SessionState.SetString(SessionKey, JsonUtility.ToJson(wrapper));
         }
     }
 }

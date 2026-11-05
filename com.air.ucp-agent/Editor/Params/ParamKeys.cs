@@ -27,5 +27,11 @@ namespace Air.UcpAgent.Params
         public const string Parent = "parent";
 
         public const string Folder = "folder";
+
+        /// <summary>A UPM package: its name, or for package_add anything Client.Add takes.</summary>
+        public const string Package = "package";
+
+        /// <summary>A file the command writes outside the asset database (a screenshot, a player build).</summary>
+        public const string OutputPath = "output_path";
     }
 }

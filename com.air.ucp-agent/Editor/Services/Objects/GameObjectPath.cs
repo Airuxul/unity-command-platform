@@ -16,13 +16,16 @@ namespace Air.UcpAgent.Editor.Services.Objects
     public static class GameObjectPath
     {
         /// <summary>Resolves a node path, or null when nothing matches.</summary>
-        public static Transform Resolve(EditTargetScope scope, string path)
+        public static Transform Resolve(EditTargetScope scope, string path) => Resolve(RootsOf(scope), path);
+
+        /// <summary>Resolves a node path among <paramref name="roots"/>, or null when nothing matches.</summary>
+        public static Transform Resolve(IEnumerable<Transform> roots, string path)
         {
             var segments = Split(path);
             if (segments.Length == 0)
                 return null;
 
-            var current = MatchAmong(scope.Roots().Select(go => go.transform), segments[0]);
+            var current = MatchAmong(roots, segments[0]);
             for (var i = 1; i < segments.Length && current != null; i++)
                 current = MatchAmong(Children(current), segments[i]);
 
@@ -41,13 +44,18 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 throw new ArgumentException($"Parameter '{paramName}' is required for scene targets.");
             }
 
-            var resolved = Resolve(scope, path);
-            if (resolved != null)
-                return resolved;
-
-            var (where, hint) = DescribeNearestMiss(scope, path);
-            throw new UcpException(UcpErrorCodes.NodeNotFound, $"Node '{path}' not found. {where}", hint);
+            return Resolve(scope, path) ?? throw NotFound(RootsOf(scope), path);
         }
+
+        /// <summary>The node_not_found error for <paramref name="path"/>, naming what was there instead.</summary>
+        public static UcpException NotFound(IReadOnlyList<Transform> roots, string path)
+        {
+            var (where, hint) = DescribeNearestMiss(roots, path);
+            return new UcpException(UcpErrorCodes.NodeNotFound, $"Node '{path}' not found. {where}", hint);
+        }
+
+        static IReadOnlyList<Transform> RootsOf(EditTargetScope scope) =>
+            scope.Roots().Where(go => go != null).Select(go => go.transform).ToList();
 
         /// <summary>Resolves the <c>node</c> path, or the <c>id</c> instance id when given instead.</summary>
         public static Transform Require(EditTargetScope scope, NodeTargetParams p)
@@ -222,17 +230,17 @@ namespace Air.UcpAgent.Editor.Services.Objects
         /// point it gave up, so a caller can correct the path without a separate query. The hint
         /// names the siblings closest to the missing segment.
         /// </summary>
-        static (string where, string hint) DescribeNearestMiss(EditTargetScope scope, string path)
+        static (string where, string hint) DescribeNearestMiss(IReadOnlyList<Transform> roots, string path)
         {
             var segments = Split(path);
             if (segments.Length == 0)
                 return ("Path is empty.", null);
 
-            var current = MatchAmong(scope.Roots().Select(go => go.transform), segments[0]);
+            var current = MatchAmong(roots, segments[0]);
             if (current == null)
             {
-                var roots = scope.Roots().Where(go => go != null).Select(go => go.name).ToArray();
-                return ($"Available roots: {Join(roots)}.", Closest(segments[0].name, roots));
+                var names = roots.Where(t => t != null).Select(t => t.name).ToArray();
+                return ($"Available roots: {Join(names)}.", Closest(segments[0].name, names));
             }
 
             for (var i = 1; i < segments.Length; i++)

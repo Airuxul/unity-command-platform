@@ -9,7 +9,8 @@ namespace Air.UcpAgent.Cli
     public interface IDeferredJobs
     {
         /// <summary>Creates the job, or retargets an existing one. Throws if the kind has no completion policy.</summary>
-        void Begin(string id, string command, string completionKind, int timeoutMs);
+        /// <param name="completionArgs">Kept on the job for the policy to read; null leaves it as it was.</param>
+        void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs = null);
 
         bool Has(string id);
         void Remove(string id);
@@ -75,14 +76,14 @@ namespace Air.UcpAgent.Cli
                 _jobs.MarkRunning(CommandId);
         }
 
-        public void Defer(string completionKind)
+        public void Defer(string completionKind, string completionArgs = null)
         {
             if (IsCompleted)
                 throw new InvalidOperationException($"'{Command}' already completed; it cannot defer.");
             if (_jobs == null)
                 throw new InvalidOperationException($"'{Command}' cannot defer on this host.");
 
-            _jobs.Begin(CommandId, Command, completionKind, TimeoutMs);
+            _jobs.Begin(CommandId, Command, completionKind, TimeoutMs, completionArgs);
         }
     }
 }

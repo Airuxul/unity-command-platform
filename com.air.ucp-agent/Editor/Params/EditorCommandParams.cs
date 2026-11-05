@@ -80,7 +80,7 @@ namespace Air.UcpAgent.Params
             AllowedValues = "scene|game|ui")]
         public string View { get; set; } = "scene";
 
-        [CliParam("output_path", Description = "relative or absolute path")]
+        [CliParam(ParamKeys.OutputPath, Description = "relative or absolute path")]
         public string OutputPath { get; set; }
 
         [CliParam(Description = "pixels (view=ui defaults to the CanvasScaler reference resolution)")]
@@ -100,6 +100,40 @@ namespace Air.UcpAgent.Params
 
         [CliParam(Description = "view=ui: background as #RRGGBB, #RRGGBBAA or 'transparent' (default)")]
         public string Background { get; set; }
+    }
+
+    public sealed class BuildParams
+    {
+        [CliParam(ParamKeys.OutputPath, Description = "the player to write, e.g. Builds/Win/Game.exe; relative to the project, not under Assets",
+            Required = true)]
+        public string OutputPath { get; set; }
+
+        [CliParam(Description = "BuildTarget name, e.g. StandaloneWindows64 or Android (default: the active one)")]
+        public string Target { get; set; }
+
+        [CliParam(Description = "JSON array of scene asset paths (default: the enabled scenes in Build Settings)")]
+        public string[] Scenes { get; set; }
+
+        [CliParam(Description = "development build")]
+        public bool Development { get; set; }
+    }
+
+    public sealed class PackageListParams
+    {
+        [CliParam(Description = "also list the packages that are only dependencies of others")]
+        public bool Indirect { get; set; }
+    }
+
+    public sealed class PackageAddParams
+    {
+        [CliParam(ParamKeys.Package, Description = "name, name@version, file:<path> or a git URL", Required = true)]
+        public string Package { get; set; }
+    }
+
+    public sealed class PackageRemoveParams
+    {
+        [CliParam(ParamKeys.Package, Description = "package name, e.g. com.unity.timeline", Required = true)]
+        public string Package { get; set; }
     }
 
     public sealed class RefreshParams
@@ -151,6 +185,43 @@ namespace Air.UcpAgent.Params
 
         [CliParam(Description = "max text / button / input rows in total; truncated says if more exist (default: 500)")]
         public int? Limit { get; set; }
+    }
+
+    public sealed class UiClickParams
+    {
+        [CliParam(ParamKeys.Node, Description = "node path as ui_snapshot prints it; a child of a Button clicks the Button",
+            Required = true)]
+        public string Node { get; set; }
+    }
+
+    public sealed class UiInputParams
+    {
+        [CliParam(ParamKeys.Node, Description = "InputField or TMP_InputField node, as ui_snapshot prints it", Required = true)]
+        public string Node { get; set; }
+
+        [CliParam(Description = "replaces the field's text, \"\" clears it; onValueChanged and then onEndEdit fire (required)")]
+        public string Text { get; set; }
+
+        [CliParam(Description = "also fire onSubmit before onEndEdit, as Enter does")]
+        public bool Submit { get; set; }
+    }
+
+    public sealed class UiWaitParams
+    {
+        public const string Exists = "exists";
+        public const string Active = "active";
+        public const string ShowsText = "text";
+
+        [CliParam(ParamKeys.Node, Description = "node path as ui_snapshot prints it", Required = true)]
+        public string Node { get; set; }
+
+        [CliParam(Description = "exists, active, or text: an active Text / TextMeshPro on or under node contains text " +
+                                "(default: text when text is given, else active)",
+            AllowedValues = Exists + "|" + Active + "|" + ShowsText)]
+        public string Until { get; set; }
+
+        [CliParam(Description = "substring to wait for, case-sensitive")]
+        public string Text { get; set; }
     }
 
     public sealed class HelpParams

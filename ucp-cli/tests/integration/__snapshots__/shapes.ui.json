@@ -1,0 +1,65 @@
+{
+  "exec": {
+    "result": "string"
+  },
+  "ui_click": {
+    "handler": "string",
+    "node": "string"
+  },
+  "ui_input": {
+    "events": [
+      "string"
+    ],
+    "node": "string",
+    "text": "string"
+  },
+  "ui_snapshot": {
+    "canvases": [
+      {
+        "active": "boolean",
+        "buttons": [
+          {
+            "active": "boolean",
+            "interactable": "boolean",
+            "name": "string",
+            "node": "string",
+            "text": "string"
+          }
+        ],
+        "inputs": [
+          {
+            "active": "boolean",
+            "interactable": "boolean",
+            "name": "string",
+            "node": "string",
+            "placeholder": "string",
+            "text": "string"
+          }
+        ],
+        "name": "string",
+        "node": "string",
+        "render_mode": "string",
+        "sorting_order": "number",
+        "texts": [
+          {
+            "active": "boolean",
+            "name": "string",
+            "node": "string",
+            "text": "string"
+          }
+        ]
+      }
+    ],
+    "limit": "number",
+    "row_count": "number",
+    "row_count_total": "number",
+    "truncated": "boolean"
+  },
+  "ui_wait": {
+    "active": "boolean",
+    "elapsed_ms": "number",
+    "node": "string",
+    "text?": "string",
+    "until": "string"
+  }
+}

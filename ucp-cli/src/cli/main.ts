@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { executeCommand, fetchUcpHostStatus } from "./client/ucp-host-client.js";
+import { type ScriptStep, loadScript, runScript } from "./commands/run-script.js";
 import { registerTargetsCommand } from "./commands/targets.js";
 import { exitFromResult, printResult } from "./result.js";
 
@@ -52,17 +53,70 @@ export async function run(argv: string[]): Promise<void> {
     });
 
   program
-    .command("build")
-    .description("Run build command (skeleton)")
-    .action(async () => {
-      const opts = globalOpts();
-      const result = await executeCommand("build", {
-        project: opts.project,
-        session: opts.session,
-        target: opts.target ?? opts.session,
-        sessionType: opts.sessionType,
-        timeout: opts.timeout,
-      });
+    .command("build <output_path>")
+    .description("Build a player; scenes default to the enabled ones in Build Settings")
+    // Not --target: that one picks the ucp target id.
+    .option(
+      "--platform <name>",
+      "BuildTarget name, e.g. StandaloneWindows64 (default: the active one)",
+    )
+    .option("--scene <path...>", "scene asset paths to build")
+    .option("--development", "development build")
+    .action(
+      async (
+        outputPath: string,
+        opts: { platform?: string; scene?: string[]; development?: boolean },
+      ) => {
+        const g = globalOpts();
+        const args: Record<string, unknown> = { output_path: outputPath };
+        if (opts.platform) args.target = opts.platform;
+        if (opts.scene) args.scenes = opts.scene;
+        if (opts.development) args.development = true;
+        const result = await executeCommand("build", {
+          project: g.project,
+          session: g.session,
+          target: g.target ?? g.session,
+          sessionType: g.sessionType,
+          timeout: g.timeout,
+          args,
+        });
+        printResult(result);
+        exitFromResult(result);
+      },
+    );
+
+  program
+    .command("run-script <file>")
+    .description(
+      'Run a JSON flow of {"command", "args"?, "timeout"?, "session_type"?} steps in order; stops at the first failure',
+    )
+    .action(async (file: string) => {
+      const g = globalOpts();
+      let steps: ScriptStep[];
+      try {
+        steps = loadScript(file);
+      } catch (error) {
+        const result = {
+          ok: false,
+          error_code: "invalid_argument",
+          message: `${file}: ${error instanceof Error ? error.message : String(error)}`,
+        };
+        printResult(result);
+        exitFromResult(result);
+        return;
+      }
+
+      const result = await runScript(
+        steps,
+        {
+          project: g.project,
+          session: g.session,
+          target: g.target ?? g.session,
+          sessionType: g.sessionType,
+          timeout: g.timeout,
+        },
+        executeCommand,
+      );
       printResult(result);
       exitFromResult(result);
     });

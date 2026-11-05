@@ -1,0 +1,112 @@
+{
+  "asset_create_folder": {
+    "already_existed": "boolean",
+    "created": "boolean",
+    "guid": "string",
+    "path": "string"
+  },
+  "exec": {
+    "result": "string"
+  },
+  "gameobject_create": {
+    "components": [
+      "string"
+    ],
+    "components_added": [],
+    "instance_id": "number",
+    "name": "string",
+    "node": "string",
+    "parent": "null",
+    "primitive": "string",
+    "rect_transform": "boolean",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "refresh": {
+    "compiled": "boolean",
+    "note": "string"
+  },
+  "scene_close": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "closed": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "removed": "boolean"
+  },
+  "scene_new": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "null",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": {
+          "$union": [
+            "null",
+            "string"
+          ]
+        },
+        "root_count": "number"
+      }
+    ],
+    "mode": "string",
+    "name": "string",
+    "path": "null",
+    "saved": "boolean",
+    "setup": "string"
+  },
+  "scene_save_as": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "guid": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "previous_path": "null"
+  },
+  "test_run": {
+    "duration_s": "number",
+    "failed": "number",
+    "failures": [],
+    "inconclusive": "number",
+    "mode": "string",
+    "passed": "number",
+    "skipped": "number",
+    "total": "number"
+  }
+}

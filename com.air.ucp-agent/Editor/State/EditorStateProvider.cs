@@ -41,6 +41,8 @@ namespace Air.UcpAgent
                     ? System.Array.Empty<string>()
                     : new[] { state.IsCompiling ? "compiling" : "busy" },
                 ["active_command"] = activeCommand,
+                // While true, commands other than ping / state / console / help / echo are refused as busy.
+                ["tests_running"] = TestRunState.IsRunActive(),
                 ["ucp_agent_build"] = UcpAgentBuild.Id,
             };
 

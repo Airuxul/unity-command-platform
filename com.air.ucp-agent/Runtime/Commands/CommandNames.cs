@@ -21,6 +21,7 @@ namespace Air.UcpAgent.Commands
         public const string Screenshot = "screenshot";
         public const string State = "state";
         public const string Stop = "stop";
+        public const string TestRun = "test_run";
 
         // --- Project settings: tags / layers / tools -----------------------------------
         public const string TagList = "tag_list";
@@ -102,6 +103,11 @@ namespace Air.UcpAgent.Commands
         public const string AssetDependencies = "asset_dependencies";
         public const string AssetGuid = "asset_guid";
 
+        // --- Packages (UPM) ------------------------------------------------------------
+        public const string PackageList = "package_list";
+        public const string PackageAdd = "package_add";
+        public const string PackageRemove = "package_remove";
+
         // --- Editor selection ----------------------------------------------------------
         public const string SelectionGet = "selection_get";
         public const string SelectionSet = "selection_set";
@@ -109,5 +115,8 @@ namespace Air.UcpAgent.Commands
 
         // --- Play Mode UI --------------------------------------------------------------
         public const string UiSnapshot = "ui_snapshot";
+        public const string UiClick = "ui_click";
+        public const string UiInput = "ui_input";
+        public const string UiWait = "ui_wait";
     }
 }

@@ -1,0 +1,29 @@
+{
+    "name": "com.air.UcpAgent.Editor.TestRunner",
+    "rootNamespace": "Air.UcpAgent.Editor.TestRunner",
+    "references": [
+        "com.air.UcpAgent.Runtime",
+        "com.air.UcpAgent.Editor",
+        "UnityEditor.TestRunner",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UCP_TEST_FRAMEWORK"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.test-framework",
+            "expression": "1.1.0",
+            "define": "UCP_TEST_FRAMEWORK"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -1,0 +1,28 @@
+{
+  "exec": {
+    "result": "number"
+  },
+  "package_add": {
+    "direct": "boolean",
+    "display_name": "string",
+    "package": "string",
+    "source": "string",
+    "version": "string"
+  },
+  "package_list": {
+    "count": "number",
+    "packages": [
+      {
+        "direct": "boolean",
+        "display_name": "string",
+        "package": "string",
+        "source": "string",
+        "version": "string"
+      }
+    ]
+  },
+  "package_remove": {
+    "package": "string",
+    "removed": "boolean"
+  }
+}

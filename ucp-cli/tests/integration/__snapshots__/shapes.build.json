@@ -1,0 +1,47 @@
+{
+  "build": {
+    "development": "boolean",
+    "duration_s": "number",
+    "error_count": "number",
+    "messages": [],
+    "output_path": "string",
+    "result": "string",
+    "scenes": [
+      "string"
+    ],
+    "size_bytes": "number",
+    "target": "string",
+    "unsaved_scenes": [],
+    "warning_count": "number"
+  },
+  "scene_list": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "count": "number",
+    "folder": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "scenes": [
+      {
+        "guid": "string",
+        "in_build": "boolean",
+        "name": "string",
+        "path": "string"
+      }
+    ],
+    "total_matches": "number",
+    "truncated": "boolean"
+  }
+}

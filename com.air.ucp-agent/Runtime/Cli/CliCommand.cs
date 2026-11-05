@@ -23,6 +23,9 @@ namespace Air.UcpAgent.Cli
 
         /// <summary>Fails with the exception's code (<see cref="UcpErrorCodes.Of"/>), message and hint.</summary>
         protected void CompleteFail(Exception ex) => _invocation?.Fail(CommandFailure.From(ex));
+
+        /// <summary>Fails with a code and detail of the command's own, such as a failed build's report.</summary>
+        protected void CompleteFail(CommandFailure failure) => _invocation?.Fail(failure);
         protected void MarkRunning() => _invocation?.MarkRunning();
 
         /// <summary>
@@ -30,8 +33,12 @@ namespace Air.UcpAgent.Cli
         /// policy for <paramref name="completionKind"/> completes, across domain reloads too.
         /// Commands declared with <see cref="DeferredInvokeDescriptor"/> already have one.
         /// </summary>
-        protected void Defer(string completionKind) =>
-            (_invocation ?? throw new InvalidOperationException("Command is not running.")).Defer(completionKind);
+        protected void Defer(string completionKind) => Defer(completionKind, null);
+
+        /// <inheritdoc cref="Defer(string)"/>
+        /// <param name="completionArgs">What the policy reads back from <see cref="Job.InvokeJobRecord.CompletionArgs"/>.</param>
+        protected void Defer(string completionKind, string completionArgs) =>
+            (_invocation ?? throw new InvalidOperationException("Command is not running.")).Defer(completionKind, completionArgs);
 
         public abstract void Run();
 

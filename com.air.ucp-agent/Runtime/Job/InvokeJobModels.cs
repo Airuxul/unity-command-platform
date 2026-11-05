@@ -29,5 +29,8 @@ namespace Air.UcpAgent.Job
         public string ErrorCode;
 
         public string Hint;
+
+        /// <summary>What the completion policy needs to finish this job, e.g. the condition ui_wait waits for. Empty before 0.5.</summary>
+        public string CompletionArgs;
     }
 }

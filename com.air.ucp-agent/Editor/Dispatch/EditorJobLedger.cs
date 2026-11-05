@@ -164,6 +164,10 @@ namespace Air.UcpAgent
             return job;
         }
 
+        /// <summary>
+        /// Every serialized field: after a reload this copy replaces the SessionState one when both
+        /// carry the same UpdatedAtUtcMs, so a field left out here is lost with every reload.
+        /// </summary>
         static InvokeJobRecord Snapshot(InvokeJobRecord job)
         {
             var copy = new InvokeJobRecord
@@ -177,6 +181,10 @@ namespace Air.UcpAgent
                 CreatedAtUtcMs = job.CreatedAtUtcMs,
                 UpdatedAtUtcMs = job.UpdatedAtUtcMs,
                 ResultJson = job.ResultJson,
+                DeadlineUtcMs = job.DeadlineUtcMs,
+                ErrorCode = job.ErrorCode,
+                Hint = job.Hint,
+                CompletionArgs = job.CompletionArgs,
             };
 
             if (job.Result != null)

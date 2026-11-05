@@ -37,6 +37,9 @@
   "layer_list",
   "layer_remove",
   "menu",
+  "package_add",
+  "package_list",
+  "package_remove",
   "pause",
   "ping",
   "play",
@@ -84,6 +87,10 @@
   "tag_add",
   "tag_list",
   "tag_remove",
+  "test_run",
   "tool_set",
-  "ui_snapshot"
+  "ui_click",
+  "ui_input",
+  "ui_snapshot",
+  "ui_wait"
 ]

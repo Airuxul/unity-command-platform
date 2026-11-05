@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Air.UcpAgent.Cli;
+using Air.UcpAgent.Editor.Services;
 using Air.UcpAgent.IO;
 using Air.UcpAgent.Protocol;
 using Newtonsoft.Json;
@@ -148,8 +149,12 @@ namespace Air.UcpAgent.Editor
                 var outbox = UcpPaths.OutboxFile(_projectId, command.id);
                 if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
                 {
-                    var result = CommandExecutor.Execute(
-                        CommandRegistry.EditorHost, command, EditorJobStateManager.Jobs);
+                    var result = TestRunState.BlocksCommand(command.type)
+                        ? UcpResults.Failure(command.id, new CommandFailure(
+                            UcpErrorCodes.Busy,
+                            $"Tests are running; '{command.type}' waits until they finish.",
+                            "Retry once state reports tests_running=false; ping, state, console, help and echo run meanwhile."))
+                        : CommandExecutor.Execute(CommandRegistry.EditorHost, command, EditorJobStateManager.Jobs);
                     // Null: the command continues as a job, delivered by DeliverFinishedJobs.
                     if (result != null)
                         WriteOutbox(command.id, result);

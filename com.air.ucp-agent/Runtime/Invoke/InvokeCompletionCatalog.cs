@@ -11,5 +11,8 @@ namespace Air.UcpAgent.Invoke
         public const string CompletionCompilation = "compilation";
         public const string CompletionEnterPlay = "enter_play";
         public const string CompletionExitPlay = "exit_play";
+        public const string CompletionUiWait = "ui_wait";
+        public const string CompletionTests = "tests";
+        public const string CompletionPackages = "packages";
     }
 }

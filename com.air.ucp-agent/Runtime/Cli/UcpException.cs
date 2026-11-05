@@ -20,7 +20,20 @@ namespace Air.UcpAgent.Cli
         public const string ComponentNotFound = "component_not_found";
         public const string PlayModeRequired = "play_mode_required";
         public const string EditModeRequired = "edit_mode_required";
+
+        /// <summary>The node is inactive, or its Selectable or a CanvasGroup above it blocks input.</summary>
+        public const string NotInteractable = "not_interactable";
+
         public const string CompileError = "compile_error";
+
+        /// <summary>BuildPipeline reported a failed or cancelled build; data carries the report summary.</summary>
+        public const string BuildFailed = "build_failed";
+
+        /// <summary>test_run ran, and at least one test failed; data carries the summary.</summary>
+        public const string TestsFailed = "tests_failed";
+
+        /// <summary>Tests are running, and the command could disturb them.</summary>
+        public const string Busy = "busy";
 
         /// <summary>A batch op's <c>expect</c> did not hold, so the batch was rolled back.</summary>
         public const string ExpectationFailed = "expectation_failed";
@@ -41,7 +54,11 @@ namespace Air.UcpAgent.Cli
             (ComponentNotFound, "the node exists but has no component of that type"),
             (PlayModeRequired, "the command only runs in Play Mode; run play first"),
             (EditModeRequired, "the command cannot run in Play Mode; run stop first"),
+            (NotInteractable, "the node is inactive or does not take input right now; ui_wait for it, then retry"),
             (CompileError, "scripts do not compile; data.errors lists the compiler errors"),
+            (BuildFailed, "the player build failed or was cancelled; data.messages has its errors"),
+            (TestsFailed, "tests ran and some failed; data.failures lists them"),
+            (Busy, "tests are running; only ping, state, console, help and echo run until they finish"),
             (ExpectationFailed, "a batch op's expect did not hold; nothing in the batch was kept"),
             (Timeout, "the command passed its deadline before it finished"),
             (Orphaned, "a domain reload lost the command before it finished"),

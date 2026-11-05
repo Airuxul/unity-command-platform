@@ -166,6 +166,29 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     },
   },
   {
+    type: "test_run",
+    description: "test_run with a filter that matches nothing (the rest is in test-run.test.ts)",
+    args: { filter: "^UcpNoSuchTest$" },
+    timeout: 120_000,
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.error_code).toBe("invalid_argument");
+    },
+  },
+  // In Play Mode they are covered by ui-interaction.test.ts.
+  ...["ui_click", "ui_input", "ui_wait"].map(
+    (type): EditorCommandCase => ({
+      type,
+      description: `${type} is rejected outside play mode`,
+      args: { node: "Canvas", text: "x" },
+      expectFailure: true,
+      assert: (r) => {
+        expect(r.ok).toBe(false);
+        expect(r.error_code).toBe("play_mode_required");
+      },
+    }),
+  ),
+  {
     type: "pause",
     description: "pause is rejected outside play mode",
     expectFailure: true,
@@ -316,12 +339,43 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     },
   },
   {
-    type: "build",
-    description: "UCP build skeleton",
+    type: "package_list",
+    description: "packages the manifest lists",
     assert: (r) => {
       expect(r.ok).toBe(true);
       const data = r.data as Record<string, unknown> | null;
-      expect(data?.implemented).toBe(false);
+      expect(Array.isArray(data?.packages)).toBe(true);
+    },
+  },
+  ...["package_add", "package_remove"].map(
+    (type): EditorCommandCase => ({
+      type,
+      description: `${type} needs a package`,
+      expectFailure: true,
+      assert: (r) => {
+        expect(r.error_code).toBe("invalid_argument");
+      },
+    }),
+  ),
+  // A real build is in build.test.ts (UCP_EDITOR_SLOW).
+  {
+    type: "build",
+    description: "build names the installed targets for an unknown one",
+    args: { target: "NoSuchTarget", output_path: "Builds/x.exe" },
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.error_code).toBe("invalid_argument");
+      expect(r.message).toContain("Installed:");
+    },
+  },
+  {
+    type: "build",
+    description: "build refuses a scene that is not a scene asset",
+    args: { scenes: ["Assets/UcpNoSuchScene.unity"], output_path: "Builds/x.exe" },
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.error_code).toBe("invalid_argument");
+      expect(r.message).toContain("Assets/UcpNoSuchScene.unity");
     },
   },
 ];
@@ -349,7 +403,11 @@ export const ALL_EDITOR_COMMANDS: readonly string[] = [
   "screenshot",
   "state",
   "stop",
+  "test_run",
+  "ui_click",
+  "ui_input",
   "ui_snapshot",
+  "ui_wait",
   // project settings
   "layer_add",
   "layer_list",
@@ -420,6 +478,10 @@ export const ALL_EDITOR_COMMANDS: readonly string[] = [
   "asset_info",
   "asset_list",
   "asset_move",
+  // packages (add / remove in package.test.ts)
+  "package_add",
+  "package_list",
+  "package_remove",
   // selection
   "selection_clear",
   "selection_get",

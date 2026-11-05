@@ -32,10 +32,6 @@
     "total_matches": "number",
     "truncated": "boolean"
   },
-  "build": {
-    "hint": "string",
-    "implemented": "boolean"
-  },
   "echo": {
     "channel": "string",
     "message": "string"
@@ -89,6 +85,18 @@
     ]
   },
   "menu": "null",
+  "package_list": {
+    "count": "number",
+    "packages": [
+      {
+        "direct": "boolean",
+        "display_name": "string",
+        "package": "string",
+        "source": "string",
+        "version": "string"
+      }
+    ]
+  },
   "ping": "null",
   "prefab_list": {
     "count": "number",

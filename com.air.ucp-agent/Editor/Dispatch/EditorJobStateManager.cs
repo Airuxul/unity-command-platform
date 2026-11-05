@@ -38,6 +38,9 @@ namespace Air.UcpAgent
             { InvokeCompletionCatalog.CompletionCompilation, new Completion.CompilationPolicy() },
             { InvokeCompletionCatalog.CompletionEnterPlay, new Completion.EnterPlayModePolicy() },
             { InvokeCompletionCatalog.CompletionExitPlay, new Completion.ExitPlayModePolicy() },
+            { InvokeCompletionCatalog.CompletionUiWait, new Completion.UiWaitPolicy() },
+            { InvokeCompletionCatalog.CompletionTests, new Completion.TestRunPolicy() },
+            { InvokeCompletionCatalog.CompletionPackages, new Completion.PackagePolicy() },
         };
 
         static Dictionary<string, InvokeJobRecord> _commands = new();
@@ -131,7 +134,7 @@ namespace Air.UcpAgent
             SaveSession();
         }
 
-        static void Begin(string id, string command, string completionKind, int timeoutMs)
+        static void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs)
         {
             if (string.IsNullOrEmpty(id))
                 throw new ArgumentException("A deferred command needs an id.", nameof(id));
@@ -157,6 +160,8 @@ namespace Air.UcpAgent
             }
 
             job.CompletionKind = kind;
+            if (completionArgs != null)
+                job.CompletionArgs = completionArgs;
             job.UpdatedAtUtcMs = now;
             if (timeoutMs > 0)
                 job.DeadlineUtcMs = now + timeoutMs;
@@ -223,6 +228,15 @@ namespace Air.UcpAgent
 
                 if (TimedOut(job, now, out var timeoutError))
                 {
+                    if (job.DeadlineUtcMs > 0)
+                    {
+                        // ucp-host counts the same timeout from before Unity received the command,
+                        // so it has already answered; a result now would only litter the outbox.
+                        UcpLog.LogWarning($"[ucp-agent] '{job.Command}' passed its deadline; the caller was told it timed out.");
+                        Remove(job.Id);
+                        continue;
+                    }
+
                     Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Timeout, timeoutError), null);
                     continue;
                 }
@@ -336,8 +350,8 @@ namespace Air.UcpAgent
 
         sealed class JobStore : IDeferredJobs
         {
-            public void Begin(string id, string command, string completionKind, int timeoutMs) =>
-                EditorJobStateManager.Begin(id, command, completionKind, timeoutMs);
+            public void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs = null) =>
+                EditorJobStateManager.Begin(id, command, completionKind, timeoutMs, completionArgs);
 
             public bool Has(string id) => !string.IsNullOrEmpty(id) && _commands.ContainsKey(id);
             public void Remove(string id) => EditorJobStateManager.Remove(id);

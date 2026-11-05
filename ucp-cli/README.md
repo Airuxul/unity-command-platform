@@ -4,21 +4,29 @@ npm package for **ucp-cli** (CLI) and **ucp-host** (daemon).
 
 ## Setup
 
+Node 20 or later.
+
 ```powershell
-cd CustomPackages/packages/unity-command-platform/ucp-cli
-.\setup.ps1
+cd unity-command-platform/ucp-cli
+.\setup.ps1          # npm install, build, npm link
 ```
+
+If `ucp-cli` is not found afterwards, add the npm global folder (`npm prefix -g`) to `PATH` and
+open a new terminal. Local without global link: `node .\ucp-cli ping` or `npm run ucp-cli -- ping`.
 
 ## Usage (Unity Editor open)
 
 ```powershell
 ucp-cli ping
-ucp-cli build
-ucp-cli host status
+ucp-cli help                                  # command catalog; ucp-cli help <type> for one card
 ucp-cli run echo --args '{"message":"hello"}'
+ucp-cli run-script flow.json                  # [{"command": ..., "args": ..., "timeout": ...}, ...]
+ucp-cli build Builds/Win/Game.exe --platform StandaloneWindows64
+ucp-cli host status
 ```
 
-Local without global link: `node .\ucp-cli ping` or `npm run ucp-cli -- ping`
+Every result is JSON: `{ ok, data, message, error_code, hint, timing }`; the exit code is 0 only
+when `ok` is true.
 
 ## Targets configuration
 
@@ -50,8 +58,8 @@ Two tiers, same transport:
 
 | | Command | Covers | Time |
 |-|---------|--------|------|
-| Smoke | `npm run smoke -- --project <path>` | One Prefab round trip, 18 assertions | ~3-4 min |
-| Full | `npm run test:integration` (needs `UCP_EDITOR_INTEGRATION=1`) | Every editor command | ~16 min |
+| Smoke | `npm run smoke -- --project <path>` | One Prefab round trip, 18 assertions | a few seconds |
+| Full | `npm run test:integration` (needs `UCP_EDITOR_INTEGRATION=1`) | Every editor command | ~3 min |
 
 ```powershell
 npm run smoke -- --project C:/Path/To/UnityProject
@@ -70,16 +78,20 @@ editor session. `--keep` leaves `Assets/UcpSmoke` behind for inspection after a 
 ```powershell
 npm run verify
 $env:UCP_EDITOR_INTEGRATION="1"
-npm run test:integration:editor
+npm run test:integration
 ```
+
+`UCP_EDITOR_SLOW=1` adds the compile / play cases and a real player build. See
+[../docs/MAINTENANCE.md](../docs/MAINTENANCE.md#node-development) for the full gate.
 
 ## Layout
 
 ```text
 ucp-cli/
 ├── ucp-cli, bin/ucp-cli.js, bin/ucp-host.js
+├── scripts/smoke.js
 ├── src/shared/    protocol + ~/.ucp
-├── src/cli/       ucp-cli (commander)
+├── src/cli/       ucp-cli (commander), host client, run-script
 └── src/host/      ucp-host daemon
 ```
 

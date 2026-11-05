@@ -13,5 +13,3 @@
 | [RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md) | FileQueue 可靠性 |
 | [DOC_GOVERNANCE.md](DOC_GOVERNANCE.md) | 文档维护流程 |
 | [../ucp-cli/README.md](../ucp-cli/README.md) | CLI 用法 |
-
-架构原文：[01_Architecture.md](../../../01_Architecture.md)

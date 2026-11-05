@@ -16,5 +16,3 @@
 | [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) | Agent-facing changelog |
 | [../ucp-cli/README.md](../ucp-cli/README.md) | CLI setup and scripts |
 | [../com.air.ucp-agent/README.md](../com.air.ucp-agent/README.md) | Unity UPM install |
-
-Authoritative architecture: [01_Architecture.md](../../../01_Architecture.md) (GameDemo root).

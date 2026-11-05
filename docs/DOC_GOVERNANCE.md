@@ -1,10 +1,10 @@
-# Documentation Governance — `packages/ucp`
+# Documentation Governance — `unity-command-platform`
 
 **Last Updated:** 2026-06-16 · **Scope:** documentation workflow (English)
 
 ## Purpose
 
-Define how user and agent documentation is structured in this Git submodule (`packages/ucp`).
+Define how user and agent documentation is structured in this repository.
 
 ## Document layout
 
@@ -25,12 +25,12 @@ Documents referencing `unity-cmd`, `unity-connector`, `~/.unity-cmd/`, or Editor
 2. Keep `README.md` and `README.zh-CN.md` in sync for user-visible changes.
 3. Update [CONVENTIONS.md](../CONVENTIONS.md) when naming or layout changes.
 4. Append [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md) for non-trivial agent doc work.
-5. Align with [01_Architecture.md](../../../01_Architecture.md) for architectural claims.
+5. Keep [ARCHITECTURE.md](ARCHITECTURE.md) in step with the code; it is the architecture reference.
 
 ## Command documentation source of truth
 
 - **Names:** `com.air.ucp-agent/Runtime/Commands/CommandNames.cs`
 - **Behavior:** `Editor/Commands/*Command.cs`
-- **CLI usage:** `ucp-cli run <type>`
+- **CLI usage:** `ucp-cli help` (generated); `ucp-cli run <type>`
 
 Do not maintain a separate markdown command catalog in this repo.

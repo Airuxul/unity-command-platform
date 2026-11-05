@@ -34,21 +34,17 @@ packages/unity-command-platform/
 | `src/host/` | ucp-host (`createUcpHost`, `UcpHostServer`, services) |
 | `src/shared/` | Protocol, paths, zod |
 
-Host submodules (match [01_Architecture.md](../../01_Architecture.md)):
+Host modules:
 
-| Service | Path |
-|---------|------|
-| Session | `host/session/` |
-| Queue (in-memory) | `host/queue/` |
-| Scheduler | `host/scheduler/` |
-| Retry | `host/retry/` |
-| Discovery | `host/discovery/` |
-| Capability | `host/capability/` |
-| Transport router | `host/router/` |
+| Module | Path |
+|--------|------|
+| HTTP server | `host/server/` |
+| Sessions, discovery, runtime probes | `host/sessions/` (`SessionDirectory`) |
+| Lanes, deadlines, long polling | `host/commands/` (`CommandRunner`) |
 | Editor adapter (FileQueue) | `host/adapter/editor-file-queue/` |
-| Runtime adapter (HTTP skeleton) | `host/adapter/runtime-http/` |
+| Runtime adapter (HTTP) | `host/adapter/runtime-http/` |
 
-**Do not confuse:** Host `QueueService` (memory state machine) vs disk **FileQueue** (`inbox`/`outbox`).
+**Do not confuse:** the host's in-memory command lanes vs the disk **FileQueue** (`inbox`/`outbox`).
 
 ### npm exports
 
@@ -64,7 +60,8 @@ Host submodules (match [01_Architecture.md](../../01_Architecture.md)):
 | `UCP_ROOT` | Override `~/.ucp` |
 | `UCP_HOST_PORT` | Host HTTP port (default `6610`) |
 | `UCP_EDITOR_INTEGRATION` | `1` = live Unity integration tests |
-| `UCP_EDITOR_SLOW` | `1` = include compile/play/stop tests |
+| `UCP_EDITOR_SLOW` | `1` = include compile/play/stop tests and the real build |
+| `UCP_TEST_PROJECT` | Unity project the integration tests and smoke run against |
 | `UCP_LOG_LEVEL` | Host log level |
 
 ## Unity (`com.air.ucp-agent`)
@@ -83,10 +80,18 @@ scene or prefab inherit `EditTargetCommand<TParams>` instead and only implement
 | `Editor/Services/Prefab/` | `Air.UcpAgent.Editor.Services.Prefab` |
 | `Editor/Services/Scenes/` · `Editor/Services/Assets/` | `…Services.Scenes` · `…Services.Assets` |
 | `Editor/IO/AssetPaths.cs` | `Air.UcpAgent.Editor.IO` |
-| `Editor/Bridge/` | `Air.UcpAgent.Editor.Bridge` |
+| `Editor/TestRunner/` | `Air.UcpAgent.Editor.TestRunner` (own assembly, needs the test framework) |
+| `Runtime/Cli/` | `Air.UcpAgent.Cli` (`CommandRegistry`, `CommandExecutor`, `UcpException`) |
 | `Runtime/Protocol/` | `UcpCommand`, `UcpResult`, `UcpSession` |
 
-Deferred commands (`compile`, `play`, `stop`) use `EditorJobStateManager`; bridge tracks `DeferredJobId`.
+Deferred commands (`compile`, `play`, `stop`, `test_run`, `package_add` / `package_remove`,
+`ui_wait`) keep a job in `EditorJobStateManager` that a completion policy in `Editor/Completion/`
+finishes; see [docs/MAINTENANCE.md](docs/MAINTENANCE.md#deferred-commands).
+
+Error codes are lowercase snake case (`node_not_found`), declared once in `UcpErrorCodes`.
+Parameter names used by several commands are constants in `ParamKeys`; `prefab` always means the
+prefab asset a content command edits, `path` the asset a command operates on, `source` a prefab
+to copy from.
 
 ### Command naming
 
@@ -109,7 +114,10 @@ later op failed) overrides `Batchable => false`.
 |---------|---------|
 | `ucp-cli ping` | Health check |
 | `ucp-cli run <type> [--args JSON]` | Any agent command |
+| `ucp-cli help [<type>] [--md]` | Command catalog, or one command's card |
+| `ucp-cli run-script <file>` | Several commands in order, stops at the first failure |
+| `ucp-cli build <output_path> [--platform] [--scene ...] [--development]` | Shortcut for `run build` |
+| `ucp-cli targets list\|set\|remove\|show` | `~/.ucp/targets.json` |
 | `ucp-cli host status` | Host + sessions |
-| `ucp-cli build` | Shortcut for `run build` |
 
 Command `type` strings: lowercase, constants in `CommandNames.cs`.

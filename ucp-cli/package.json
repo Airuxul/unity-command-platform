@@ -1,6 +1,6 @@
 {
   "name": "ucp-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "UCP: ucp-cli front-end and ucp-host daemon for Unity",
   "type": "module",
   "main": "./dist/index.js",

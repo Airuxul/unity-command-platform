@@ -191,10 +191,11 @@ namespace Air.UcpAgent
                 if (!IsFinished(job))
                     continue;
 
-                // Before 0.5 every synchronous command also got a job ("started"), already delivered
-                // when it ran. Only deferred jobs can still owe their caller a result.
-                var deliveredWhenRun = job.DeadlineUtcMs == 0 && !Policies.ContainsKey(job.CompletionKind ?? "");
-                if (deliveredWhenRun || job.UpdatedAtUtcMs < cutoff)
+                // Before 0.5 (no deadline) a job was delivered as it finished and then kept, so a
+                // finished record from then has been delivered already; sending it again only
+                // leaves an outbox file nobody reads.
+                var writtenBefore05 = job.DeadlineUtcMs == 0;
+                if (writtenBefore05 || job.UpdatedAtUtcMs < cutoff)
                     _commands.Remove(job.Id);
             }
         }

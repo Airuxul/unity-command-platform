@@ -12,7 +12,7 @@ export async function run(argv: string[]): Promise<void> {
   program
     .name("ucp-cli")
     .description("Unity Command Platform CLI")
-    .version("0.2.0")
+    .version("0.3.0")
     .option("--project <path>", "Unity project path for session selection")
     .option("--session <id>", "Target session id")
     .option("--target <id>", "Target id from ~/.ucp/targets.json")

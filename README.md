@@ -22,7 +22,7 @@ Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 | HTTP listeners break in firewalled or containerized environments | Editor transport uses local files (`~/.ucp/queues/`) — zero network required |
 | Play Mode runtime needs a separate channel | Runtime `GET /health` + `POST /command` HTTP on loopback; discovered automatically, no profile setup |
 | Multiple Unity instances on one machine | Each project gets its own queue directory keyed by project path hash — no port collisions |
-| Commands that outlive a single HTTP request (compile, play, stop) | Host keeps an in-memory `QueueService`; deferred commands are driven by `EditorJobStateManager` in `Update()` |
+| Commands that outlive a domain reload (compile, play, stop, test_run) | The agent keeps a job for each across the reload and answers once it is done; the CLI long-polls ucp-host until then |
 
 ---
 
@@ -33,29 +33,27 @@ Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 │  ucp-cli (stateless, any shell / CI / AI agent)      │
 │  ucp-cli run echo --session-type editor --args ...   │
 └─────────────────────┬────────────────────────────────┘
-                      │ HTTP POST /commands  127.0.0.1:6610
+                      │ HTTP 127.0.0.1:6610, X-UCP-Token
 ┌─────────────────────▼────────────────────────────────┐
 │  ucp-host (background daemon, auto-started)          │
-│  ├── SessionService  — reads ~/.ucp/sessions/*.json  │
-│  ├── DiscoveryService — watches targets.json + files │
-│  ├── QueueService   — in-memory command lifecycle    │
-│  ├── SchedulerService — dispatch loop                │
-│  ├── CapabilityRegistry — validates command type     │
-│  └── TransportRouter                                 │
-│        ├── EditorFileQueueAdapter  (Editor)          │
-│        └── RuntimeHttpAdapter      (Runtime)         │
+│  ├── SessionDirectory — sessions/*.json, targets.json│
+│  ├── CommandRunner   — one lane per session,         │
+│  │                     deadlines, long polling       │
+│  ├── EditorFileQueueAdapter  (Editor)                │
+│  └── RuntimeHttpAdapter      (Runtime)               │
 └──────┬──────────────────────────┬────────────────────┘
        │ writes inbox JSON        │ POST /command
        ▼                          ▼
 ~/.ucp/queues/{id}/inbox/    http://127.0.0.1:{port}/
        │                          │
-┌──────▼──────────────┐    ┌──────▼──────────────────┐
-│ com.air.ucp-agent   │    │ RuntimeAgentHost        │
-│ (EditorAgentBootstrap│   │ (MonoBehaviour, Play Mode│
-│  polls every 250ms) │    │  only)                  │
-│ executes CliCommand  │    │ executes RuntimeCommand │
-│ writes outbox JSON  │    │ returns JSON response   │
-└─────────────────────┘    └─────────────────────────┘
+┌──────▼───────────────┐   ┌──────▼──────────────────┐
+│ com.air.ucp-agent    │   │ RuntimeAgentHost        │
+│ (EditorAgentBootstrap│   │ (MonoBehaviour, Play    │
+│  checks every tick)  │   │  Mode only)             │
+│ CommandExecutor runs │   │ CommandExecutor runs    │
+│ the CliCommand       │   │ the CliCommand          │
+│ writes outbox JSON   │   │ returns JSON response   │
+└──────────────────────┘   └─────────────────────────┘
 ```
 
 ---
@@ -66,58 +64,44 @@ Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 - **Auto-discovered sessions** — the agent writes `~/.ucp/sessions/{projectId}.json` every 2 s; `ucp-host` promotes it to a ready session automatically.
 - **Targets config** — `~/.ucp/targets.json` stores Editor and Runtime targets. Runtime targets are probed via `/health`; Editor targets fall back to session-file discovery.
 - **Capability gating** — each session advertises which command types it supports; `ucp-host` rejects unsupported commands before dispatching.
-- **Deferred long-running commands** — compile, play, stop, and exec block inside `EditorJobStateManager` without timing out the HTTP caller.
-- **Domain Reload Safe** — in-flight commands survive Unity's script compilation cycle without losing state; see below.
+- **Waits instead of failing** — a command sent while the Editor imports assets waits until it is ready; each command has its own default timeout (`build` 30 min, `test_run` 10 min, `compile` 180 s, most others 30 s).
+- **Domain Reload Safe** — commands that cause a reload still return their result, once; see below.
 - **Play Mode runtime channel** — `RuntimeAgentHost` starts automatically on `AfterSceneLoad`, binds `127.0.0.1:6620` (configurable), and shuts down cleanly when Play Mode exits.
 - **Multi-project safe** — queue paths are keyed by `SHA-256(projectPath)[0:16]`; multiple Unity instances coexist without conflicts.
-- **Structured JSON everywhere** — every command response is `{ ok, data, message, error_code }` — easy to parse in scripts or AI tool calls.
+- **Structured JSON everywhere** — every response is `{ ok, data, message, error_code, hint, timing }`. `error_code` is a fixed code (`node_not_found`, `play_mode_required`, `compile_error`, ...) a script can branch on; `ucp-cli help <command>` lists them.
 
 ---
 
 ## Domain Reload Safety
 
-Unity wipes all C# static state when script compilation finishes (**Domain Reload**). UCP uses a two-layer persistence strategy so in-flight commands are never lost or stuck.
+Unity wipes all C# static state when scripts recompile or Play Mode starts (**domain reload**).
+Commands that cause one (`compile`, `refresh compile=true`, `play`, `stop`, `test_run`,
+`package_add`, `package_remove`) still return their result, exactly once.
 
-### Persistence layers
+### How
 
-| Layer | Mechanism | Notes |
-|-------|-----------|-------|
-| In-memory | `EditorJobStateManager._commands` | Primary dictionary; rebuilt immediately from the layers below after each reload |
-| Lightweight | `SessionState` (`Air.UcpAgent.Jobs`) | Unity's built-in Editor key-value store; survives Domain Reload automatically |
-| Disk | `~/.ucp/jobs/{projectId}/{cmdId}.json` | Written by `EditorJobLedger`; recovers from any crash or hot reload |
+1. A command that cannot finish inside one call is **deferred**: before it runs, the agent creates
+   a job for it with its completion kind and deadline. Every other command answers synchronously
+   and has no job.
+2. The job is kept in memory, in `SessionState` (`Air.UcpAgent.Jobs`, survives a reload) and in
+   `~/.ucp/jobs/{projectId}/{cmdId}.json` (survives anything short of a lost disk).
+3. After the reload, `EditorJobStateManager` loads the jobs back before the first inbox poll. Each
+   editor tick, a **completion policy** checks whether its job is done:
 
-### Recovery sequence after reload
+| Completion kind | Done when | Commands |
+|-----------------|-----------|----------|
+| `compilation` | Unity has stopped compiling; fails as `compile_error` if scripts do not compile | `compile`, `refresh compile=true` |
+| `enter_play` / `exit_play` | Play Mode is on / off | `play`, `stop` |
+| `tests` | the Test Runner reported the run and the Editor is back in Edit Mode | `test_run` |
+| `packages` | the package is (or is no longer) registered and the Editor has settled | `package_add`, `package_remove` |
+| `ui_wait` | the node condition holds; fails just before the deadline | `ui_wait` |
+| `started` | completed by the command's own callback; **orphaned** by a reload, which kills it | — |
 
-```text
-Domain Reload fires
-    ↓
-EditorJobStateManager  [InitializeOnLoad static ctor]
-    1. PurgeCorruptFiles()        remove bad disk job files
-    2. LoadFromSession()          restore dict from SessionState
-    3. MergePendingInto()         fill gaps from disk ledger
-    4. OrphanJobsAfterDomainReload()  mark non-resumable jobs as Orphaned
-    5. Save()                     write merged state back to SessionState + disk
-    ↓
-EditorAgentBootstrap  [InitializeOnLoad static ctor]
-    re-registers EditorApplication.update
-    rewrites session file → ucp-host sees the agent as ready again
-```
+4. A finished job's result goes to the outbox and the job is deleted. A job past its deadline is
+   deleted without a result: ucp-host counts the same deadline and has already answered `timeout`.
 
-### Which commands survive a Domain Reload?
-
-`OrphanJobsAfterDomainReload` decides based on the job's `CompletionKind` field:
-
-| CompletionKind | After reload | Typical commands |
-|----------------|-------------|-----------------|
-| `compilation` | Resumes — `CompilationPolicy` checks `IsCompiling` flag | `compile`, `refresh` |
-| `enter_play` | Resumes — `EnterPlayModePolicy` checks Play Mode state | `play` |
-| `exit_play` | Resumes — `ExitPlayModePolicy` checks Play Mode state | `stop` |
-| `deferred` | Resumes — caller drives progress in `Update()` | `exec` |
-| other / empty | **Orphaned** — failure written to outbox immediately | commands without a registered policy |
-
-### How does the CLI receive results after a reload?
-
-`EditorAgentBootstrap.PollInbox()` resumes in the next `EditorApplication.update` tick (~250 ms). `ucp-host` picks up the outbox result before the command timeout and forwards it to `ucp-cli`. Orphaned commands also write an explicit error to the outbox, so the CLI never hangs indefinitely.
+The inbox file is claimed (renamed to `.claimed`) before a command runs, and a command whose job
+exists is never started again, so a reload in the middle cannot run it twice.
 
 ---
 
@@ -126,7 +110,9 @@ EditorAgentBootstrap  [InitializeOnLoad static ctor]
 The catalog is generated from the agent itself, so there is no checked-in command table to drift:
 
 ```powershell
-ucp-cli run help          # every command, its description and its parameters
+ucp-cli help                  # every command, its description and its parameters
+ucp-cli help prefab_create    # one command: parameters, an example call, its error codes
+ucp-cli help --md             # every card as markdown, e.g. for an AI agent's instructions
 ```
 
 The Editor commands, grouped by what they address:
@@ -134,7 +120,9 @@ The Editor commands, grouped by what they address:
 | Family | What it covers |
 |--------|----------------|
 | `ping` `echo` `state` `console` `help` | Health, agent/editor state, console log, command catalog |
-| `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` `build` | Editor control and diagnostics |
+| `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` | Editor control and diagnostics |
+| `build` `test_run` | Player builds; EditMode / PlayMode tests with their failures |
+| `package_*` | List, add and remove UPM packages |
 | `prefab_*` | Prefab assets, variants, instances, overrides, nesting, Prefab Mode |
 | `gameobject_*` | Create, delete, duplicate, rename, reparent, transform, activate, tag, layer, info, tree, find |
 | `component_*` | Add, remove, list, and read/write serialized properties |
@@ -143,7 +131,18 @@ The Editor commands, grouped by what they address:
 | `selection_*` | Read and drive the Editor selection |
 | `tag_*` `layer_*` `tool_set` | Project tag/layer tables and the active transform tool |
 | `prefab_edit` `scene_edit` | Several node commands on one prefab or scene, kept only if all succeed |
-| `ui_snapshot` | Play Mode only: canvases, text, and whether each button can be clicked |
+| `ui_snapshot` `ui_click` `ui_input` `ui_wait` | Play Mode only: read the UI, click and type into it, wait for what follows |
+
+`ucp-cli run-script flow.json` runs a list of commands in order and stops at the first failure:
+
+```json
+[
+  { "command": "play" },
+  { "command": "ui_click", "args": { "node": "Canvas/Login/Go" } },
+  { "command": "ui_wait", "args": { "node": "Canvas/Home", "until": "active" }, "timeout": 10000 },
+  { "command": "stop" }
+]
+```
 
 ### One command set, two scopes
 
@@ -181,22 +180,35 @@ Object-reference properties accept an asset path, a GUID, a node path or an inst
 
 ## Quick start
 
+Node 20 or later. In a clone of this repository:
+
 ```powershell
 cd ucp-cli
-.\setup.ps1          # npm install + npm link (one-time)
+.\setup.ps1          # npm install, build, npm link: puts ucp-cli and ucp-host on PATH
 
 ucp-cli ping
 ucp-cli run state
 ucp-cli host status
 ```
 
-Unity `Packages/manifest.json`:
+Without linking: `node <repo>/ucp-cli/bin/ucp-cli.js ping`. If `ucp-cli` is not found after
+`setup.ps1`, the npm global folder (`npm prefix -g`) is missing from `PATH`; open a new terminal
+after adding it.
+
+Unity `Packages/manifest.json`, either from a local clone or straight from git:
 
 ```json
-"com.air.ucp-agent": "file:../CustomPackages/packages/unity-command-platform/com.air.ucp-agent"
+"com.air.ucp-agent": "file:C:/path/to/unity-command-platform/com.air.ucp-agent"
+"com.air.ucp-agent": "https://github.com/Airuxul/unity-command-platform.git?path=/com.air.ucp-agent"
 ```
 
 Open the Unity project and wait for compile — the agent writes `~/.ucp/sessions/{projectId}.json`.
+
+### Upgrading from 0.3
+
+Update the CLI and the Unity package together. Several parameters were renamed and every failure
+now carries a code; the list is in
+[docs/CHANGELOG_AGENT.md](docs/CHANGELOG_AGENT.md#upgrading-from-03).
 
 ### Runtime (Play Mode)
 
@@ -209,19 +221,48 @@ ucp-cli run echo --session-type runtime --args '{"message":"hello from runtime"}
 ucp-cli run stop --session-type editor
 ```
 
+### Runtime Cmd Panel (in-game UGUI)
+
+Drop `Resources/UcpCmdPanel.prefab` under a Canvas in your scene (the `` ` `` key shows and hides
+it). Layout and `_fontSize` are set on the prefab. The scene needs a Canvas and an EventSystem.
+
+```text
+com.air.ucp-agent/Resources/UcpCmdPanel.prefab
+com.air.ucp-agent/Runtime/CmdPanel/UcpCmdPanel.cs
+```
+
+| Area | What it does |
+|------|--------------|
+| History | Two lines per run: `> command`, then its result |
+| Hints | The commands and `--parameters` matching what you are typing |
+| Input | Click to focus; `Tab` completes, `Enter` runs, `↑` / `↓` walk the history |
+
+**Adding runtime commands:** put a `CliCommand` / `CliCommand<TParams>` with
+`CommandHostScope.Runtime` anywhere in your project's scripts. After compiling, the panel and
+`ucp-cli --session-type runtime` both find it.
+
+```text
+> ping
+pong
+
+> echo --message hello
+echo ok {"channel":"runtime","message":"hello"}
+```
+
 ---
 
 ## Data layout (`~/.ucp/`)
 
 ```text
 ~/.ucp/
-├── host.json                        # pid + port of running ucp-host
+├── host.json                        # pid, port and token of the running ucp-host
 ├── host.lock                        # spawn guard
 ├── targets.json                     # user-configured targets
-├── sessions/{projectId}.json        # written by Unity agent (Editor)
+├── sessions/{projectId}.json        # written by the Unity agent (Editor)
+├── jobs/{projectId}/{cmdId}.json    # deferred commands in flight; empty when idle
 └── queues/{projectId}/
-    ├── inbox/{cmdId}.json           # ucp-host → Unity
-    └── outbox/{cmdId}.json          # Unity → ucp-host
+    ├── inbox/{cmdId}.json           # ucp-host → Unity; .claimed while it runs
+    └── outbox/{cmdId}.json          # Unity → ucp-host; removed once read
 ```
 
 ---
@@ -230,11 +271,13 @@ ucp-cli run stop --session-type editor
 
 ```powershell
 cd ucp-cli
-npm run verify                       # build + lint + unit tests
+npm run verify                       # build + lint + unit tests (+ integration, skipped without Unity)
 
-# Integration tests (Unity Editor must be open and compiled)
+# Against an open, compiled Editor
 $env:UCP_EDITOR_INTEGRATION="1"
-npm run test:integration
+$env:UCP_TEST_PROJECT="C:/path/to/UnityProject"
+npm run test:integration             # about 3 min; $env:UCP_EDITOR_SLOW="1" adds compile/play and a real build
+npm run smoke                        # one Prefab round trip, a few seconds
 ```
 
 ---

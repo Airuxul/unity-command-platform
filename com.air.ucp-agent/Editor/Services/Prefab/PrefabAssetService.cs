@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Editor.Services.Assets;
 using Air.UcpAgent.Editor.Services.Objects;
 using Air.UcpAgent.Params;
 using UnityEditor;
@@ -20,16 +21,14 @@ namespace Air.UcpAgent.Editor.Services.Prefab
     /// </summary>
     public static class PrefabAssetService
     {
-        const int DefaultListLimit = 200;
-
         public static Dictionary<string, object> Create(EditTargetScope scope, PrefabCreateParams p)
         {
-            var path = AssetPaths.RequirePrefabPath(p.Path, "path");
+            var path = AssetPaths.RequirePrefabPath(p.Path, ParamKeys.Path);
 
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var connect = p.Connect ?? true;
 
-            AssetPaths.RequireNewAssetPath(path, "path");
+            AssetPaths.RequireNewAssetPath(path, ParamKeys.Path);
             AssetPaths.EnsureParentFolder(path);
 
             GameObject asset;
@@ -57,40 +56,28 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["source_node"] = GameObjectPath.Of(node),
                 ["root"] = asset.name,
                 ["connected"] = connect,
-                ["components"] = NodeTargets.ComponentNames(asset),
-                ["target"] = scope.Describe(),
+                ["components"] = ComponentService.Names(asset),
             };
         }
 
         public static Dictionary<string, object> CreateEmpty(PrefabCreateEmptyParams p)
         {
-            var path = AssetPaths.RequirePrefabPath(p.Path, "path");
+            var path = AssetPaths.RequirePrefabPath(p.Path, ParamKeys.Path);
             var name = string.IsNullOrWhiteSpace(p.Name)
                 ? Path.GetFileNameWithoutExtension(path)
                 : p.Name.Trim();
 
-            AssetPaths.RequireNewAssetPath(path, "path");
+            AssetPaths.RequireNewAssetPath(path, ParamKeys.Path);
             AssetPaths.EnsureParentFolder(path);
 
-            var added = new List<string>();
+            List<string> added;
             GameObject asset;
 
             using (var staging = PreviewStage.Begin())
             {
                 var root = staging.Adopt(Primitives.Create(p.Primitive));
                 root.name = name;
-
-                foreach (var typeName in p.Components ?? Array.Empty<string>())
-                {
-                    if (string.IsNullOrWhiteSpace(typeName))
-                        continue;
-
-                    var type = ComponentTypeResolver.RequireComponent(typeName);
-                    if (root.GetComponent(type) == null && root.AddComponent(type) == null)
-                        throw new InvalidOperationException($"Could not add {type.Name} to '{name}'.");
-
-                    added.Add(type.Name);
-                }
+                added = Primitives.AddComponents(root, p.Components);
 
                 asset = PrefabUtility.SaveAsPrefabAsset(root, path, out var saved);
                 if (!saved || asset == null)
@@ -102,22 +89,22 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["path"] = path,
                 ["guid"] = AssetDatabase.AssetPathToGUID(path),
                 ["root"] = name,
-                ["primitive"] = string.IsNullOrWhiteSpace(p.Primitive) ? "empty" : p.Primitive.ToLowerInvariant(),
-                ["components"] = NodeTargets.ComponentNames(asset),
+                ["primitive"] = Primitives.Name(p.Primitive),
+                ["components"] = ComponentService.Names(asset),
                 ["components_added"] = added,
             };
         }
 
         public static Dictionary<string, object> CreateVariant(PrefabVariantParams p)
         {
-            var basePath = AssetPaths.RequireExisting(p.Path, "path");
-            var baseAsset = AssetPaths.RequireAsset<GameObject>(basePath, "path");
-            var target = AssetPaths.RequirePrefabPath(p.Target, "target");
+            var basePath = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
+            var baseAsset = AssetPaths.RequireAsset<GameObject>(basePath, ParamKeys.Path);
+            var target = AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target);
 
             if (string.Equals(basePath, target, StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("A variant cannot be written over its own base prefab.");
 
-            AssetPaths.RequireNewAssetPath(target, "target");
+            AssetPaths.RequireNewAssetPath(target, ParamKeys.Target);
             AssetPaths.EnsureParentFolder(target);
 
             GameObject variant;
@@ -149,8 +136,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         /// <summary>Copying a non-prefab to a .prefab path would produce a broken asset with a prefab name.</summary>
         static string RequirePrefabSource(string path)
         {
-            var source = AssetPaths.RequirePrefabPath(path, "path");
-            var asset = AssetPaths.RequireAsset<GameObject>(source, "path");
+            var source = AssetPaths.RequirePrefabPath(path, ParamKeys.Path);
+            var asset = AssetPaths.RequireAsset<GameObject>(source, ParamKeys.Path);
             if (PrefabUtility.GetPrefabAssetType(asset) == PrefabAssetType.NotAPrefab)
                 throw new ArgumentException($"'{source}' is not a prefab asset.");
 
@@ -159,125 +146,45 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
         public static Dictionary<string, object> Delete(PrefabPathParams p)
         {
-            var path = AssetPaths.RequirePrefabPath(p.Path, "path");
-            AssetPaths.RequireExisting(path, "path");
-            AssetPaths.RequireUnderAssets(path, "path");
-            PrefabStageService.RequireNotOpenInStage(path, "deleted");
-            var guid = AssetDatabase.AssetPathToGUID(path);
-
-            AssetPaths.Trash(path);
-
-            return new Dictionary<string, object>
-            {
-                ["path"] = path,
-                ["guid"] = guid,
-                ["trashed"] = true,
-            };
+            var path = AssetPaths.RequirePrefabPath(p.Path, ParamKeys.Path);
+            AssetPaths.RequireExisting(path, ParamKeys.Path);
+            return AssetService.Trash(path);
         }
 
-        public static Dictionary<string, object> Duplicate(PrefabCopyParams p)
-        {
-            var source = RequirePrefabSource(p.Path);
-            var target = AssetPaths.RequirePrefabPath(p.Target, "target");
+        public static Dictionary<string, object> Duplicate(PrefabCopyParams p) =>
+            AssetService.Copy(RequirePrefabSource(p.Path), AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target));
 
-            AssetPaths.RequireNewAssetPath(target, "target");
-            AssetPaths.EnsureParentFolder(target);
-
-            if (!AssetDatabase.CopyAsset(source, target))
-                throw new InvalidOperationException($"Could not copy '{source}' to '{target}'.");
-
-            AssetDatabase.ImportAsset(target, ImportAssetOptions.ForceSynchronousImport);
-
-            return new Dictionary<string, object>
-            {
-                ["source"] = source,
-                ["path"] = target,
-                ["guid"] = AssetDatabase.AssetPathToGUID(target),
-            };
-        }
-
-        public static Dictionary<string, object> Move(PrefabCopyParams p)
-        {
-            var source = RequirePrefabSource(p.Path);
-            AssetPaths.RequireUnderAssets(source, "path");
-            PrefabStageService.RequireNotOpenInStage(source, "moved");
-            var target = AssetPaths.RequirePrefabPath(p.Target, "target");
-
-            AssetPaths.RequireNewAssetPath(target, "target");
-            AssetPaths.EnsureParentFolder(target);
-
-            var error = AssetDatabase.MoveAsset(source, target);
-            if (!string.IsNullOrEmpty(error))
-                throw new InvalidOperationException($"Could not move '{source}' to '{target}': {error}");
-
-            return new Dictionary<string, object>
-            {
-                ["source"] = source,
-                ["path"] = target,
-                // The GUID is stable across a move — that is the point of moving rather than copying.
-                ["guid"] = AssetDatabase.AssetPathToGUID(target),
-            };
-        }
+        // The GUID is stable across a move — that is the point of moving rather than copying.
+        public static Dictionary<string, object> Move(PrefabCopyParams p) =>
+            AssetService.Move(RequirePrefabSource(p.Path), AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target));
 
         public static Dictionary<string, object> List(PrefabListParams p)
         {
-            var folder = string.IsNullOrWhiteSpace(p.Folder)
-                ? "Assets"
-                : AssetPaths.RequireProjectPath(p.Folder, "folder");
-
-            if (!AssetDatabase.IsValidFolder(folder))
-                throw new ArgumentException($"'{folder}' is not a folder.");
-
-            var limit = p.Limit ?? DefaultListLimit;
             var includeVariants = p.IncludeVariants ?? true;
 
-            var results = new List<object>();
-            var total = 0;
-
-            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { folder }))
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrEmpty(path))
-                    continue;
-
-                if (!string.IsNullOrWhiteSpace(p.Name) &&
-                    Path.GetFileNameWithoutExtension(path).IndexOf(p.Name, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
-
-                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                var assetType = asset == null ? PrefabAssetType.NotAPrefab : PrefabUtility.GetPrefabAssetType(asset);
-                if (!includeVariants && assetType != PrefabAssetType.Regular)
-                    continue;
-
-                total++;
-                if (results.Count >= limit)
-                    continue;
-
-                results.Add(new Dictionary<string, object>
+            var page = AssetQuery.InFolder(p.Folder, "t:Prefab", p.Name, p.Limit,
+                (path, guid) => new Dictionary<string, object>
                 {
                     ["path"] = path,
                     ["guid"] = guid,
                     ["name"] = Path.GetFileNameWithoutExtension(path),
-                    ["asset_type"] = assetType.ToString(),
-                });
-            }
+                    ["asset_type"] = AssetTypeAt(path).ToString(),
+                },
+                include: path => includeVariants || AssetTypeAt(path) == PrefabAssetType.Regular);
 
-            return new Dictionary<string, object>
-            {
-                ["folder"] = folder,
-                ["count"] = results.Count,
-                ["total_matches"] = total,
-                ["truncated"] = total > results.Count,
-                ["prefabs"] = results,
-            };
+            return page.Describe("prefabs");
+        }
+
+        static PrefabAssetType AssetTypeAt(string path)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            return asset == null ? PrefabAssetType.NotAPrefab : PrefabUtility.GetPrefabAssetType(asset);
         }
 
         public static Dictionary<string, object> Info(PrefabInfoParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
-            var asset = AssetPaths.RequireAsset<GameObject>(path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
+            var asset = AssetPaths.RequireAsset<GameObject>(path, ParamKeys.Path);
             var assetType = PrefabUtility.GetPrefabAssetType(asset);
 
             var result = new Dictionary<string, object>
@@ -291,8 +198,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["layer_name"] = LayerMask.LayerToName(asset.layer),
                 ["child_count"] = asset.transform.childCount,
                 ["descendant_count"] = GameObjectPath.Descend(asset.transform).Count() - 1,
-                ["components"] = NodeTargets.ComponentNames(asset),
-                ["transform"] = GameObjectService.DescribeTransform(asset.transform),
+                ["components"] = ComponentService.Names(asset),
+                ["transform"] = TransformValues.Describe(asset.transform),
             };
 
             if (assetType == PrefabAssetType.Variant)
@@ -327,16 +234,18 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         /// </summary>
         public static Dictionary<string, object> Tree(PrefabTreeParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
 
-            using var scope = EditTargetScope.Open(path);
-            return GameObjectService.Tree(scope, new GameObjectTreeParams
+            using var scope = EditTargetScope.Peek(path);
+            var tree = GameObjectService.Tree(scope, new GameObjectTreeParams
             {
                 Depth = p.Depth ?? -1,
                 Components = p.Components,
                 IncludeInactive = true,
             });
+            // Says whether the tree came from the asset or from the open Prefab Mode stage.
+            tree["target"] = scope.Describe();
+            return tree;
         }
-
     }
 }

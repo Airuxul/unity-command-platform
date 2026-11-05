@@ -114,6 +114,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandHostScope.Editor,
             "Everything about one GameObject: transform, tag, layer, components, children, prefab linkage");
 
+        protected override bool ReadOnly => true;
+
         protected override Dictionary<string, object> Apply(EditTargetScope scope, NodeParams p) => GameObjectService.Info(scope, p);
     }
 
@@ -123,6 +125,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandNames.GameObjectTree,
             CommandHostScope.Editor,
             "Hierarchy dump from a node or from the scene roots");
+
+        protected override bool ReadOnly => true;
 
         protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectTreeParams p) =>
             GameObjectService.Tree(scope, p);
@@ -134,6 +138,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandNames.GameObjectFind,
             CommandHostScope.Editor,
             "Search GameObjects by name, tag, layer, component or path");
+
+        protected override bool ReadOnly => true;
 
         protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectFindParams p) =>
             GameObjectService.Find(scope, p);

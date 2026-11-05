@@ -14,64 +14,16 @@ namespace Air.UcpAgent.Editor.Services.Assets
     /// </summary>
     public static class AssetService
     {
-        const int DefaultLimit = 200;
-
         public static Dictionary<string, object> List(AssetListParams p)
         {
-            var folder = string.IsNullOrWhiteSpace(p.Folder)
-                ? "Assets"
-                : AssetPaths.RequireProjectPath(p.Folder, "folder");
-
-            if (!AssetDatabase.IsValidFolder(folder))
-                throw new ArgumentException($"'{folder}' is not a folder.");
-
             var recursive = p.Recursive ?? true;
-            var limit = p.Limit ?? DefaultLimit;
             var filter = string.IsNullOrWhiteSpace(p.Type) ? string.Empty : "t:" + p.Type.Trim();
 
-            var assets = new List<object>();
-            var folders = new List<object>();
-            var total = 0;
-
-            foreach (var guid in AssetDatabase.FindAssets(filter, new[] { folder }))
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrEmpty(path))
-                    continue;
-
-                var parent = AssetPaths.ParentFolder(path);
-                if (!recursive && !string.Equals(parent, folder, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (AssetDatabase.IsValidFolder(path))
-                {
-                    folders.Add(path);
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(p.Name) &&
-                    Path.GetFileNameWithoutExtension(path).IndexOf(p.Name, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
-
-                total++;
-                if (assets.Count >= limit)
-                    continue;
-
-                assets.Add(Summary(path, guid));
-            }
-
-            return new Dictionary<string, object>
-            {
-                ["folder"] = folder,
-                ["recursive"] = recursive,
-                ["count"] = assets.Count,
-                ["total_matches"] = total,
-                ["truncated"] = total > assets.Count,
-                ["assets"] = assets,
-                ["folders"] = folders,
-            };
+            var page = AssetQuery.InFolder(p.Folder, filter, p.Name, p.Limit, Summary, recursive: recursive);
+            var result = page.Describe("assets");
+            result["recursive"] = recursive;
+            result["folders"] = page.Folders;
+            return result;
         }
 
         public static Dictionary<string, object> Find(AssetFindParams p)
@@ -84,7 +36,7 @@ namespace Air.UcpAgent.Editor.Services.Assets
                 .Select(f => AssetPaths.RequireProjectPath(f, "folders"))
                 .ToArray();
 
-            var limit = p.Limit ?? DefaultLimit;
+            var limit = p.Limit ?? AssetQuery.DefaultLimit;
             var guids = folders.Length == 0
                 ? AssetDatabase.FindAssets(p.Filter)
                 : AssetDatabase.FindAssets(p.Filter, folders);
@@ -108,7 +60,7 @@ namespace Air.UcpAgent.Editor.Services.Assets
 
         public static Dictionary<string, object> Info(AssetInfoParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
             var isFolder = AssetDatabase.IsValidFolder(path);
             var main = AssetDatabase.LoadMainAssetAtPath(path);
 
@@ -149,8 +101,8 @@ namespace Air.UcpAgent.Editor.Services.Assets
 
         public static Dictionary<string, object> CreateFolder(AssetCreateFolderParams p)
         {
-            var path = AssetPaths.RequireProjectPath(p.Path, "path");
-            AssetPaths.RequireUnderAssets(path, "path");
+            var path = AssetPaths.RequireProjectPath(p.Path, ParamKeys.Path);
+            AssetPaths.RequireUnderAssets(path, ParamKeys.Path);
             var existed = AssetDatabase.IsValidFolder(path);
 
             AssetPaths.EnsureFolder(path);
@@ -166,12 +118,26 @@ namespace Air.UcpAgent.Editor.Services.Assets
 
         public static Dictionary<string, object> Delete(AssetDeleteParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
-            AssetPaths.RequireUnderAssets(path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
+            var wasFolder = AssetDatabase.IsValidFolder(path);
+            var result = Trash(path);
+            result["was_folder"] = wasFolder;
+            return result;
+        }
+
+        public static Dictionary<string, object> Move(AssetMoveParams p) =>
+            Move(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), AssetPaths.RequireProjectPath(p.Target, ParamKeys.Target));
+
+        public static Dictionary<string, object> Duplicate(AssetMoveParams p) =>
+            Copy(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), AssetPaths.RequireProjectPath(p.Target, ParamKeys.Target));
+
+        /// <summary>Moves an existing asset to the OS trash. The path checks are the caller's.</summary>
+        public static Dictionary<string, object> Trash(string path)
+        {
+            AssetPaths.RequireUnderAssets(path, ParamKeys.Path);
             // Covers deleting a folder that contains the prefab currently open in Prefab Mode.
             Prefab.PrefabStageService.RequireNotOpenInStage(path, "deleted");
             var guid = AssetDatabase.AssetPathToGUID(path);
-            var wasFolder = AssetDatabase.IsValidFolder(path);
 
             AssetPaths.Trash(path);
 
@@ -179,19 +145,16 @@ namespace Air.UcpAgent.Editor.Services.Assets
             {
                 ["path"] = path,
                 ["guid"] = guid,
-                ["was_folder"] = wasFolder,
                 ["trashed"] = true,
             };
         }
 
-        public static Dictionary<string, object> Move(AssetMoveParams p)
+        public static Dictionary<string, object> Move(string source, string target)
         {
-            var source = AssetPaths.RequireExisting(p.Path, "path");
-            AssetPaths.RequireUnderAssets(source, "path");
+            AssetPaths.RequireUnderAssets(source, ParamKeys.Path);
             Prefab.PrefabStageService.RequireNotOpenInStage(source, "moved");
-            var target = AssetPaths.RequireProjectPath(p.Target, "target");
 
-            AssetPaths.RequireNewAssetPath(target, "target");
+            AssetPaths.RequireNewAssetPath(target, ParamKeys.Target);
             AssetPaths.EnsureParentFolder(target);
 
             var error = AssetDatabase.MoveAsset(source, target);
@@ -207,12 +170,9 @@ namespace Air.UcpAgent.Editor.Services.Assets
             };
         }
 
-        public static Dictionary<string, object> Duplicate(AssetMoveParams p)
+        public static Dictionary<string, object> Copy(string source, string target)
         {
-            var source = AssetPaths.RequireExisting(p.Path, "path");
-            var target = AssetPaths.RequireProjectPath(p.Target, "target");
-
-            AssetPaths.RequireNewAssetPath(target, "target");
+            AssetPaths.RequireNewAssetPath(target, ParamKeys.Target);
             AssetPaths.EnsureParentFolder(target);
 
             if (!AssetDatabase.CopyAsset(source, target))
@@ -230,7 +190,7 @@ namespace Air.UcpAgent.Editor.Services.Assets
 
         public static Dictionary<string, object> Dependencies(AssetDependenciesParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
             var dependencies = AssetDatabase.GetDependencies(path, p.Recursive)
                 .Where(d => !string.Equals(d, path, StringComparison.Ordinal))
                 .ToList();
@@ -250,11 +210,11 @@ namespace Air.UcpAgent.Editor.Services.Assets
             var hasGuid = !string.IsNullOrWhiteSpace(p.Guid);
 
             if (hasPath == hasGuid)
-                throw new ArgumentException("Pass exactly one of 'path' or 'guid'.");
+                throw new ArgumentException($"Pass exactly one of '{ParamKeys.Path}' or 'guid'.");
 
             if (hasPath)
             {
-                var path = AssetPaths.RequireExisting(p.Path, "path");
+                var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
                 return new Dictionary<string, object>
                 {
                     ["path"] = path,

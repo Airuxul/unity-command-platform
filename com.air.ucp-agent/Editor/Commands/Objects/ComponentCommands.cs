@@ -34,6 +34,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandHostScope.Editor,
             "List a node's components with their types, indices and enabled state");
 
+        protected override bool ReadOnly => true;
+
         protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentListParams p) => ComponentService.List(scope, p);
     }
 
@@ -42,7 +44,9 @@ namespace Air.UcpAgent.Editor.Commands
         public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentGetParams>(
             CommandNames.ComponentGet,
             CommandHostScope.Editor,
-            "Read a component's serialized properties, in the shape component_set accepts back");
+            $"Read a component's serialized properties, in the shape {CommandNames.ComponentSet} accepts back");
+
+        protected override bool ReadOnly => true;
 
         protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentGetParams p) => ComponentService.Get(scope, p);
     }

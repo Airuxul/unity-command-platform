@@ -83,7 +83,8 @@ namespace Air.UcpAgent.Editor.Services
             var nodePaths = p.Node ?? Array.Empty<string>();
             if (nodePaths.Length > 0)
             {
-                using var scope = EditTargetScope.Open(null, p.Scene);
+                // Node paths are scene paths, as the parameter says — never the Prefab Mode stage.
+                using var scope = EditTargetScope.PeekScene(p.Scene);
                 foreach (var nodePath in nodePaths.Where(n => !string.IsNullOrWhiteSpace(n)))
                 {
                     var node = GameObjectPath.Resolve(scope, nodePath);
@@ -107,7 +108,7 @@ namespace Air.UcpAgent.Editor.Services
                 throw new ArgumentException($"Could not resolve: {string.Join(", ", misses)}.");
 
             if (resolved.Count == 0)
-                throw new ArgumentException("Pass at least one of 'assets', 'node' or 'ids'.");
+                throw new ArgumentException($"Pass at least one of 'assets', '{ParamKeys.Node}' or 'ids'.");
 
             Selection.objects = p.Additive
                 ? (Selection.objects ?? Array.Empty<Object>()).Concat(resolved).Distinct().ToArray()

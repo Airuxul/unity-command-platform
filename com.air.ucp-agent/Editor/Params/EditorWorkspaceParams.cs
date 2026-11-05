@@ -5,14 +5,14 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "asset paths to select")]
         public string[] Assets { get; set; }
 
-        [CliParam(Description = "scene node paths to select, e.g. [\"Player/Body\"]",
+        [CliParam(ParamKeys.Node, Description = "scene node paths to select, e.g. [\"Player/Body\"]",
             AlternateKeys = "gameobjects,nodes")]
         public string[] Node { get; set; }
 
         [CliParam(Description = "Unity instance ids to select", AlternateKeys = "instance_ids")]
         public int[] Ids { get; set; }
 
-        [CliParam(Description = "loaded scene the node paths belong to (default: active scene)")]
+        [CliParam(ParamKeys.Scene, Description = "loaded scene the node paths belong to (default: active scene)")]
         public string Scene { get; set; }
 
         [CliParam(Description = "add to the current selection instead of replacing it")]

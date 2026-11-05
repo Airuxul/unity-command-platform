@@ -1,33 +1,28 @@
+using System;
 using System.Collections.Generic;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
 using Air.UcpAgent.Params;
-using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class ConsoleCommand : CliCommand<ConsoleParams>
+    public class ConsoleCommand : EditorActionCommand<ConsoleParams>
     {
         public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ConsoleParams>(
             CommandNames.Console,
             CommandHostScope.Editor,
             "Read or clear Unity Editor console logs");
 
-        public override void Run(ConsoleParams p)
+        protected override Dictionary<string, object> Execute(ConsoleParams p)
         {
             if (!UnityConsoleReader.IsReady)
-            {
-                var error = $"Console reader unavailable: {UnityConsoleReader.InitError}";
-                CompleteFail(error);
-                return;
-            }
+                throw new InvalidOperationException($"Console reader unavailable: {UnityConsoleReader.InitError}");
 
             if (p.Clear)
             {
                 UnityConsoleReader.Clear();
-                CompleteSuccess(InvokeResult.Ok("console cleared"));
-                return;
+                return null;
             }
 
             var stacktrace = string.IsNullOrEmpty(p.Stacktrace) ? "user" : p.Stacktrace;
@@ -38,7 +33,7 @@ namespace Air.UcpAgent.Editor.Commands
                 Stacktrace = stacktrace,
             }, out var matched);
 
-            var data = new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["count"] = entries.Count,
                 ["matched"] = matched,
@@ -47,7 +42,8 @@ namespace Air.UcpAgent.Editor.Commands
                 ["types"] = p.Type ?? "error,warning",
                 ["stacktrace"] = stacktrace,
             };
-            CompleteSuccess(InvokeResult.Ok("console entries", data));
         }
+
+        protected override string Message(ConsoleParams p) => p.Clear ? "console cleared" : "console entries";
     }
 }

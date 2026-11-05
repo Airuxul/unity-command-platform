@@ -1,26 +1,25 @@
-using Newtonsoft.Json.Linq;
+using Air.UcpAgent.Editor.Services.Objects;
 
 namespace Air.UcpAgent.Params
 {
-    /// <summary>Commands that only address a prefab asset on disk.</summary>
+    /// <summary>
+    /// Commands that only address a prefab asset on disk. The asset is the <c>path</c> — <c>prefab</c>
+    /// is kept for the asset a content command edits.
+    /// </summary>
     public class PrefabPathParams
     {
-        [CliParam(Description = "prefab asset path, e.g. Assets/Prefabs/Player.prefab", Required = true,
-            AlternateKeys = "prefab,prefab_path")]
+        [CliParam(ParamKeys.Path, Description = "prefab asset path, e.g. Assets/Prefabs/Player.prefab", Required = true)]
         public string Path { get; set; }
     }
 
     /// <summary>Commands that copy or move a prefab asset.</summary>
-    public sealed class PrefabCopyParams : PrefabPathParams
+    public sealed class PrefabCopyParams : CopyParams
     {
-        [CliParam(Description = "destination prefab path", Required = true,
-            AlternateKeys = "output,destination,to")]
-        public string Target { get; set; }
     }
 
     public sealed class PrefabCreateParams : NodeTargetParams
     {
-        [CliParam(Description = "prefab asset path to write, e.g. Assets/Prefabs/Player.prefab",
+        [CliParam(ParamKeys.Path, Description = "prefab asset path to write, e.g. Assets/Prefabs/Player.prefab",
             Required = true, AlternateKeys = "output,to")]
         public string Path { get; set; }
 
@@ -30,41 +29,29 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabCreateEmptyParams
     {
-        [CliParam(Description = "prefab asset path to create", Required = true,
-            AlternateKeys = "prefab,prefab_path,output")]
+        [CliParam(ParamKeys.Path, Description = "prefab asset path to create", Required = true,
+            AlternateKeys = "output")]
         public string Path { get; set; }
 
         [CliParam(Description = "root GameObject name (default: the file name)")]
         public string Name { get; set; }
 
-        [CliParam(Description = "built-in shape for the root",
-            AllowedValues = "empty|cube|sphere|capsule|cylinder|plane|quad")]
+        [CliParam(Description = "built-in shape for the root", AllowedValues = Primitives.Allowed)]
         public string Primitive { get; set; } = "empty";
 
         [CliParam(Description = "component type names to add to the root")]
         public string[] Components { get; set; }
     }
 
-    public sealed class PrefabVariantParams : PrefabPathParams
+    /// <summary><c>path</c> is the base prefab, <c>target</c> the variant to write.</summary>
+    public sealed class PrefabVariantParams : CopyParams
     {
-        [CliParam(Description = "variant asset path to write", Required = true,
-            AlternateKeys = "output,to")]
-        public string Target { get; set; }
     }
 
-    public sealed class PrefabListParams
+    public sealed class PrefabListParams : FolderQueryParams
     {
-        [CliParam(Description = "folder to search under (default: Assets)")]
-        public string Folder { get; set; }
-
-        [CliParam(Description = "name substring filter")]
-        public string Name { get; set; }
-
         [CliParam(Description = "include variants and model prefabs (default: true)")]
         public bool? IncludeVariants { get; set; }
-
-        [CliParam(Description = "max results (default: 200)")]
-        public int? Limit { get; set; }
     }
 
     public sealed class PrefabInfoParams : PrefabPathParams
@@ -87,26 +74,14 @@ namespace Air.UcpAgent.Params
     /// instantiated, and the inherited <c>prefab</c> is the asset it is instantiated
     /// <em>into</em> — which is how a nested prefab gets added without opening anything.
     /// </summary>
-    public sealed class PrefabInstantiateParams : EditTargetParams
+    public sealed class PrefabInstantiateParams : PlacementParams
     {
-        [CliParam(Description = "prefab asset to instantiate", Required = true,
-            AlternateKeys = "asset,path")]
+        [CliParam(ParamKeys.Source, Description = "prefab asset to instantiate", Required = true,
+            AlternateKeys = "asset")]
         public string Source { get; set; }
-
-        [CliParam(Description = "parent node path (omit for top level / prefab root)")]
-        public string Parent { get; set; }
 
         [CliParam(Description = "name for the instance (default: the prefab name)")]
         public string Name { get; set; }
-
-        [CliParam(Description = "local position as [x,y,z] or a single number")]
-        public JToken Position { get; set; }
-
-        [CliParam(Description = "local euler angles as [x,y,z]")]
-        public JToken Rotation { get; set; }
-
-        [CliParam(Description = "local scale as [x,y,z] or a single number")]
-        public JToken Scale { get; set; }
 
         [CliParam(Description = "sibling index under the parent (default: last)",
             AlternateKeys = "sibling_index")]
@@ -152,9 +127,9 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabReplaceParams : PrefabInstanceParams
     {
-        [CliParam(Description = "prefab asset to swap in", Required = true,
-            AlternateKeys = "to")]
-        public string Path { get; set; }
+        [CliParam(ParamKeys.Source, Description = "prefab asset to swap in", Required = true,
+            AlternateKeys = "asset")]
+        public string Source { get; set; }
 
         [CliParam(Description = "keep the instance's current transform values (default: true)")]
         public bool? KeepTransform { get; set; }
@@ -162,7 +137,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabStageOpenParams : PrefabPathParams
     {
-        [CliParam(Description = "instance to open the prefab in the context of (optional)")]
+        [CliParam(ParamKeys.Node, Description = "instance to open the prefab in the context of (optional)")]
         public string Node { get; set; }
 
         [CliParam(Description = "discard unsaved changes in the prefab that is already open")]

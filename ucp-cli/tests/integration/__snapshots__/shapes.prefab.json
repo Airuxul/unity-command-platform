@@ -1,0 +1,808 @@
+{
+  "asset_create_folder": {
+    "already_existed": "boolean",
+    "created": "boolean",
+    "guid": "string",
+    "path": "string"
+  },
+  "asset_delete": {
+    "guid": "string",
+    "path": "string",
+    "trashed": "boolean",
+    "was_folder": "boolean"
+  },
+  "asset_dependencies": {
+    "count": "number",
+    "dependencies": [
+      "string"
+    ],
+    "path": "string",
+    "recursive": "boolean"
+  },
+  "asset_duplicate": {
+    "guid": "string",
+    "path": "string",
+    "source": "string"
+  },
+  "asset_guid": {
+    "direction": "string",
+    "guid": "string",
+    "path": "string"
+  },
+  "asset_info": {
+    "dependencies": [
+      "string"
+    ],
+    "guid": "string",
+    "importer": "string",
+    "is_folder": "boolean",
+    "labels": [],
+    "main_type": "string",
+    "name": "string",
+    "path": "string",
+    "sub_assets": [],
+    "type": "string"
+  },
+  "asset_move": {
+    "guid": "string",
+    "path": "string",
+    "source": "string"
+  },
+  "component_add": {
+    "component": "string",
+    "full_type": "string",
+    "index": "number",
+    "node": "string",
+    "properties_set": [
+      "string"
+    ],
+    "rect_transform": "boolean",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "component_get": {
+    "component": "string",
+    "full_type": "string",
+    "node": "string",
+    "properties": {
+      "m_AngularDrag?": "number",
+      "m_CenterOfMass?": [
+        "number"
+      ],
+      "m_CollisionDetection?": "string",
+      "m_Drag?": "number",
+      "m_ExcludeLayers?": "number",
+      "m_ImplicitCom?": "boolean",
+      "m_ImplicitTensor?": "boolean",
+      "m_IncludeLayers?": "number",
+      "m_InertiaRotation?": [
+        "number"
+      ],
+      "m_InertiaTensor?": [
+        "number"
+      ],
+      "m_Interpolate?": "string",
+      "m_IsKinematic?": "boolean",
+      "m_Mass": "number",
+      "m_UseGravity?": "boolean"
+    },
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "component_list": {
+    "components": [
+      {
+        "full_type": "string",
+        "index": "number",
+        "instance_id": "number",
+        "type": "string"
+      }
+    ],
+    "count": "number",
+    "node": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "component_remove": {
+    "component": "string",
+    "node": "string",
+    "remaining": [
+      "string"
+    ],
+    "removed": "boolean",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "component_set": {
+    "component": "string",
+    "count": "number",
+    "node": "string",
+    "properties_set": [
+      "string"
+    ],
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_activate": {
+    "active": "boolean",
+    "active_in_hierarchy": "boolean",
+    "node": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_create": {
+    "components": [
+      "string"
+    ],
+    "components_added": [],
+    "instance_id": "number",
+    "name": "string",
+    "node": "string",
+    "parent": "string",
+    "primitive": "string",
+    "rect_transform": "boolean",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_delete": {
+    "deleted": "boolean",
+    "name": "string",
+    "node": "string",
+    "target": {
+      "kind": "string",
+      "prefab": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      },
+      "scene": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      }
+    }
+  },
+  "gameobject_duplicate": {
+    "instance_id": "number",
+    "name": "string",
+    "node": "string",
+    "prefab_instance": "boolean",
+    "source": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_info": {
+    "active": "boolean",
+    "active_in_hierarchy": "boolean",
+    "child_count": "number",
+    "children": [
+      "string"
+    ],
+    "components": [
+      {
+        "full_type": "string",
+        "index": "number",
+        "instance_id": "number",
+        "type": "string"
+      }
+    ],
+    "instance_id": "number",
+    "layer": "number",
+    "layer_name": "string",
+    "name": "string",
+    "node": "string",
+    "parent": "string",
+    "prefab": {
+      "is_instance_root": "boolean",
+      "is_part_of_instance": "boolean",
+      "source": "null"
+    },
+    "sibling_index": "number",
+    "static_flags": "string",
+    "tag": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    },
+    "transform": {
+      "euler": [
+        "number"
+      ],
+      "local_euler": [
+        "number"
+      ],
+      "local_position": [
+        "number"
+      ],
+      "local_scale": [
+        "number"
+      ],
+      "lossy_scale": [
+        "number"
+      ],
+      "position": [
+        "number"
+      ]
+    }
+  },
+  "gameobject_layer": {
+    "layer": "number",
+    "layer_name": "string",
+    "node": "string",
+    "nodes_changed": "number",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_rename": {
+    "name": "string",
+    "node": "string",
+    "previous_name": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_reparent": {
+    "kept_world_transform": "boolean",
+    "node": "string",
+    "parent": "string",
+    "previous_node": "string",
+    "sibling_index": "number",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_tag": {
+    "node": "string",
+    "nodes_changed": "number",
+    "tag": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "gameobject_transform": {
+    "changed": [
+      "string"
+    ],
+    "node": "string",
+    "relative": "boolean",
+    "space": "string",
+    "target": {
+      "kind": "string",
+      "prefab": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      },
+      "scene": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      }
+    },
+    "transform": {
+      "euler": [
+        "number"
+      ],
+      "local_euler": [
+        "number"
+      ],
+      "local_position": [
+        "number"
+      ],
+      "local_scale": [
+        "number"
+      ],
+      "lossy_scale": [
+        "number"
+      ],
+      "position": [
+        "number"
+      ]
+    }
+  },
+  "gameobject_tree": {
+    "depth": "number",
+    "node_count": "number",
+    "roots": [
+      {
+        "active": "boolean",
+        "child_count": "number",
+        "children": [
+          {
+            "active": "boolean",
+            "child_count": "number",
+            "children": [
+              {
+                "active": "boolean",
+                "child_count": "number",
+                "components": [
+                  "string"
+                ],
+                "name": "string",
+                "node": "string"
+              }
+            ],
+            "components": [
+              "string"
+            ],
+            "name": "string",
+            "node": "string"
+          }
+        ],
+        "components": [
+          "string"
+        ],
+        "name": "string",
+        "node": "string"
+      }
+    ],
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "prefab_apply": {
+    "applied_scope": "string",
+    "applied_to": "string",
+    "instance_root": "string",
+    "node": "string",
+    "remaining_overrides": {
+      "added_components": "number",
+      "added_gameobjects": "number",
+      "any": "boolean",
+      "property_modifications": "number",
+      "removed_components": "number"
+    },
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "prefab_close": {
+    "closed": "boolean",
+    "discarded_changes": "boolean",
+    "had_unsaved_changes": "boolean",
+    "path": "string",
+    "saved": "boolean"
+  },
+  "prefab_create_empty": {
+    "components": [
+      "string"
+    ],
+    "components_added": [],
+    "guid": "string",
+    "path": "string",
+    "primitive": "string",
+    "root": "string"
+  },
+  "prefab_create_variant": {
+    "asset_type": "string",
+    "base": "string",
+    "guid": "string",
+    "is_variant": "boolean",
+    "path": "string",
+    "root": "string"
+  },
+  "prefab_delete": {
+    "guid": "string",
+    "path": "string",
+    "trashed": "boolean"
+  },
+  "prefab_duplicate": {
+    "guid": "string",
+    "path": "string",
+    "source": "string"
+  },
+  "prefab_info": {
+    "asset_type": "string",
+    "base_prefab?": "string",
+    "child_count": "number",
+    "components": [
+      "string"
+    ],
+    "descendant_count": "number",
+    "editable": "boolean",
+    "guid": "string",
+    "layer_name": "string",
+    "nested_prefabs": [
+      {
+        "node": "string",
+        "source": "string"
+      }
+    ],
+    "path": "string",
+    "root": "string",
+    "tag": "string",
+    "transform": {
+      "euler": [
+        "number"
+      ],
+      "local_euler": [
+        "number"
+      ],
+      "local_position": [
+        "number"
+      ],
+      "local_scale": [
+        "number"
+      ],
+      "lossy_scale": [
+        "number"
+      ],
+      "position": [
+        "number"
+      ]
+    }
+  },
+  "prefab_instance_info": {
+    "asset_node": "string",
+    "is_disconnected": "boolean",
+    "is_instance_root": "boolean",
+    "is_part_of_asset": "boolean",
+    "is_part_of_instance": "boolean",
+    "nearest_instance_root": "string",
+    "node": "string",
+    "outermost_instance_root": "string",
+    "overrides": {
+      "added_components": "number",
+      "added_gameobjects": "number",
+      "any": "boolean",
+      "property_modifications": "number",
+      "removed_components": "number"
+    },
+    "source": "string",
+    "status": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "prefab_instantiate": {
+    "instance_id": "number",
+    "name": "string",
+    "nested": "boolean",
+    "node": "string",
+    "parent": {
+      "$union": [
+        "null",
+        "string"
+      ]
+    },
+    "source": "string",
+    "target": {
+      "kind": "string",
+      "prefab": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      },
+      "scene": {
+        "$union": [
+          "null",
+          "string"
+        ]
+      }
+    },
+    "transform": {
+      "euler": [
+        "number"
+      ],
+      "local_euler": [
+        "number"
+      ],
+      "local_position": [
+        "number"
+      ],
+      "local_scale": [
+        "number"
+      ],
+      "lossy_scale": [
+        "number"
+      ],
+      "position": [
+        "number"
+      ]
+    }
+  },
+  "prefab_move": {
+    "guid": "string",
+    "path": "string",
+    "source": "string"
+  },
+  "prefab_open": {
+    "child_count": "number",
+    "components": [
+      "string"
+    ],
+    "dirty": "boolean",
+    "mode": "string",
+    "open": "boolean",
+    "path": "string",
+    "root": "string",
+    "state": "string"
+  },
+  "prefab_overrides": {
+    "added_components": [],
+    "added_gameobjects": [],
+    "has_overrides": "boolean",
+    "include_defaults": "boolean",
+    "instance_root": "string",
+    "modified_objects": [
+      {
+        "node": "string",
+        "object": "string"
+      }
+    ],
+    "node": "string",
+    "property_modifications": [
+      {
+        "component_type": "string",
+        "object_reference": "null",
+        "property": "string",
+        "target_node": "string",
+        "value": "string"
+      }
+    ],
+    "property_modifications_include_defaults": "boolean",
+    "removed_components": [],
+    "source": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "prefab_replace": {
+    "instance_id": "number",
+    "kept_transform": "boolean",
+    "node": "string",
+    "overrides_preserved": "boolean",
+    "previous_source": "string",
+    "source": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "prefab_revert": {
+    "instance_root": "string",
+    "node": "string",
+    "remaining_overrides": {
+      "added_components": "number",
+      "added_gameobjects": "number",
+      "any": "boolean",
+      "property_modifications": "number",
+      "removed_components": "number"
+    },
+    "reverted_scope": "string",
+    "source": "string",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "prefab_save": {
+    "child_count": "number",
+    "components": [
+      "string"
+    ],
+    "dirty": "boolean",
+    "mode": "string",
+    "open": "boolean",
+    "path": "string",
+    "root": "string",
+    "state": "string"
+  },
+  "prefab_stage_info": {
+    "child_count?": "number",
+    "components?": [
+      "string"
+    ],
+    "dirty?": "boolean",
+    "mode?": "string",
+    "open": "boolean",
+    "path": {
+      "$union": [
+        "null",
+        "string"
+      ]
+    },
+    "root?": "string",
+    "state?": "string"
+  },
+  "prefab_tree": {
+    "depth": "number",
+    "node_count": "number",
+    "roots": [
+      {
+        "active": "boolean",
+        "child_count": "number",
+        "children": [
+          {
+            "active": "boolean",
+            "child_count": "number",
+            "children?": [
+              {
+                "active": "boolean",
+                "child_count": "number",
+                "components": [
+                  "string"
+                ],
+                "name": "string",
+                "nested_prefab?": "string",
+                "node": "string"
+              }
+            ],
+            "components": [
+              "string"
+            ],
+            "name": "string",
+            "node": "string"
+          }
+        ],
+        "components": [
+          "string"
+        ],
+        "name": "string",
+        "node": "string"
+      }
+    ],
+    "target": {
+      "kind": "string",
+      "prefab": "string",
+      "scene": "null"
+    }
+  },
+  "prefab_unpack": {
+    "mode": "string",
+    "node": "string",
+    "still_instance": "boolean",
+    "still_instance_of": {
+      "$union": [
+        "null",
+        "string"
+      ]
+    },
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    },
+    "was_instance_of": "string"
+  },
+  "scene_new": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "null",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": {
+          "$union": [
+            "null",
+            "string"
+          ]
+        },
+        "root_count": "number"
+      }
+    ],
+    "mode": "string",
+    "name": "string",
+    "path": "null",
+    "saved": "boolean",
+    "setup": "string"
+  },
+  "scene_save": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "saved": [
+      "string"
+    ],
+    "scope": "string"
+  },
+  "scene_save_as": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "guid": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "previous_path": "null"
+  },
+  "selection_set": {
+    "active": {
+      "instance_id": "number",
+      "name": "string",
+      "node": "string",
+      "type": "string"
+    },
+    "additive": "boolean",
+    "assets": [],
+    "count": "number",
+    "nodes": [
+      {
+        "instance_id": "number",
+        "name": "string",
+        "node": "string",
+        "scene": "string"
+      }
+    ]
+  }
+}

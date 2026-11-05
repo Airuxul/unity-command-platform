@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Commands;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Params;
@@ -33,9 +34,20 @@ namespace Air.UcpAgent.Editor.Services.Objects
                         scope.Revert();
                     return result;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    scope.Revert();
+                    try
+                    {
+                        scope.Revert();
+                    }
+                    catch (Exception revertError)
+                    {
+                        // The caller needs the reason the edit failed, not only the rollback's.
+                        throw new InvalidOperationException(
+                            $"{ex.Message} Rolling the edit back also failed, so the target may be half-edited: {revertError.Message}",
+                            ex);
+                    }
+
                     throw;
                 }
             }
@@ -58,7 +70,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             {
                 target.Dispose();
                 throw new InvalidOperationException(
-                    "dry_run needs undo to take the ops back, and Play Mode records none. Stop play first.");
+                    $"dry_run needs undo to take the ops back, and Play Mode records none. Run {CommandNames.Stop} first.");
             }
 
             return Run(target, scope =>
@@ -118,7 +130,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
                 var target = (EditTargetParams)args;
                 if (!string.IsNullOrWhiteSpace(target.Prefab) || !string.IsNullOrWhiteSpace(target.Scene))
-                    throw new ArgumentException($"ops[{i}] {name}: 'prefab' / 'scene' belong on the batch, not on an op.");
+                    throw new ArgumentException($"ops[{i}] {name}: '{ParamKeys.Prefab}' / '{ParamKeys.Scene}' belong on the batch, not on an op.");
 
                 resolved.Add((command, args));
             }

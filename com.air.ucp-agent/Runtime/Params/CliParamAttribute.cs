@@ -22,8 +22,9 @@ namespace Air.UcpAgent.Params
         public bool Required { get; set; }
 
         /// <summary>
-        /// Pipe-separated list of accepted values shown in help, e.g. "enable|disable|status".
-        /// Does NOT enforce validation at runtime (too restrictive for open-ended strings).
+        /// Pipe-separated list of accepted values, e.g. "enable|disable|status". Shown in help and
+        /// enforced by <see cref="CliParamBinder"/> (case-insensitive; a comma-separated value is
+        /// checked item by item). Leave empty for open-ended strings.
         /// </summary>
         public string AllowedValues { get; set; } = "";
 

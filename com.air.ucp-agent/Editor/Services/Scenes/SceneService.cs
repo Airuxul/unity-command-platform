@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Editor.Services.Assets;
 using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -17,13 +19,11 @@ namespace Air.UcpAgent.Editor.Services.Scenes
     /// </summary>
     public static class SceneService
     {
-        const int DefaultListLimit = 200;
-
         public static Dictionary<string, object> Open(SceneOpenParams p)
         {
             RequireEditMode("open a scene");
 
-            var path = AssetPaths.RequireExisting(p.Path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
             if (!path.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException($"'{path}' is not a scene asset (expected a .unity file).");
 
@@ -54,8 +54,8 @@ namespace Air.UcpAgent.Editor.Services.Scenes
             string savedTo = null;
             if (!string.IsNullOrWhiteSpace(p.Path))
             {
-                savedTo = RequireScenePath(p.Path, "path");
-                AssetPaths.RequireNewAssetPath(savedTo, "path");
+                savedTo = RequireScenePath(p.Path, ParamKeys.Path);
+                AssetPaths.RequireNewAssetPath(savedTo, ParamKeys.Path);
             }
 
             if (mode == NewSceneMode.Single)
@@ -95,7 +95,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
                 if (untitled.Length > 0)
                 {
                     throw new InvalidOperationException(
-                        $"Never-saved scenes: {string.Join(", ", untitled)}. Save each with scene_save_as first.");
+                        $"Never-saved scenes: {string.Join(", ", untitled)}. Save each with {CommandNames.SceneSaveAs} first.");
                 }
 
                 if (!EditorSceneManager.SaveOpenScenes())
@@ -108,11 +108,11 @@ namespace Air.UcpAgent.Editor.Services.Scenes
                 });
             }
 
-            var scene = Resolve(p.Scene);
+            var scene = SceneLookup.Require(p.Scene);
             if (string.IsNullOrEmpty(scene.path))
             {
                 throw new InvalidOperationException(
-                    $"Scene '{scene.name}' has never been saved. Use scene_save_as with a path.");
+                    $"Scene '{scene.name}' has never been saved. Use {CommandNames.SceneSaveAs} with a path.");
             }
 
             if (!EditorSceneManager.SaveScene(scene))
@@ -130,9 +130,9 @@ namespace Air.UcpAgent.Editor.Services.Scenes
         {
             RequireEditMode("save a scene");
 
-            var path = RequireScenePath(p.Path, "path");
-            AssetPaths.RequireNewAssetPath(path, "path");
-            var scene = Resolve(p.Scene);
+            var path = RequireScenePath(p.Path, ParamKeys.Path);
+            AssetPaths.RequireNewAssetPath(path, ParamKeys.Path);
+            var scene = SceneLookup.Require(p.Scene);
             var previous = scene.path;
 
             AssetPaths.EnsureParentFolder(path);
@@ -151,17 +151,17 @@ namespace Air.UcpAgent.Editor.Services.Scenes
         {
             RequireEditMode("close a scene");
 
-            var scene = Resolve(p.Scene);
+            var scene = SceneLookup.Require(p.Scene);
             if (SceneManager.sceneCount <= 1)
             {
                 throw new InvalidOperationException(
-                    "Cannot close the only open scene. Use scene_open or scene_new to replace it instead.");
+                    $"Cannot close the only open scene. Use {CommandNames.SceneOpen} or {CommandNames.SceneNew} to replace it instead.");
             }
 
             if (scene.isDirty && !p.Force)
             {
                 throw new InvalidOperationException(
-                    $"Scene '{scene.name}' has unsaved changes. Save it with scene_save, or pass force=true to discard them.");
+                    $"Scene '{scene.name}' has unsaved changes. Save it with {CommandNames.SceneSave}, or pass force=true to discard them.");
             }
 
             var path = scene.path;
@@ -179,34 +179,8 @@ namespace Air.UcpAgent.Editor.Services.Scenes
 
         public static Dictionary<string, object> List(SceneListParams p)
         {
-            var folder = string.IsNullOrWhiteSpace(p.Folder)
-                ? "Assets"
-                : AssetPaths.RequireProjectPath(p.Folder, "folder");
-
-            if (!AssetDatabase.IsValidFolder(folder))
-                throw new ArgumentException($"'{folder}' is not a folder.");
-
-            var limit = p.Limit ?? DefaultListLimit;
-            var assets = new List<object>();
-            var total = 0;
-
-            foreach (var guid in AssetDatabase.FindAssets("t:Scene", new[] { folder }))
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrEmpty(path))
-                    continue;
-
-                if (!string.IsNullOrWhiteSpace(p.Name) &&
-                    Path.GetFileNameWithoutExtension(path).IndexOf(p.Name, StringComparison.OrdinalIgnoreCase) < 0)
-                {
-                    continue;
-                }
-
-                total++;
-                if (assets.Count >= limit)
-                    continue;
-
-                assets.Add(new Dictionary<string, object>
+            var page = AssetQuery.InFolder(p.Folder, "t:Scene", p.Name, p.Limit, (path, guid) =>
+                new Dictionary<string, object>
                 {
                     ["path"] = path,
                     ["guid"] = guid,
@@ -214,16 +188,8 @@ namespace Air.UcpAgent.Editor.Services.Scenes
                     ["in_build"] = EditorBuildSettings.scenes.Any(s =>
                         string.Equals(s.path, path, StringComparison.OrdinalIgnoreCase)),
                 });
-            }
 
-            return Snapshot(new Dictionary<string, object>
-            {
-                ["folder"] = folder,
-                ["count"] = assets.Count,
-                ["total_matches"] = total,
-                ["truncated"] = total > assets.Count,
-                ["scenes"] = assets,
-            });
+            return Snapshot(page.Describe("scenes"));
         }
 
         public static Dictionary<string, object> Info() => Snapshot(new Dictionary<string, object>());
@@ -267,34 +233,6 @@ namespace Air.UcpAgent.Editor.Services.Scenes
             return scenes;
         }
 
-        static Scene Resolve(string nameOrPath)
-        {
-            if (string.IsNullOrWhiteSpace(nameOrPath))
-            {
-                var active = SceneManager.GetActiveScene();
-                if (!active.IsValid())
-                    throw new InvalidOperationException("No scene is loaded.");
-
-                return active;
-            }
-
-            var wanted = AssetPaths.Normalize(nameOrPath);
-            var loaded = new List<string>();
-            for (var i = 0; i < SceneManager.sceneCount; i++)
-            {
-                var scene = SceneManager.GetSceneAt(i);
-                loaded.Add(string.IsNullOrEmpty(scene.path) ? scene.name : scene.path);
-                if (string.Equals(scene.name, wanted, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(AssetPaths.Normalize(scene.path), wanted, StringComparison.OrdinalIgnoreCase))
-                {
-                    return scene;
-                }
-            }
-
-            throw new ArgumentException(
-                $"Scene '{nameOrPath}' is not loaded. Loaded: {(loaded.Count == 0 ? "(none)" : string.Join(", ", loaded))}.");
-        }
-
         // A typo must not fall back to Single: that closes every open scene.
         static NewSceneMode ParseNewMode(string mode)
         {
@@ -325,7 +263,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
             {
                 "single" => OpenSceneMode.Single,
                 "additive" => OpenSceneMode.Additive,
-                "additive_without_loading" or "additivewithoutloading" => OpenSceneMode.AdditiveWithoutLoading,
+                "additive_without_loading" => OpenSceneMode.AdditiveWithoutLoading,
                 _ => throw new ArgumentException(
                     $"Unknown mode '{mode}'. Valid: single, additive, additive_without_loading."),
             };
@@ -343,7 +281,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
         static void RequireEditMode(string action)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
-                throw new InvalidOperationException($"Cannot {action} in play mode. Run 'stop' first.");
+                throw new InvalidOperationException($"Cannot {action} in play mode. Run '{CommandNames.Stop}' first.");
         }
 
         static void RequireNoUnsavedChanges(bool force, string consequence)
@@ -357,7 +295,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
                 {
                     throw new InvalidOperationException(
                         $"'{stage.assetPath}' is open in Prefab Mode with unsaved changes. " +
-                        "Run prefab_save or prefab_close first, or pass force=true to discard them.");
+                        $"Run {CommandNames.PrefabSave} or {CommandNames.PrefabClose} first, or pass force=true to discard them.");
                 }
 
                 stage.ClearDirtiness();
@@ -376,7 +314,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
 
             throw new InvalidOperationException(
                 $"Unsaved changes in: {string.Join(", ", dirty)}. {consequence} " +
-                "Save with scene_save, or pass force=true to discard.");
+                $"Save with {CommandNames.SceneSave}, or pass force=true to discard.");
         }
     }
 }

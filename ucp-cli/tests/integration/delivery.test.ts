@@ -194,9 +194,16 @@ describe.skipIf(!runEditorTests)("command delivery (Unity required)", () => {
   });
 
   it("rejects unknown scene_new values instead of falling back to single", async () => {
-    expect(await fails("scene_new", { mode: "additve" })).toContain("Unknown mode");
+    // The binder checks AllowedValues, so the typo never reaches the command.
+    expect(await fails("scene_new", { mode: "additve" })).toContain(
+      "Invalid value 'additve' for '--mode'",
+    );
     expect(await fails("scene_new", { setup: "emtpy", mode: "additive" })).toContain(
-      "Unknown setup",
+      "Invalid value 'emtpy' for '--setup'",
+    );
+    // Comma-separated values are checked item by item.
+    expect(await fails("console", { type: "error,warnings" })).toContain(
+      "Invalid value 'warnings' for '--type'",
     );
   });
 

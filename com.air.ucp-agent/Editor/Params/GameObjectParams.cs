@@ -1,27 +1,16 @@
+using Air.UcpAgent.Commands;
+using Air.UcpAgent.Editor.Services.Objects;
 using Newtonsoft.Json.Linq;
 
 namespace Air.UcpAgent.Params
 {
-    public sealed class GameObjectCreateParams : EditTargetParams
+    public sealed class GameObjectCreateParams : PlacementParams
     {
         [CliParam(Description = "name of the new GameObject", Required = true)]
         public string Name { get; set; }
 
-        [CliParam(Description = "parent node path (omit for top level / prefab root)")]
-        public string Parent { get; set; }
-
-        [CliParam(Description = "built-in shape to create",
-            AllowedValues = "empty|cube|sphere|capsule|cylinder|plane|quad")]
+        [CliParam(Description = "built-in shape to create", AllowedValues = Primitives.Allowed)]
         public string Primitive { get; set; } = "empty";
-
-        [CliParam(Description = "local position as [x,y,z], {x,y,z}, or a single number")]
-        public JToken Position { get; set; }
-
-        [CliParam(Description = "local euler angles as [x,y,z] (or [x,y,z,w] for a raw quaternion)")]
-        public JToken Rotation { get; set; }
-
-        [CliParam(Description = "local scale as [x,y,z] or a single number")]
-        public JToken Scale { get; set; }
 
         [CliParam(Description = "tag to assign")]
         public string Tag { get; set; }
@@ -46,7 +35,7 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "name for the copy (default: Unity's \"Name (1)\" numbering)")]
         public string Name { get; set; }
 
-        [CliParam(Description = "parent for the copy (default: same parent as the source)")]
+        [CliParam(ParamKeys.Parent, Description = "parent for the copy (default: same parent as the source)")]
         public string Parent { get; set; }
     }
 
@@ -58,7 +47,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class GameObjectReparentParams : NodeTargetParams
     {
-        [CliParam(Description = "new parent node path (empty string moves the node to the top level)",
+        [CliParam(ParamKeys.Parent, Description = "new parent node path (empty string moves the node to the top level)",
             AlternateKeys = "new_parent")]
         public string Parent { get; set; }
 
@@ -98,7 +87,8 @@ namespace Air.UcpAgent.Params
 
     public sealed class GameObjectTagParams : NodeTargetParams
     {
-        [CliParam(Description = "tag to assign (must already exist — create it with tag_add)", Required = true)]
+        [CliParam(Description = "tag to assign (must already exist — create it with " + CommandNames.TagAdd + ")",
+            Required = true)]
         public string Tag { get; set; }
 
         [CliParam(Description = "also apply to every descendant")]

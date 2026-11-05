@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   SCRATCH_FOLDER,
   cleanupScratch,
+  expectShapesUnchanged,
   fails,
   ok,
   releaseScratchStage,
@@ -153,5 +154,9 @@ describe.skipIf(!runEditorTests)("batch edits (Unity required)", () => {
     });
     expect(reason).toContain("NoSuchTag");
     expect(await findInScene("TaggedProbe")).toBe(0);
+  });
+
+  it("returns results of the same shape", async () => {
+    await expectShapesUnchanged("shapes.batch.json");
   });
 });

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Params;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -22,17 +23,12 @@ namespace Air.UcpAgent.Editor.Services.Objects
     /// </remarks>
     public static class SerializedValueWriter
     {
-        public sealed class Context
-        {
-            /// <summary>Needed to resolve <c>{"node": "Root/Child"}</c> style references.</summary>
-            public EditTargetScope Scope { get; set; }
-
-            /// <summary>Scene edits go through Undo; prefab-contents edits have no undo stack.</summary>
-            public bool RecordUndo { get; set; }
-        }
-
         /// <summary>Applies every entry, returning the property paths actually written.</summary>
-        public static List<string> Apply(Object target, JObject properties, Context context)
+        /// <param name="scope">
+        /// The target the object lives in: resolves <c>{"node": ..}</c> references and decides
+        /// whether the write records undo. Null when there is no such target.
+        /// </param>
+        public static List<string> Apply(Object target, JObject properties, EditTargetScope scope)
         {
             if (target == null)
                 throw new ArgumentException("Cannot set properties on a missing object.");
@@ -40,8 +36,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
             var applied = new List<string>();
             if (properties == null || properties.Count == 0)
                 return applied;
-
-            context ??= new Context();
 
             var serialized = new SerializedObject(target);
             var viaReflection = new List<KeyValuePair<string, JToken>>();
@@ -55,13 +49,13 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     continue;
                 }
 
-                Write(property, pair.Value, context);
+                Write(property, pair.Value, scope);
                 applied.Add(property.propertyPath);
             }
 
             if (applied.Count > 0)
             {
-                if (context.RecordUndo)
+                if (scope != null && scope.SupportsUndo)
                     serialized.ApplyModifiedProperties();
                 else
                     serialized.ApplyModifiedPropertiesWithoutUndo();
@@ -69,7 +63,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             foreach (var pair in viaReflection)
             {
-                if (!TryWriteViaReflection(target, pair.Key, pair.Value, context))
+                if (!TryWriteViaReflection(target, pair.Key, pair.Value, scope))
                 {
                     throw new ArgumentException(
                         $"'{target.GetType().Name}' has no settable property '{pair.Key}'. " +
@@ -127,12 +121,11 @@ namespace Air.UcpAgent.Editor.Services.Objects
                    ?? parent.FindPropertyRelative("m_" + Capitalize(trimmed));
         }
 
-        public static void Write(SerializedProperty property, JToken value, Context context)
+        public static void Write(SerializedProperty property, JToken value, EditTargetScope scope)
         {
             if (property == null)
                 throw new ArgumentException("Cannot write to a missing property.");
 
-            context ??= new Context();
             var where = property.propertyPath;
             RequireNotTruncated(value, where);
 
@@ -177,7 +170,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     return;
 
                 case SerializedPropertyType.ObjectReference:
-                    property.objectReferenceValue = ResolveReference(value, ExpectedReferenceType(property), context);
+                    property.objectReferenceValue = ResolveReference(value, ExpectedReferenceType(property), scope);
                     return;
 
                 case SerializedPropertyType.Vector2:
@@ -249,7 +242,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     return;
 
                 case SerializedPropertyType.Generic:
-                    WriteGeneric(property, value, context);
+                    WriteGeneric(property, value, scope);
                     return;
 
                 default:
@@ -267,7 +260,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             }
         }
 
-        static void WriteGeneric(SerializedProperty property, JToken value, Context context)
+        static void WriteGeneric(SerializedProperty property, JToken value, EditTargetScope scope)
         {
             if (property.isArray)
             {
@@ -283,7 +276,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
                 property.arraySize = array.Count;
                 for (var i = 0; i < array.Count; i++)
-                    Write(property.GetArrayElementAtIndex(i), array[i], context);
+                    Write(property.GetArrayElementAtIndex(i), array[i], scope);
 
                 return;
             }
@@ -303,7 +296,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                         $"'{property.propertyPath}' has no field '{pair.Key}'. Fields: {DescribeChildren(property)}");
                 }
 
-                Write(child, pair.Value, context);
+                Write(child, pair.Value, scope);
             }
         }
 
@@ -313,7 +306,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
         /// Resolves an object reference from an asset path, a 32-char GUID, a node path, an instance
         /// id, or an object form carrying any of those keys.
         /// </summary>
-        public static Object ResolveReference(JToken value, Type expectedType, Context context)
+        public static Object ResolveReference(JToken value, Type expectedType, EditTargetScope scope)
         {
             expectedType ??= typeof(Object);
 
@@ -322,7 +315,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             if (value is JObject form)
             {
-                var assetPath = JsonValues.Text(form, "asset", "asset_path", "path");
+                var assetPath = JsonValues.Text(form, "asset", "asset_path", ParamKeys.Path);
                 if (!string.IsNullOrWhiteSpace(assetPath))
                     return LoadFromPath(assetPath, JsonValues.Text(form, "sub_asset", "sub"), expectedType);
 
@@ -342,7 +335,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
                 var node = JsonValues.Text(form, "node", "gameobject", "go");
                 if (!string.IsNullOrWhiteSpace(node))
-                    return ResolveNodeReference(node, JsonValues.Text(form, "component", "type"), expectedType, context);
+                    return ResolveNodeReference(node, JsonValues.Text(form, "component", "type"), expectedType, scope);
 
                 var id = JsonValues.Pick(form, "id", "instance_id");
                 if (!JsonValues.IsAbsent(id))
@@ -373,7 +366,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     return LoadFromPath(path, null, expectedType);
             }
 
-            return ResolveNodeReference(text, null, expectedType, context);
+            return ResolveNodeReference(text, null, expectedType, scope);
         }
 
         const string BuiltinPrefix = "builtin:";
@@ -442,15 +435,15 @@ namespace Air.UcpAgent.Editor.Services.Objects
             throw new ArgumentException($"'{normalized}' holds no {expectedType.Name}.");
         }
 
-        static Object ResolveNodeReference(string nodePath, string componentType, Type expectedType, Context context)
+        static Object ResolveNodeReference(string nodePath, string componentType, Type expectedType, EditTargetScope scope)
         {
-            if (context?.Scope == null)
+            if (scope == null)
             {
                 throw new ArgumentException(
                     $"Cannot resolve node reference '{nodePath}' without an edit target. Use an asset path or guid instead.");
             }
 
-            var node = GameObjectPath.Require(context.Scope, nodePath, "node");
+            var node = GameObjectPath.Require(scope, nodePath, ParamKeys.Node);
 
             if (!string.IsNullOrWhiteSpace(componentType))
             {
@@ -525,34 +518,34 @@ namespace Air.UcpAgent.Editor.Services.Objects
         const BindingFlags MemberFlags =
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase | BindingFlags.FlattenHierarchy;
 
-        static bool TryWriteViaReflection(Object target, string name, JToken value, Context context)
+        static bool TryWriteViaReflection(Object target, string name, JToken value, EditTargetScope scope)
         {
             var type = target.GetType();
 
             var property = type.GetProperty(name, MemberFlags);
             if (property != null && property.CanWrite && property.GetIndexParameters().Length == 0)
             {
-                property.SetValue(target, Convert(property.PropertyType, value, context, name));
+                property.SetValue(target, Convert(property.PropertyType, value, scope, name));
                 return true;
             }
 
             var field = type.GetField(name, MemberFlags);
             if (field != null && !field.IsLiteral && !field.IsInitOnly)
             {
-                field.SetValue(target, Convert(field.FieldType, value, context, name));
+                field.SetValue(target, Convert(field.FieldType, value, scope, name));
                 return true;
             }
 
             return false;
         }
 
-        static object Convert(Type type, JToken value, Context context, string name)
+        static object Convert(Type type, JToken value, EditTargetScope scope, string name)
         {
             if (JsonValues.IsAbsent(value))
                 return type.IsValueType ? Activator.CreateInstance(type) : null;
 
             if (typeof(Object).IsAssignableFrom(type))
-                return ResolveReference(value, type, context);
+                return ResolveReference(value, type, scope);
 
             var target = Nullable.GetUnderlyingType(type) ?? type;
 

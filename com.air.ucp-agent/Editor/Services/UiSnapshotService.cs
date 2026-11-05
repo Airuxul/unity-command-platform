@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Objects;
 using UnityEditor;
 using UnityEngine;
@@ -12,7 +13,7 @@ namespace Air.UcpAgent.Editor.Services
         public static Dictionary<string, object> Capture()
         {
             if (!EditorApplication.isPlaying)
-                throw new InvalidOperationException("ui_snapshot runs in play mode. Run play first.");
+                throw new InvalidOperationException($"{CommandNames.UiSnapshot} runs in play mode. Run {CommandNames.Play} first.");
 
             var canvases = UnityEngine.Object.FindObjectsOfType<Canvas>(true);
             var list = new List<Canvas>();
@@ -27,7 +28,8 @@ namespace Air.UcpAgent.Editor.Services
             }
 
             list.Sort(CompareCanvas);
-            var tmpType = FindType("TMPro.TextMeshProUGUI");
+            // TextMeshPro is an optional package, so it is looked up by name rather than referenced.
+            ComponentTypeResolver.TryResolveComponent("TMPro.TextMeshProUGUI", out var tmpType);
             var rows = new List<Dictionary<string, object>>(list.Count);
             for (int i = 0; i < list.Count; i++)
                 rows.Add(DescribeCanvas(list[i], tmpType));
@@ -50,7 +52,7 @@ namespace Air.UcpAgent.Editor.Services
         {
             return new Dictionary<string, object>
             {
-                ["path"] = GameObjectPath.Of(canvas.transform),
+                ["node"] = GameObjectPath.Of(canvas.transform),
                 ["name"] = canvas.name,
                 ["active"] = canvas.gameObject.activeInHierarchy,
                 ["render_mode"] = canvas.renderMode.ToString(),
@@ -91,7 +93,7 @@ namespace Air.UcpAgent.Editor.Services
                 var button = buttons[i];
                 rows.Add(new Dictionary<string, object>
                 {
-                    ["path"] = GameObjectPath.Of(button.transform),
+                    ["node"] = GameObjectPath.Of(button.transform),
                     ["name"] = button.name,
                     ["text"] = ButtonText(button, tmpType),
                     ["interactable"] = button.IsInteractable(),
@@ -120,23 +122,11 @@ namespace Air.UcpAgent.Editor.Services
         {
             return new Dictionary<string, object>
             {
-                ["path"] = GameObjectPath.Of(node),
+                ["node"] = GameObjectPath.Of(node),
                 ["name"] = node.name,
                 ["text"] = text ?? "",
                 ["active"] = active,
             };
-        }
-
-        static Type FindType(string fullName)
-        {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType(fullName);
-                if (type != null)
-                    return type;
-            }
-
-            return null;
         }
     }
 }

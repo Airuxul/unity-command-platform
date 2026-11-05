@@ -37,12 +37,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return TryLookup(name, _objectsByFullName, _objectsBySimpleName, typeof(UnityEngine.Object), out type);
         }
 
-        public static Type RequireObject(string name)
-        {
-            EnsureObjectIndex();
-            return Lookup(name, _objectsByFullName, _objectsBySimpleName, typeof(UnityEngine.Object), "asset");
-        }
-
         static Type Lookup(
             string name,
             Dictionary<string, Type> byFullName,

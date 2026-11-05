@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEditorInternal;
@@ -20,7 +21,7 @@ namespace Air.UcpAgent.Editor.Services
         public static Dictionary<string, object> Pause(PauseParams p)
         {
             if (!EditorApplication.isPlaying)
-                throw new InvalidOperationException("Not in play mode. Start it with 'play' first.");
+                throw new InvalidOperationException($"Not in play mode. Start it with '{CommandNames.Play}' first.");
 
             EditorApplication.isPaused = p?.Paused ?? !EditorApplication.isPaused;
 

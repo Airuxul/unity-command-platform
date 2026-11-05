@@ -1,0 +1,201 @@
+{
+  "asset_find": {
+    "assets": [
+      {
+        "guid": "string",
+        "name": "string",
+        "path": "string",
+        "type": "string"
+      }
+    ],
+    "count": "number",
+    "filter": "string",
+    "folders": [],
+    "total_matches": "number",
+    "truncated": "boolean"
+  },
+  "asset_list": {
+    "assets": [
+      {
+        "guid": "string",
+        "name": "string",
+        "path": "string",
+        "type": "string"
+      }
+    ],
+    "count": "number",
+    "folder": "string",
+    "folders": [
+      "string"
+    ],
+    "recursive": "boolean",
+    "total_matches": "number",
+    "truncated": "boolean"
+  },
+  "build": {
+    "hint": "string",
+    "implemented": "boolean"
+  },
+  "echo": {
+    "channel": "string",
+    "message": "string"
+  },
+  "help": {
+    "alias_to_command": {
+      "asset_rename": "string",
+      "commands": "string",
+      "prefab_rename": "string",
+      "recompile": "string",
+      "reload": "string"
+    },
+    "catalog_version": "string",
+    "commands": [
+      {
+        "aliases": [
+          "string"
+        ],
+        "allow_connection_retry": "boolean",
+        "completion": {
+          "$union": [
+            "null",
+            "string"
+          ]
+        },
+        "default_timeout_ms": {
+          "$union": [
+            "null",
+            "number"
+          ]
+        },
+        "description": "string",
+        "name": "string",
+        "params": [
+          "string"
+        ],
+        "scope": "string"
+      }
+    ],
+    "ok": "boolean"
+  },
+  "layer_list": {
+    "count": "number",
+    "first_user_layer": "number",
+    "layers": [
+      {
+        "builtin": "boolean",
+        "index": "number",
+        "name": "string"
+      }
+    ]
+  },
+  "menu": "null",
+  "ping": "null",
+  "prefab_list": {
+    "count": "number",
+    "folder": "string",
+    "prefabs": [
+      {
+        "asset_type": "string",
+        "guid": "string",
+        "name": "string",
+        "path": "string"
+      }
+    ],
+    "total_matches": "number",
+    "truncated": "boolean"
+  },
+  "prefab_stage_info": {
+    "open": "boolean",
+    "path": "null"
+  },
+  "profiler": {
+    "enabled": "boolean",
+    "first_frame": "number",
+    "frame_count": "number",
+    "is_playing": "boolean",
+    "last_frame": "number"
+  },
+  "refresh": {
+    "compile_requested": "boolean",
+    "dirty_scenes": [],
+    "force": "boolean",
+    "refreshed": "boolean",
+    "warning": "null"
+  },
+  "scene_info": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ]
+  },
+  "scene_list": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "count": "number",
+    "folder": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "scenes": [
+      {
+        "guid": "string",
+        "in_build": "boolean",
+        "name": "string",
+        "path": "string"
+      }
+    ],
+    "total_matches": "number",
+    "truncated": "boolean"
+  },
+  "screenshot": {
+    "alpha": "boolean",
+    "camera": "string",
+    "height": "number",
+    "note": "string",
+    "path": "string",
+    "view": "string",
+    "width": "number"
+  },
+  "selection_clear": {
+    "cleared": "number",
+    "count": "number"
+  },
+  "selection_get": {
+    "active": "null",
+    "assets": [],
+    "count": "number",
+    "nodes": []
+  },
+  "tag_list": {
+    "count": "number",
+    "tags": [
+      "string"
+    ]
+  },
+  "tool_set": {
+    "tool": "string"
+  }
+}

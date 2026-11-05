@@ -103,8 +103,6 @@ namespace Air.UcpAgent.Editor.Services
             }
 
             var rootId = frameData.GetRootItemID();
-            var rootChildIds = new List<int>();
-            frameData.GetItemChildren(rootId, rootChildIds);
 
             var parent = rootId;
             var parentName = "(root)";

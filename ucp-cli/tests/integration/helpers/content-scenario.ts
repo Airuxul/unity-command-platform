@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { describeFailure, executeCommand } from "#cli/client/ucp-host-client.js";
 import type { CliResult } from "#shared/types.js";
 import { gameDemoProjectPath } from "./editor-commands.js";
+import { recordShape, recordedShapes } from "./result-shape.js";
 
 /**
  * Command types exercised by the ordered content scenarios rather than by a standalone case in
@@ -101,7 +102,16 @@ export async function ok(
   if (!result.ok) {
     throw new Error(`${type} failed: ${describeFailure(result) || "unknown error"}`);
   }
+  recordShape(type, result.data);
   return (result.data ?? {}) as Record<string, unknown>;
+}
+
+/**
+ * Locks the shape of every result this file's `ok` calls returned; run it as the last case.
+ * Vitest resolves the snapshot path against the calling test file, not this helper.
+ */
+export async function expectShapesUnchanged(snapshot: string): Promise<void> {
+  await expect(recordedShapes()).toMatchFileSnapshot(`./__snapshots__/${snapshot}`);
 }
 
 /** Runs a command expecting rejection, and returns the reason so the test can assert on it. */

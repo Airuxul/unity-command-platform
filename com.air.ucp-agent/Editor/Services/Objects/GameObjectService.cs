@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Commands;
+using Air.UcpAgent.Editor.Services.Prefab;
 using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEngine;
@@ -34,77 +36,66 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(created, scope.Scene);
 
             // Registered before anything below can throw, so a failed create is undone with the rest.
-            NodeTargets.RegisterCreated(scope, created, "ucp gameobject_create");
+            scope.RegisterCreated(created, $"ucp {CommandNames.GameObjectCreate}");
 
             // Never hold a Transform across AddComponent: a component that requires a RectTransform
             // (any UI component) makes Unity swap the Transform instance, and the old reference is
             // then a destroyed object. Read created.transform fresh wherever it is needed.
-            SetLocalTransform(created.transform, p.Position, p.Rotation, p.Scale);
+            // A new node already sits at local zero / identity / one under its parent.
+            TransformValues.ApplyLocal(created.transform, p.Position, p.Rotation, p.Scale);
 
             if (!string.IsNullOrWhiteSpace(p.Tag))
-                created.tag = RequireTag(p.Tag);
+                created.tag = TagsAndLayers.RequireTag(p.Tag);
             if (!string.IsNullOrWhiteSpace(p.Layer))
-                created.layer = NodeTargets.RequireLayer(p.Layer);
+                created.layer = TagsAndLayers.RequireLayer(p.Layer);
             if (p.Active.HasValue)
                 created.SetActive(p.Active.Value);
 
-            var added = new List<string>();
-            foreach (var typeName in p.Components ?? Array.Empty<string>())
-            {
-                if (string.IsNullOrWhiteSpace(typeName))
-                    continue;
-
-                var type = ComponentTypeResolver.RequireComponent(typeName);
-                if (created.GetComponent(type) == null && created.AddComponent(type) == null)
-                    throw new InvalidOperationException($"Could not add {type.Name} to '{created.name}'.");
-
-                added.Add(type.Name);
-            }
-
+            var added = Primitives.AddComponents(created, p.Components);
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(created.transform),
                 ["name"] = created.name,
-                ["primitive"] = string.IsNullOrWhiteSpace(p.Primitive) ? "empty" : p.Primitive.ToLowerInvariant(),
+                ["primitive"] = Primitives.Name(p.Primitive),
                 ["parent"] = parent == null ? null : GameObjectPath.Of(parent),
-                ["components"] = NodeTargets.ComponentNames(created),
+                ["components"] = ComponentService.Names(created),
                 ["components_added"] = added,
                 ["instance_id"] = created.GetInstanceID(),
                 ["rect_transform"] = created.transform is RectTransform,
-            });
+            };
         }
 
         public static Dictionary<string, object> Delete(EditTargetScope scope, NodeParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
 
             if (scope.IsPrefabContent && node.parent == null)
             {
                 throw new InvalidOperationException(
-                    "Cannot delete a prefab's root node. Delete the asset with prefab_delete instead.");
+                    $"Cannot delete a prefab's root node. Delete the asset with {CommandNames.PrefabDelete} instead.");
             }
 
             var path = GameObjectPath.Of(node);
             var name = node.name;
-            NodeTargets.Destroy(scope, node.gameObject);
+            scope.Destroy(node.gameObject);
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = path,
                 ["name"] = name,
                 ["deleted"] = true,
-            });
+            };
         }
 
         public static Dictionary<string, object> Duplicate(EditTargetScope scope, GameObjectDuplicateParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var parent = string.IsNullOrWhiteSpace(p.Parent)
                 ? node.parent
-                : GameObjectPath.Require(scope, p.Parent, "parent");
+                : GameObjectPath.Require(scope, p.Parent, ParamKeys.Parent);
 
             if (scope.IsPrefabContent && node.parent == null)
                 throw new InvalidOperationException("Cannot duplicate a prefab's root node inside the asset.");
@@ -114,10 +105,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (parent == null && !scope.IsPrefabContent)
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(clone, scope.Scene);
 
-            NodeTargets.RegisterCreated(scope, clone, "ucp gameobject_duplicate");
+            scope.RegisterCreated(clone, $"ucp {CommandNames.GameObjectDuplicate}");
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["source"] = GameObjectPath.Of(node),
                 ["node"] = GameObjectPath.Of(clone.transform),
@@ -126,36 +117,36 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 // Object.Instantiate copies overridden values; whether the copy stays linked to the
                 // source prefab is Unity's call, so report it rather than promising either way.
                 ["prefab_instance"] = PrefabUtility.IsPartOfPrefabInstance(clone),
-            });
+            };
         }
 
         public static Dictionary<string, object> Rename(EditTargetScope scope, GameObjectRenameParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var previous = node.name;
 
-            NodeTargets.RecordUndo(scope, node.gameObject, "ucp gameobject_rename");
+            scope.RecordUndo(node.gameObject, $"ucp {CommandNames.GameObjectRename}");
             node.name = p.Name.Trim();
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["previous_name"] = previous,
                 ["name"] = node.name,
-            });
+            };
         }
 
         public static Dictionary<string, object> Reparent(EditTargetScope scope, GameObjectReparentParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
 
             if (scope.IsPrefabContent && node.parent == null)
                 throw new InvalidOperationException("Cannot reparent a prefab's root node.");
 
             var parent = string.IsNullOrWhiteSpace(p.Parent)
                 ? (scope.IsPrefabContent ? scope.PrefabRoot.transform : null)
-                : GameObjectPath.Require(scope, p.Parent, "parent");
+                : GameObjectPath.Require(scope, p.Parent, ParamKeys.Parent);
 
             if (parent != null && (parent == node || parent.IsChildOf(node)))
                 throw new InvalidOperationException($"'{p.Parent}' is inside '{GameObjectPath.Of(node)}'.");
@@ -170,7 +161,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             {
                 // Undo.SetTransformParent always keeps the world transform, so restore the local
                 // values afterwards rather than silently ignoring keepWorld=false.
-                Undo.SetTransformParent(node, parent, "ucp gameobject_reparent");
+                Undo.SetTransformParent(node, parent, $"ucp {CommandNames.GameObjectReparent}");
                 if (!keepWorld)
                 {
                     node.localPosition = localPosition;
@@ -188,22 +179,22 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["previous_node"] = previous,
                 ["node"] = GameObjectPath.Of(node),
                 ["parent"] = parent == null ? null : GameObjectPath.Of(parent),
                 ["sibling_index"] = node.GetSiblingIndex(),
                 ["kept_world_transform"] = keepWorld,
-            });
+            };
         }
 
         public static Dictionary<string, object> SetTransform(EditTargetScope scope, GameObjectTransformParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var world = string.Equals(p.Space, "world", StringComparison.OrdinalIgnoreCase);
 
-            NodeTargets.RecordUndo(scope, node, "ucp gameobject_transform");
+            scope.RecordUndo(node, $"ucp {CommandNames.GameObjectTransform}");
 
             var changed = new List<string>();
 
@@ -244,113 +235,85 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             scope.MarkDirty();
 
-            var payload = Payload(scope, new Dictionary<string, object>
+            var payload = new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["changed"] = changed,
                 ["space"] = world ? "world" : "local",
                 ["relative"] = p.Relative,
-            });
-            payload["transform"] = DescribeTransform(node);
+            };
+            payload["transform"] = TransformValues.Describe(node);
             return payload;
         }
 
         public static Dictionary<string, object> Activate(EditTargetScope scope, GameObjectActivateParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var target = p.Active ?? !node.gameObject.activeSelf;
 
-            NodeTargets.RecordUndo(scope, node.gameObject, "ucp gameobject_activate");
+            scope.RecordUndo(node.gameObject, $"ucp {CommandNames.GameObjectActivate}");
             node.gameObject.SetActive(target);
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["active"] = node.gameObject.activeSelf,
                 ["active_in_hierarchy"] = node.gameObject.activeInHierarchy,
-            });
+            };
         }
 
         public static Dictionary<string, object> SetTag(EditTargetScope scope, GameObjectTagParams p)
         {
-            var node = NodeTargets.Require(scope, p);
-            var tag = RequireTag(p.Tag);
+            var node = GameObjectPath.Require(scope, p);
+            var tag = TagsAndLayers.RequireTag(p.Tag);
 
             var touched = Targets(node, p.Recursive).ToList();
             foreach (var target in touched)
             {
-                NodeTargets.RecordUndo(scope, target.gameObject, "ucp gameobject_tag");
+                scope.RecordUndo(target.gameObject, $"ucp {CommandNames.GameObjectTag}");
                 target.gameObject.tag = tag;
             }
 
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["tag"] = tag,
                 ["nodes_changed"] = touched.Count,
-            });
+            };
         }
 
         public static Dictionary<string, object> SetLayer(EditTargetScope scope, GameObjectLayerParams p)
         {
-            var node = NodeTargets.Require(scope, p);
-            var layer = NodeTargets.RequireLayer(p.Layer);
+            var node = GameObjectPath.Require(scope, p);
+            var layer = TagsAndLayers.RequireLayer(p.Layer);
 
             var touched = Targets(node, p.Recursive).ToList();
             foreach (var target in touched)
             {
-                NodeTargets.RecordUndo(scope, target.gameObject, "ucp gameobject_layer");
+                scope.RecordUndo(target.gameObject, $"ucp {CommandNames.GameObjectLayer}");
                 target.gameObject.layer = layer;
             }
 
             scope.MarkDirty();
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["layer"] = layer,
                 ["layer_name"] = LayerMask.LayerToName(layer),
                 ["nodes_changed"] = touched.Count,
-            });
+            };
         }
 
         public static Dictionary<string, object> Info(EditTargetScope scope, NodeParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var go = node.gameObject;
 
-            var components = new List<object>();
-            var all = go.GetComponents<Component>();
-            for (var i = 0; i < all.Length; i++)
-            {
-                var component = all[i];
-                if (component == null)
-                {
-                    components.Add(new Dictionary<string, object>
-                    {
-                        ["index"] = i,
-                        ["type"] = "<missing script>",
-                    });
-                    continue;
-                }
-
-                var entry = new Dictionary<string, object>
-                {
-                    ["index"] = i,
-                    ["type"] = component.GetType().Name,
-                    ["full_type"] = component.GetType().FullName,
-                };
-
-                if (component is Behaviour behaviour)
-                    entry["enabled"] = behaviour.enabled;
-
-                components.Add(entry);
-            }
-
-            var payload = Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
                 ["name"] = go.name,
@@ -365,12 +328,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 ["sibling_index"] = node.GetSiblingIndex(),
                 ["child_count"] = node.childCount,
                 ["children"] = Enumerable.Range(0, node.childCount).Select(i => node.GetChild(i).name).ToList(),
-                ["components"] = components,
-                ["transform"] = DescribeTransform(node),
-                ["prefab"] = NodeTargets.DescribePrefabLink(go),
-            });
-
-            return payload;
+                ["components"] = ComponentService.Describe(go),
+                ["transform"] = TransformValues.Describe(node),
+                ["prefab"] = PrefabInstanceService.Link(go),
+            };
         }
 
         public static Dictionary<string, object> Tree(EditTargetScope scope, GameObjectTreeParams p)
@@ -384,7 +345,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             if (!string.IsNullOrWhiteSpace(p.Node) || p.Id != null || scope.IsPrefabContent)
             {
-                var node = NodeTargets.Require(scope, p);
+                var node = GameObjectPath.Require(scope, p);
                 roots.Add(Describe(node, depth, withComponents, includeInactive, ref count));
             }
             else
@@ -398,12 +359,12 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 }
             }
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["depth"] = depth,
                 ["node_count"] = count,
                 ["roots"] = roots,
-            });
+            };
         }
 
         public static Dictionary<string, object> Find(EditTargetScope scope, GameObjectFindParams p)
@@ -413,7 +374,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             var componentType = string.IsNullOrWhiteSpace(p.Component)
                 ? null
                 : ComponentTypeResolver.RequireComponent(p.Component);
-            var layer = string.IsNullOrWhiteSpace(p.Layer) ? (int?)null : NodeTargets.RequireLayer(p.Layer);
+            var layer = string.IsNullOrWhiteSpace(p.Layer) ? (int?)null : TagsAndLayers.RequireLayer(p.Layer);
 
             if (string.IsNullOrWhiteSpace(p.Name) && string.IsNullOrWhiteSpace(p.Tag) &&
                 layer == null && componentType == null && string.IsNullOrWhiteSpace(p.Path))
@@ -468,60 +429,21 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     ["active"] = go.activeSelf,
                     ["tag"] = go.tag,
                     ["layer_name"] = LayerMask.LayerToName(go.layer),
-                    ["components"] = NodeTargets.ComponentNames(go),
+                    ["components"] = ComponentService.Names(go),
                 });
             }
 
-            return Payload(scope, new Dictionary<string, object>
+            return new Dictionary<string, object>
             {
                 ["count"] = matches.Count,
                 ["total_matches"] = total,
                 ["truncated"] = total > matches.Count,
                 ["limit"] = limit,
                 ["matches"] = matches,
-            });
+            };
         }
 
         // --- shared shaping ----------------------------------------------------------------
-
-        /// <summary>Every payload carries the resolved target so the caller is never guessing.</summary>
-        internal static Dictionary<string, object> Payload(
-            EditTargetScope scope,
-            Dictionary<string, object> body)
-        {
-            body["target"] = scope.Describe();
-            return body;
-        }
-
-        internal static Dictionary<string, object> DescribeTransform(Transform node) =>
-            new Dictionary<string, object>
-            {
-                ["local_position"] = ToArray(node.localPosition),
-                ["local_euler"] = ToArray(node.localEulerAngles),
-                ["local_scale"] = ToArray(node.localScale),
-                ["position"] = ToArray(node.position),
-                ["euler"] = ToArray(node.eulerAngles),
-                ["lossy_scale"] = ToArray(node.lossyScale),
-            };
-
-        internal static float[] ToArray(Vector3 value) => new[] { value.x, value.y, value.z };
-
-        static void SetLocalTransform(
-            Transform node,
-            Newtonsoft.Json.Linq.JToken position,
-            Newtonsoft.Json.Linq.JToken rotation,
-            Newtonsoft.Json.Linq.JToken scale)
-        {
-            node.localPosition = JsonValues.IsAbsent(position)
-                ? Vector3.zero
-                : JsonValues.ToVector3(position, "position");
-            node.localRotation = JsonValues.IsAbsent(rotation)
-                ? Quaternion.identity
-                : JsonValues.ToQuaternion(rotation, "rotation");
-            node.localScale = JsonValues.IsAbsent(scale)
-                ? Vector3.one
-                : JsonValues.ToVector3(scale, "scale");
-        }
 
         static Dictionary<string, object> Describe(
             Transform node,
@@ -541,7 +463,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             };
 
             if (withComponents)
-                entry["components"] = NodeTargets.ComponentNames(node.gameObject);
+                entry["components"] = ComponentService.Names(node.gameObject);
 
             // Nested prefabs read as instance roots even inside prefab contents, so this marks the
             // boundary where edits become overrides instead of direct changes.
@@ -571,21 +493,5 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         static IEnumerable<Transform> Targets(Transform node, bool recursive) =>
             recursive ? GameObjectPath.Descend(node) : new[] { node };
-
-        static string RequireTag(string tag)
-        {
-            var trimmed = tag?.Trim();
-            if (string.IsNullOrEmpty(trimmed))
-                throw new ArgumentException("Parameter 'tag' is required.");
-
-            var tags = UnityEditorInternal.InternalEditorUtility.tags;
-            if (Array.IndexOf(tags, trimmed) < 0)
-            {
-                throw new ArgumentException(
-                    $"Unknown tag '{trimmed}'. Defined tags: {string.Join(", ", tags)}. Add one with tag_add.");
-            }
-
-            return trimmed;
-        }
     }
 }

@@ -11,7 +11,7 @@ namespace Air.UcpAgent.Editor.Commands
         public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabStageOpenParams>(
             CommandNames.PrefabOpen,
             CommandHostScope.Editor,
-            "Open a prefab in Prefab Mode (not required to edit it — pass 'prefab' to the content commands instead)");
+            "Open a prefab in Prefab Mode (not required to edit it — pass '" + ParamKeys.Prefab + "' to the content commands instead)");
 
         protected override Dictionary<string, object> Execute(PrefabStageOpenParams p) =>
             PrefabStageService.Open(p);

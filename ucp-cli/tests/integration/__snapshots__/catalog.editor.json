@@ -46,8 +46,8 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--target <string> destination path (required)",
-        "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
+        "--path <string> existing asset to start from (required)",
+        "--target <string> path to write (required)"
       ]
     },
     {
@@ -100,10 +100,10 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--folder <string> folder to list (default: Assets)",
         "--type <string> Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript",
-        "--name <string> name substring filter",
         "--recursive <bool> include sub-folders (default: true)",
+        "--folder <string> folder to search under (default: Assets)",
+        "--name <string> name substring filter",
         "--limit <int> max results (default: 200)"
       ]
     },
@@ -118,8 +118,8 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--target <string> destination path (required)",
-        "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
+        "--path <string> existing asset to start from (required)",
+        "--target <string> path to write (required)"
       ]
     },
     {
@@ -306,15 +306,15 @@
       "allow_connection_retry": true,
       "params": [
         "--name <string> name of the new GameObject (required)",
-        "--parent <string> parent node path (omit for top level / prefab root)",
         "--primitive <string> [empty|cube|sphere|capsule|cylinder|plane|quad] built-in shape to create",
-        "--position <jtoken> local position as [x,y,z], {x,y,z}, or a single number",
-        "--rotation <jtoken> local euler angles as [x,y,z] (or [x,y,z,w] for a raw quaternion)",
-        "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--tag <string> tag to assign",
         "--layer <string> layer name or index",
         "--components <string[]> component type names to add, e.g. [\"Rigidbody\",\"BoxCollider\"]",
         "--active <bool> initial active state (default: true)",
+        "--parent <string> parent node path (omit for top level / prefab root)",
+        "--position <jtoken> local position as [x,y,z], {x,y,z}, or a single number",
+        "--rotation <jtoken> local euler angles as [x,y,z] (or [x,y,z,w] for a raw quaternion)",
+        "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
       ]
@@ -657,8 +657,8 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--target <string> variant asset path to write (required)",
-        "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
+        "--path <string> existing asset to start from (required)",
+        "--target <string> path to write (required)"
       ]
     },
     {
@@ -682,8 +682,8 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--target <string> destination prefab path (required)",
-        "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
+        "--path <string> existing asset to start from (required)",
+        "--target <string> path to write (required)"
       ]
     },
     {
@@ -738,12 +738,12 @@
       "allow_connection_retry": true,
       "params": [
         "--source <string> prefab asset to instantiate (required)",
-        "--parent <string> parent node path (omit for top level / prefab root)",
         "--name <string> name for the instance (default: the prefab name)",
-        "--position <jtoken> local position as [x,y,z] or a single number",
-        "--rotation <jtoken> local euler angles as [x,y,z]",
-        "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--index <int> sibling index under the parent (default: last)",
+        "--parent <string> parent node path (omit for top level / prefab root)",
+        "--position <jtoken> local position as [x,y,z], {x,y,z}, or a single number",
+        "--rotation <jtoken> local euler angles as [x,y,z] (or [x,y,z,w] for a raw quaternion)",
+        "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
       ]
@@ -757,9 +757,9 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
+        "--includeVariants <bool> include variants and model prefabs (default: true)",
         "--folder <string> folder to search under (default: Assets)",
         "--name <string> name substring filter",
-        "--includeVariants <bool> include variants and model prefabs (default: true)",
         "--limit <int> max results (default: 200)"
       ]
     },
@@ -774,8 +774,8 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--target <string> destination prefab path (required)",
-        "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
+        "--path <string> existing asset to start from (required)",
+        "--target <string> path to write (required)"
       ]
     },
     {
@@ -817,7 +817,7 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--path <string> prefab asset to swap in (required)",
+        "--source <string> prefab asset to swap in (required)",
         "--keepTransform <bool> keep the instance's current transform values (default: true)",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
@@ -902,7 +902,7 @@
       "default_timeout_ms": null,
       "allow_connection_retry": true,
       "params": [
-        "--action <string> [enable|disable|status|clear|hierarchy] profiler operation (required)",
+        "--action <string> [enable|disable|status|clear|hierarchy] profiler operation (default: hierarchy)",
         "--frame <int> frame index (-1 = latest, hierarchy only)",
         "--from <int> start frame for range hierarchy",
         "--to <int> end frame for range hierarchy",
@@ -911,7 +911,7 @@
         "--root <string> filter root sample",
         "--parent <int> parent sample id",
         "--min <float> minimum time threshold",
-        "--sort <string> [total|self] sort key",
+        "--sort <string> [total|self|calls] sort key",
         "--depth <int> max depth",
         "--max <int> max children per node"
       ]
@@ -1062,7 +1062,7 @@
         "--output_path <string> relative or absolute path",
         "--width <int> pixels (view=ui defaults to the CanvasScaler reference resolution)",
         "--height <int> pixels (view=ui defaults to the CanvasScaler reference resolution)",
-        "--prefab <string> view=ui: prefab asset to render a throwaway copy of (no side effects)",
+        "--source <string> view=ui: prefab asset to render a throwaway copy of (no side effects)",
         "--node <string> view=ui: node in an open scene whose canvas to render",
         "--scene <string> view=ui: loaded scene the node belongs to (default: active scene)",
         "--background <string> view=ui: background as #RRGGBB, #RRGGBBAA or 'transparent' (default)"

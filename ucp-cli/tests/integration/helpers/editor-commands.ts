@@ -16,6 +16,8 @@ export interface EditorCommandCase {
   skip?: boolean;
   /** The command is expected to fail — used to pin down error handling, not just happy paths. */
   expectFailure?: boolean;
+  /** false when the result's structure depends on Editor state (e.g. what the console holds). */
+  shape?: false;
   assert: (result: CliResult) => void;
 }
 
@@ -42,6 +44,8 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
   {
     type: "state",
     description: "agent/editor state snapshot",
+    // recent_console is empty or not depending on what the console holds.
+    shape: false,
     assert: (r) => {
       expect(r.ok).toBe(true);
       const data = r.data as Record<string, unknown> | null;
@@ -53,6 +57,7 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     type: "console",
     description: "read console entries",
     args: { type: "log,warning,error", lines: 5, stacktrace: "none" },
+    shape: false,
     assert: (r) => {
       expect(r.ok).toBe(true);
       const data = r.data as Record<string, unknown> | null;
@@ -83,6 +88,15 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
       expect(r.ok).toBe(true);
       const data = r.data as Record<string, unknown> | null;
       expect(data?.path).toBeTruthy();
+    },
+  },
+  {
+    type: "screenshot",
+    description: "screenshot refuses to write outside the project",
+    args: { view: "game", width: 16, height: 16, output_path: "../ucp-outside.png" },
+    expectFailure: true,
+    assert: (r) => {
+      expect(describeFailure(r)).toContain("must be inside the project");
     },
   },
   {

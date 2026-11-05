@@ -1,0 +1,253 @@
+{
+  "asset_create_folder": {
+    "already_existed": "boolean",
+    "created": "boolean",
+    "guid": "string",
+    "path": "string"
+  },
+  "gameobject_create": {
+    "components": [
+      "string"
+    ],
+    "components_added": [],
+    "instance_id": "number",
+    "name": "string",
+    "node": "string",
+    "parent": "null",
+    "primitive": "string",
+    "rect_transform": "boolean",
+    "target": {
+      "kind": "string",
+      "prefab": "null",
+      "scene": "string"
+    }
+  },
+  "layer_add": {
+    "added": "boolean",
+    "index": "number",
+    "layer": "string"
+  },
+  "layer_list": {
+    "count": "number",
+    "first_user_layer": "number",
+    "layers": [
+      {
+        "builtin": "boolean",
+        "index": "number",
+        "name": "string"
+      }
+    ]
+  },
+  "layer_remove": {
+    "index": "number",
+    "layer": "string",
+    "removed": "boolean"
+  },
+  "scene_close": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "closed": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "removed": "boolean"
+  },
+  "scene_info": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ]
+  },
+  "scene_list": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "count": "number",
+    "folder": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "scenes": [
+      {
+        "guid": "string",
+        "in_build": "boolean",
+        "name": "string",
+        "path": "string"
+      }
+    ],
+    "total_matches": "number",
+    "truncated": "boolean"
+  },
+  "scene_new": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "null",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": {
+          "$union": [
+            "null",
+            "string"
+          ]
+        },
+        "root_count": "number"
+      }
+    ],
+    "mode": "string",
+    "name": "string",
+    "path": "null",
+    "saved": "boolean",
+    "setup": "string"
+  },
+  "scene_open": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "mode": "string",
+    "name": "string",
+    "path": "string",
+    "root_count": "number"
+  },
+  "scene_save": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "saved": [
+      "string"
+    ],
+    "scope": "string"
+  },
+  "scene_save_as": {
+    "active_scene": {
+      "dirty": "boolean",
+      "loaded": "boolean",
+      "name": "string",
+      "path": "string",
+      "root_count": "number"
+    },
+    "guid": "string",
+    "loaded_scenes": [
+      {
+        "dirty": "boolean",
+        "loaded": "boolean",
+        "name": "string",
+        "path": "string",
+        "root_count": "number"
+      }
+    ],
+    "path": "string",
+    "previous_path": "null"
+  },
+  "selection_clear": {
+    "cleared": "number",
+    "count": "number"
+  },
+  "selection_get": {
+    "active": "null",
+    "assets": [],
+    "count": "number",
+    "nodes": []
+  },
+  "selection_set": {
+    "active": {
+      "asset_path": "string",
+      "guid": "string",
+      "instance_id": "number",
+      "name": "string",
+      "type": "string"
+    },
+    "additive": "boolean",
+    "assets": [
+      {
+        "guid": "string",
+        "name": "string",
+        "path": "string",
+        "type": "string"
+      }
+    ],
+    "count": "number",
+    "nodes": []
+  },
+  "tag_add": {
+    "added": "boolean",
+    "tag": "string",
+    "tags": [
+      "string"
+    ]
+  },
+  "tag_remove": {
+    "removed": "boolean",
+    "tag": "string",
+    "tags": [
+      "string"
+    ]
+  }
+}

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   SCRATCH_FOLDER,
   cleanupScratch,
+  expectShapesUnchanged,
   fails,
   ok,
   releaseScratchStage,
@@ -299,7 +300,7 @@ describe.skipIf(!runEditorTests)("prefab content commands (Unity required)", () 
     const afterRevert = await ok("prefab_overrides", { node, scene: SCRATCH_SCENE });
     expect(afterRevert.has_overrides).toBe(false);
 
-    const replaced = await ok("prefab_replace", { node, scene: SCRATCH_SCENE, path: VARIANT });
+    const replaced = await ok("prefab_replace", { node, scene: SCRATCH_SCENE, source: VARIANT });
     expect(replaced.source).toBe(VARIANT);
     expect(replaced.overrides_preserved).toBe(false);
 
@@ -386,5 +387,9 @@ describe.skipIf(!runEditorTests)("prefab content commands (Unity required)", () 
     expect(await fails("prefab_apply", { prefab: PREFAB, node: "Smoke" })).toContain(
       "not part of a prefab instance",
     );
+  });
+
+  it("returns results of the same shape", async () => {
+    await expectShapesUnchanged("shapes.prefab.json");
   });
 });

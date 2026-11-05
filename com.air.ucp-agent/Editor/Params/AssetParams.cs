@@ -3,27 +3,43 @@ namespace Air.UcpAgent.Params
     /// <summary>Commands that address one asset or folder.</summary>
     public class AssetPathParams
     {
-        [CliParam(Description = "asset or folder path, e.g. Assets/Prefabs/Player.prefab", Required = true,
-            AlternateKeys = "asset,asset_path")]
+        [CliParam(ParamKeys.Path, Description = "asset or folder path, e.g. Assets/Prefabs/Player.prefab",
+            Required = true, AlternateKeys = "asset,asset_path")]
         public string Path { get; set; }
     }
 
-    public sealed class AssetListParams
+    /// <summary>Commands that write an asset somewhere new from an existing one: copy, move, variant.</summary>
+    public abstract class CopyParams
     {
-        [CliParam(Description = "folder to list (default: Assets)")]
-        public string Folder { get; set; }
+        [CliParam(ParamKeys.Path, Description = "existing asset to start from", Required = true,
+            AlternateKeys = "asset,asset_path")]
+        public string Path { get; set; }
 
-        [CliParam(Description = "Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript")]
-        public string Type { get; set; }
+        [CliParam(ParamKeys.Target, Description = "path to write", Required = true,
+            AlternateKeys = "output,destination,to")]
+        public string Target { get; set; }
+    }
+
+    /// <summary>The folder search shared by asset_list, prefab_list and scene_list.</summary>
+    public abstract class FolderQueryParams
+    {
+        [CliParam(ParamKeys.Folder, Description = "folder to search under (default: Assets)")]
+        public string Folder { get; set; }
 
         [CliParam(Description = "name substring filter")]
         public string Name { get; set; }
 
-        [CliParam(Description = "include sub-folders (default: true)")]
-        public bool? Recursive { get; set; }
-
         [CliParam(Description = "max results (default: 200)")]
         public int? Limit { get; set; }
+    }
+
+    public sealed class AssetListParams : FolderQueryParams
+    {
+        [CliParam(Description = "Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript")]
+        public string Type { get; set; }
+
+        [CliParam(Description = "include sub-folders (default: true)")]
+        public bool? Recursive { get; set; }
     }
 
     public sealed class AssetFindParams
@@ -56,10 +72,8 @@ namespace Air.UcpAgent.Params
     {
     }
 
-    public sealed class AssetMoveParams : AssetPathParams
+    public sealed class AssetMoveParams : CopyParams
     {
-        [CliParam(Description = "destination path", Required = true, AlternateKeys = "output,destination,to")]
-        public string Target { get; set; }
     }
 
     public sealed class AssetDependenciesParams : AssetPathParams
@@ -70,7 +84,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class AssetGuidParams
     {
-        [CliParam(Description = "asset path to convert to a GUID", AlternateKeys = "asset,asset_path")]
+        [CliParam(ParamKeys.Path, Description = "asset path to convert to a GUID", AlternateKeys = "asset,asset_path")]
         public string Path { get; set; }
 
         [CliParam(Description = "GUID to convert to an asset path")]

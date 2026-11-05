@@ -18,9 +18,8 @@ namespace Air.UcpAgent.Params
 
     public sealed class ProfilerParams
     {
-        [CliParam(Description = "profiler operation",
-            AllowedValues = "enable|disable|status|clear|hierarchy",
-            Required = true)]
+        [CliParam(Description = "profiler operation (default: hierarchy)",
+            AllowedValues = "enable|disable|status|clear|hierarchy")]
         public string Action { get; set; }
 
         [CliParam(Description = "frame index (-1 = latest, hierarchy only)")]
@@ -47,7 +46,7 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "minimum time threshold")]
         public float? Min { get; set; }
 
-        [CliParam(Description = "sort key", AllowedValues = "total|self")]
+        [CliParam(Description = "sort key", AllowedValues = "total|self|calls")]
         public string Sort { get; set; } = "total";
 
         [CliParam(Description = "max depth")]
@@ -90,14 +89,13 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "pixels (view=ui defaults to the CanvasScaler reference resolution)")]
         public int? Height { get; set; }
 
-        [CliParam(Description = "view=ui: prefab asset to render a throwaway copy of (no side effects)",
-            AlternateKeys = "prefab_path")]
-        public string Prefab { get; set; }
+        [CliParam(ParamKeys.Source, Description = "view=ui: prefab asset to render a throwaway copy of (no side effects)")]
+        public string Source { get; set; }
 
-        [CliParam(Description = "view=ui: node in an open scene whose canvas to render")]
+        [CliParam(ParamKeys.Node, Description = "view=ui: node in an open scene whose canvas to render")]
         public string Node { get; set; }
 
-        [CliParam(Description = "view=ui: loaded scene the node belongs to (default: active scene)")]
+        [CliParam(ParamKeys.Scene, Description = "view=ui: loaded scene the node belongs to (default: active scene)")]
         public string Scene { get; set; }
 
         [CliParam(Description = "view=ui: background as #RRGGBB, #RRGGBBAA or 'transparent' (default)")]

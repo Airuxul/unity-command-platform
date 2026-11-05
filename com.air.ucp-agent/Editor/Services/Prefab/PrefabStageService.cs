@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.IO;
 using Air.UcpAgent.Editor.Services.Objects;
 using Air.UcpAgent.Params;
@@ -25,8 +26,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
     {
         public static Dictionary<string, object> Open(PrefabStageOpenParams p)
         {
-            var path = AssetPaths.RequireExisting(p.Path, "path");
-            AssetPaths.RequireAsset<GameObject>(path, "path");
+            var path = AssetPaths.RequireExisting(p.Path, ParamKeys.Path);
+            AssetPaths.RequireAsset<GameObject>(path, ParamKeys.Path);
 
             var current = PrefabStageUtility.GetCurrentPrefabStage();
             if (current != null && current.scene.isDirty)
@@ -36,7 +37,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 {
                     throw new InvalidOperationException(
                         $"'{openPath}' is already open in Prefab Mode with unsaved changes. " +
-                        "Run prefab_save, or pass force=true to discard them.");
+                        $"Run {CommandNames.PrefabSave}, or pass force=true to discard them.");
                 }
 
                 current.ClearDirtiness();
@@ -47,8 +48,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             {
                 // The context instance lives in the scene; Open(null, null) would search the stage
                 // that is about to be replaced when Prefab Mode is already open.
-                using var scope = EditTargetScope.OpenScene(null);
-                context = GameObjectPath.Require(scope, p.Node, "node").gameObject;
+                using var scope = EditTargetScope.PeekScene(null);
+                context = GameObjectPath.Require(scope, p.Node, ParamKeys.Node).gameObject;
             }
 
             var opened = context == null
@@ -84,7 +85,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 if (!(p?.Force ?? false))
                 {
                     throw new InvalidOperationException(
-                        $"'{path}' has unsaved changes. Call prefab_close with save=true, or force=true to discard them.");
+                        $"'{path}' has unsaved changes. Call {CommandNames.PrefabClose} with save=true, or force=true to discard them.");
                 }
 
                 // Clearing the flag is what keeps GoToMainStage from opening a modal prompt.
@@ -154,7 +155,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 return;
 
             throw new InvalidOperationException(
-                $"'{open}' is open in Prefab Mode and cannot be {action}. Run prefab_close first.");
+                $"'{open}' is open in Prefab Mode and cannot be {action}. Run {CommandNames.PrefabClose} first.");
         }
 
         static Dictionary<string, object> Describe(string state)
@@ -171,7 +172,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["dirty"] = stage.scene.isDirty,
                 ["mode"] = stage.mode.ToString(),
                 ["child_count"] = root == null ? 0 : root.transform.childCount,
-                ["components"] = root == null ? null : NodeTargets.ComponentNames(root),
+                ["components"] = root == null ? null : ComponentService.Names(root),
             };
         }
 
@@ -179,7 +180,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         {
             var stage = PrefabStageUtility.GetCurrentPrefabStage();
             if (stage == null)
-                throw new InvalidOperationException("No prefab is open in Prefab Mode. Open one with prefab_open.");
+                throw new InvalidOperationException($"No prefab is open in Prefab Mode. Open one with {CommandNames.PrefabOpen}.");
 
             if (stage.prefabContentsRoot == null)
                 throw new InvalidOperationException("The open prefab stage has no contents root.");

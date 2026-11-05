@@ -79,13 +79,13 @@ namespace Air.UcpAgent.Editor.Services
 
         static Dictionary<string, object> CaptureUi(ScreenshotParams p, string outputPath)
         {
-            var hasPrefab = !string.IsNullOrWhiteSpace(p.Prefab);
+            var hasPrefab = !string.IsNullOrWhiteSpace(p.Source);
             var hasNode = !string.IsNullOrWhiteSpace(p.Node);
             if (hasPrefab == hasNode)
             {
                 throw new ArgumentException(
-                    "view=ui needs exactly one of 'prefab' (renders a throwaway copy, no side effects) " +
-                    "or 'node' (renders the live canvas in the open scene).");
+                    $"view=ui needs exactly one of '{ParamKeys.Source}' (a prefab: renders a throwaway copy, no side effects) " +
+                    $"or '{ParamKeys.Node}' (renders the live canvas in the open scene).");
             }
 
             return hasPrefab ? CaptureUiFromPrefab(p, outputPath) : CaptureUiFromScene(p, outputPath);
@@ -97,8 +97,8 @@ namespace Air.UcpAgent.Editor.Services
         /// </summary>
         static Dictionary<string, object> CaptureUiFromPrefab(ScreenshotParams p, string outputPath)
         {
-            var prefabPath = AssetPaths.RequireExisting(p.Prefab, "prefab");
-            var asset = AssetPaths.RequireAsset<GameObject>(prefabPath, "prefab");
+            var prefabPath = AssetPaths.RequireExisting(p.Source, ParamKeys.Source);
+            var asset = AssetPaths.RequireAsset<GameObject>(prefabPath, ParamKeys.Source);
 
             using var stage = PreviewStage.Begin();
             var copy = PrefabUtility.InstantiatePrefab(asset, stage.Scene) as GameObject;
@@ -116,8 +116,9 @@ namespace Air.UcpAgent.Editor.Services
 
         static Dictionary<string, object> CaptureUiFromScene(ScreenshotParams p, string outputPath)
         {
-            using var scope = EditTargetScope.Open(null, p.Scene);
-            var node = GameObjectPath.Require(scope, p.Node, "node");
+            // 'node' is documented as a node in an open scene, so the Prefab Mode stage is not searched.
+            using var scope = EditTargetScope.PeekScene(p.Scene);
+            var node = GameObjectPath.Require(scope, p.Node, ParamKeys.Node);
             var canvas = FindCanvas(node.gameObject, p.Node);
 
             var result = RenderCanvas(canvas, p, outputPath, canvas.gameObject.scene);
@@ -285,14 +286,22 @@ namespace Air.UcpAgent.Editor.Services
             }
         }
 
+        /// <summary>
+        /// Relative paths are under the project; absolute ones must point inside it too, so a
+        /// caller cannot write a PNG anywhere on disk.
+        /// </summary>
         static string ResolveOutputPath(string userPath)
         {
             var path = string.IsNullOrWhiteSpace(userPath) ? "Screenshots/screenshot.png" : userPath.Trim();
-            if (Path.IsPathRooted(path))
-                return Path.GetFullPath(path);
+            var projectRoot = EditorProjectPaths.GetProjectPath();
+            var full = Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(projectRoot, path));
 
-            var projectRoot = Path.GetDirectoryName(Application.dataPath);
-            return Path.GetFullPath(Path.Combine(projectRoot ?? ".", path));
+            var root = projectRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                       Path.DirectorySeparatorChar;
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"'output_path' must be inside the project ({projectRoot}), got '{full}'.");
+
+            return full;
         }
     }
 }

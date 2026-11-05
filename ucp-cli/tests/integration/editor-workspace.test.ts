@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { SCRATCH_FOLDER, cleanupScratch, fails, ok, run } from "./helpers/content-scenario.js";
+import {
+  SCRATCH_FOLDER,
+  cleanupScratch,
+  expectShapesUnchanged,
+  fails,
+  ok,
+  run,
+} from "./helpers/content-scenario.js";
 import { hasReadyEditorSession } from "./helpers/editor-commands.js";
 
 /**
@@ -100,5 +107,9 @@ describe.skipIf(!runEditorTests)("editor workspace commands (Unity required)", (
     await ok("selection_clear");
     const cleared = await ok("selection_get");
     expect(cleared.count).toBe(0);
+  });
+
+  it("returns results of the same shape", async () => {
+    await expectShapesUnchanged("shapes.workspace.json");
   });
 });

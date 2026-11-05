@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Params;
+using Air.UcpAgent.Editor.Services.Scenes;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
 
 namespace Air.UcpAgent.Editor.Services.Objects
 {
@@ -66,6 +70,15 @@ namespace Air.UcpAgent.Editor.Services.Objects
         /// <summary>A loaded scene only — never the Prefab Mode stage, whatever is open.</summary>
         public static EditTargetScope OpenScene(string sceneName) => BeginUndoGroup(LoadedScene(sceneName));
 
+        /// <summary>
+        /// The same target as <see cref="Open"/> for a caller that only reads: no undo group is
+        /// opened, so there is nothing to commit or revert.
+        /// </summary>
+        public static EditTargetScope Peek(string prefabPath, string sceneName = null) => Resolve(prefabPath, sceneName);
+
+        /// <summary>Read-only <see cref="OpenScene"/>.</summary>
+        public static EditTargetScope PeekScene(string sceneName) => LoadedScene(sceneName);
+
         static EditTargetScope BeginUndoGroup(EditTargetScope scope)
         {
             if (scope.SupportsUndo)
@@ -83,7 +96,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
         static EditTargetScope Resolve(string prefabPath, string sceneName)
         {
             if (!string.IsNullOrWhiteSpace(prefabPath))
-                return OpenPrefab(AssetPaths.RequirePrefabPath(prefabPath, "prefab"));
+                return OpenPrefab(AssetPaths.RequirePrefabPath(prefabPath, ParamKeys.Prefab));
 
             if (string.IsNullOrWhiteSpace(sceneName))
             {
@@ -108,7 +121,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (assetType == PrefabAssetType.Model)
             {
                 throw new InvalidOperationException(
-                    $"'{prefabPath}' is an imported model prefab and cannot be edited. Create a variant first (prefab_create_variant).");
+                    $"'{prefabPath}' is an imported model prefab and cannot be edited. Create a variant first ({CommandNames.PrefabCreateVariant}).");
             }
 
             var stage = PrefabStageUtility.GetCurrentPrefabStage();
@@ -145,39 +158,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 _stageHadUnsavedChanges = stage.scene.isDirty,
             };
 
-        static EditTargetScope LoadedScene(string sceneName)
-        {
-            var scene = string.IsNullOrWhiteSpace(sceneName)
-                ? SceneManager.GetActiveScene()
-                : FindLoadedScene(sceneName);
-
-            if (!scene.IsValid())
-            {
-                throw new InvalidOperationException(
-                    "No valid scene is loaded. Open one with scene_open, or target a prefab asset with the 'prefab' argument.");
-            }
-
-            return new EditTargetScope { Kind = EditTargetKind.Scene, Scene = scene };
-        }
-
-        static Scene FindLoadedScene(string nameOrPath)
-        {
-            var wanted = AssetPaths.Normalize(nameOrPath);
-            var loaded = new List<string>();
-            for (var i = 0; i < SceneManager.sceneCount; i++)
-            {
-                var scene = SceneManager.GetSceneAt(i);
-                loaded.Add(string.IsNullOrEmpty(scene.path) ? scene.name : scene.path);
-                if (string.Equals(scene.name, wanted, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(AssetPaths.Normalize(scene.path), wanted, StringComparison.OrdinalIgnoreCase))
-                {
-                    return scene;
-                }
-            }
-
-            throw new ArgumentException(
-                $"Scene '{nameOrPath}' is not loaded. Loaded scenes: {(loaded.Count == 0 ? "(none)" : string.Join(", ", loaded))}.");
-        }
+        static EditTargetScope LoadedScene(string sceneName) =>
+            new EditTargetScope { Kind = EditTargetKind.Scene, Scene = SceneLookup.Require(sceneName) };
 
         /// <summary>Root GameObjects the node paths are resolved against.</summary>
         public IReadOnlyList<GameObject> Roots()
@@ -196,6 +178,33 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         /// <summary>Marks the target as changed so <see cref="Commit"/> persists it.</summary>
         public void MarkDirty() => _dirty = true;
+
+        // Undo shims: recording undo is required in a scene or stage and refused for off-screen
+        // prefab contents and in Play Mode (see SupportsUndo).
+
+        public void RecordUndo(Object target, string label)
+        {
+            if (SupportsUndo && target != null)
+                Undo.RecordObject(target, label);
+        }
+
+        public void RegisterCreated(GameObject created, string label)
+        {
+            if (SupportsUndo && created != null)
+                Undo.RegisterCreatedObjectUndo(created, label);
+        }
+
+        /// <summary>Destroys a GameObject or component so that <see cref="Revert"/> can bring it back.</summary>
+        public void Destroy(Object target)
+        {
+            if (target == null)
+                return;
+
+            if (SupportsUndo)
+                Undo.DestroyObjectImmediate(target);
+            else
+                Object.DestroyImmediate(target);
+        }
 
         /// <summary>
         /// Whether <see cref="Revert"/> really takes changes back: off-screen prefab contents are
@@ -216,7 +225,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (_stageHadUnsavedChanges)
             {
                 throw new InvalidOperationException(
-                    $"'{PrefabPath}' is open in Prefab Mode with unsaved changes. Save or discard them first (prefab_save / prefab_close).");
+                    $"'{PrefabPath}' is open in Prefab Mode with unsaved changes. Save or discard them first ({CommandNames.PrefabSave} / {CommandNames.PrefabClose}).");
             }
 
             if (_undoGroup >= 0)

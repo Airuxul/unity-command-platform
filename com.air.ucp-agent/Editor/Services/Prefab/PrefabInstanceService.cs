@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.IO;
 using Air.UcpAgent.Editor.Services.Objects;
 using Air.UcpAgent.Params;
@@ -19,8 +20,8 @@ namespace Air.UcpAgent.Editor.Services.Prefab
     {
         public static Dictionary<string, object> Instantiate(EditTargetScope scope, PrefabInstantiateParams p)
         {
-            var sourcePath = AssetPaths.RequireExisting(p.Source, "source");
-            var sourceAsset = AssetPaths.RequireAsset<GameObject>(sourcePath, "source");
+            var sourcePath = AssetPaths.RequireExisting(p.Source, ParamKeys.Source);
+            var sourceAsset = AssetPaths.RequireAsset<GameObject>(sourcePath, ParamKeys.Source);
 
             if (scope.IsPrefabContent &&
                 string.Equals(scope.PrefabPath, sourcePath, StringComparison.OrdinalIgnoreCase))
@@ -36,7 +37,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 throw new InvalidOperationException($"Could not instantiate '{sourcePath}'.");
 
             // Registered before anything below can throw, so a failed instantiate is undone with the rest.
-            NodeTargets.RegisterCreated(scope, instance, "ucp prefab_instantiate");
+            scope.RegisterCreated(instance, $"ucp {CommandNames.PrefabInstantiate}");
 
             if (parent != null)
                 instance.transform.SetParent(parent, worldPositionStays: false);
@@ -45,12 +46,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 instance.name = p.Name.Trim();
 
             var transform = instance.transform;
-            if (!JsonValues.IsAbsent(p.Position))
-                transform.localPosition = JsonValues.ToVector3(p.Position, "position");
-            if (!JsonValues.IsAbsent(p.Rotation))
-                transform.localRotation = JsonValues.ToQuaternion(p.Rotation, "rotation");
-            if (!JsonValues.IsAbsent(p.Scale))
-                transform.localScale = JsonValues.ToVector3(p.Scale, "scale");
+            TransformValues.ApplyLocal(transform, p.Position, p.Rotation, p.Scale);
             if (p.Index.HasValue)
                 transform.SetSiblingIndex(Mathf.Max(0, p.Index.Value));
 
@@ -64,14 +60,13 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["instance_id"] = instance.GetInstanceID(),
                 ["parent"] = parent == null ? null : GameObjectPath.Of(parent),
                 ["nested"] = scope.IsPrefabContent,
-                ["transform"] = GameObjectService.DescribeTransform(transform),
-                ["target"] = scope.Describe(),
+                ["transform"] = TransformValues.Describe(transform),
             };
         }
 
         public static Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverrideParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
             var scopeLabel = "instance";
@@ -101,13 +96,12 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["applied_to"] = assetPath,
                 ["applied_scope"] = scopeLabel,
                 ["remaining_overrides"] = CountOverrides(root),
-                ["target"] = scope.Describe(),
             };
         }
 
         public static Dictionary<string, object> Revert(EditTargetScope scope, PrefabOverrideParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
             var scopeLabel = "instance";
@@ -137,20 +131,20 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["source"] = assetPath,
                 ["reverted_scope"] = scopeLabel,
                 ["remaining_overrides"] = CountOverrides(root),
-                ["target"] = scope.Describe(),
             };
         }
 
         public static Dictionary<string, object> Overrides(EditTargetScope scope, PrefabOverridesParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
             var modifications = (PrefabUtility.GetPropertyModifications(root) ?? Array.Empty<PropertyModification>())
                 .Where(m => m != null)
                 .Select(m => new Dictionary<string, object>
                 {
-                    ["target"] = m.target == null ? null : m.target.GetType().Name,
+                    // Named apart from the payload's own "target" (the edit target).
+                    ["component_type"] = m.target == null ? null : m.target.GetType().Name,
                     ["target_node"] = NodeOf(m.target),
                     ["property"] = m.propertyPath,
                     ["value"] = m.value,
@@ -217,13 +211,12 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["added_components"] = added,
                 ["removed_components"] = removed,
                 ["added_gameobjects"] = addedObjects,
-                ["target"] = scope.Describe(),
             };
         }
 
         public static Dictionary<string, object> Unpack(EditTargetScope scope, PrefabUnpackParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
 
             var mode = p.Completely ? PrefabUnpackMode.Completely : PrefabUnpackMode.OutermostRoot;
@@ -245,7 +238,6 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["mode"] = mode.ToString(),
                 ["still_instance"] = stillInstance,
                 ["still_instance_of"] = string.IsNullOrEmpty(stillInstanceOf) ? null : stillInstanceOf,
-                ["target"] = scope.Describe(),
             };
         }
 
@@ -256,10 +248,10 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         /// </summary>
         public static Dictionary<string, object> Replace(EditTargetScope scope, PrefabReplaceParams p)
         {
-            var newPath = AssetPaths.RequireExisting(p.Path, "path");
-            var newAsset = AssetPaths.RequireAsset<GameObject>(newPath, "path");
+            var newPath = AssetPaths.RequireExisting(p.Source, ParamKeys.Source);
+            var newAsset = AssetPaths.RequireAsset<GameObject>(newPath, ParamKeys.Source);
 
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var (root, oldPath) = RequireInstance(node.gameObject);
 
             if (string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase))
@@ -271,7 +263,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (scope.IsPrefabContent && root == scope.PrefabRoot)
             {
                 throw new InvalidOperationException(
-                    $"'{root.name}' is the root of '{scope.PrefabPath}' itself and cannot be replaced. Create a variant of '{newPath}' instead (prefab_create_variant).");
+                    $"'{root.name}' is the root of '{scope.PrefabPath}' itself and cannot be replaced. Create a variant of '{newPath}' instead ({CommandNames.PrefabCreateVariant}).");
             }
 
             var keepTransform = p.KeepTransform ?? true;
@@ -288,7 +280,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (replacement == null)
                 throw new InvalidOperationException($"Could not instantiate '{newPath}'.");
 
-            NodeTargets.RegisterCreated(scope, replacement, "ucp prefab_replace");
+            scope.RegisterCreated(replacement, $"ucp {CommandNames.PrefabReplace}");
 
             if (parent != null)
                 replacement.transform.SetParent(parent, worldPositionStays: false);
@@ -303,7 +295,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             replacement.name = name;
             replacement.SetActive(wasActive);
 
-            NodeTargets.Destroy(scope, root);
+            scope.Destroy(root);
             replacement.transform.SetSiblingIndex(siblingIndex);
             scope.MarkDirty();
 
@@ -315,37 +307,26 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 ["kept_transform"] = keepTransform,
                 ["overrides_preserved"] = false,
                 ["instance_id"] = replacement.GetInstanceID(),
-                ["target"] = scope.Describe(),
             };
         }
 
         public static Dictionary<string, object> Info(EditTargetScope scope, PrefabInstanceParams p)
         {
-            var node = NodeTargets.Require(scope, p);
+            var node = GameObjectPath.Require(scope, p);
             var go = node.gameObject;
 
-            var result = new Dictionary<string, object>
-            {
-                ["node"] = GameObjectPath.Of(node),
-                ["is_part_of_instance"] = PrefabUtility.IsPartOfPrefabInstance(go),
-                ["is_instance_root"] = PrefabUtility.IsAnyPrefabInstanceRoot(go),
-                ["is_part_of_asset"] = PrefabUtility.IsPartOfPrefabAsset(go),
-                ["target"] = scope.Describe(),
-            };
+            var result = Link(go);
+            result["node"] = GameObjectPath.Of(node);
+            result["is_part_of_asset"] = PrefabUtility.IsPartOfPrefabAsset(go);
 
             if (!PrefabUtility.IsPartOfPrefabInstance(go))
-            {
-                result["source"] = null;
                 return result;
-            }
 
             var nearest = PrefabUtility.GetNearestPrefabInstanceRoot(go);
             var outermost = PrefabUtility.GetOutermostPrefabInstanceRoot(go);
 
-            result["source"] = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(go);
             result["nearest_instance_root"] = nearest == null ? null : GameObjectPath.Of(nearest.transform);
             result["outermost_instance_root"] = outermost == null ? null : GameObjectPath.Of(outermost.transform);
-            result["status"] = PrefabUtility.GetPrefabInstanceStatus(go).ToString();
             result["is_disconnected"] = PrefabUtility.GetPrefabInstanceStatus(go) != PrefabInstanceStatus.Connected;
 
             var corresponding = PrefabUtility.GetCorrespondingObjectFromSource(go);
@@ -353,6 +334,28 @@ namespace Air.UcpAgent.Editor.Services.Prefab
 
             if (nearest != null)
                 result["overrides"] = CountOverrides(nearest);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Prefab linkage for a node: whether editing it is an override, and of which asset. The one
+        /// set of keys gameobject_info and prefab_instance_info both report.
+        /// </summary>
+        public static Dictionary<string, object> Link(GameObject node)
+        {
+            var isPart = PrefabUtility.IsPartOfPrefabInstance(node);
+            var source = isPart ? PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(node) : null;
+
+            var result = new Dictionary<string, object>
+            {
+                ["is_part_of_instance"] = isPart,
+                ["is_instance_root"] = PrefabUtility.IsAnyPrefabInstanceRoot(node),
+                ["source"] = string.IsNullOrEmpty(source) ? null : source,
+            };
+
+            if (isPart)
+                result["status"] = PrefabUtility.GetPrefabInstanceStatus(node).ToString();
 
             return result;
         }
@@ -365,7 +368,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             {
                 throw new InvalidOperationException(
                     $"'{GameObjectPath.Of(node.transform)}' is not part of a prefab instance. " +
-                    "Create one with prefab_instantiate, or edit the asset directly by passing 'prefab'.");
+                    $"Create one with {CommandNames.PrefabInstantiate}, or edit the asset directly by passing '{ParamKeys.Prefab}'.");
             }
 
             var root = PrefabUtility.GetNearestPrefabInstanceRoot(node);
@@ -391,15 +394,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
                 throw new ArgumentException("'property' also needs 'component' so the field can be located.");
 
             component = ComponentService.Require(node, p.Component, p.Index);
-            var serialized = new SerializedObject(component);
-            var property = SerializedValueWriter.FindProperty(serialized, p.Property);
-            if (property == null)
-            {
-                throw new ArgumentException(
-                    $"{component.GetType().Name} has no property '{p.Property}'. Use component_get to list them.");
-            }
-
-            return property;
+            return ComponentService.RequireProperty(component, p.Property);
         }
 
         static Dictionary<string, object> CountOverrides(GameObject root) =>

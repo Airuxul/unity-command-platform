@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEngine;
 
@@ -28,7 +29,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
         }
 
         /// <summary>Resolves a node path or throws with the candidates that would have matched.</summary>
-        public static Transform Require(EditTargetScope scope, string path, string paramName = "node")
+        public static Transform Require(EditTargetScope scope, string path, string paramName = ParamKeys.Node)
         {
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -47,8 +48,21 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 $"Node '{path}' not found. {DescribeNearestMiss(scope, path)}");
         }
 
-        public static GameObject RequireGameObject(EditTargetScope scope, string path, string paramName = "node") =>
-            Require(scope, path, paramName).gameObject;
+        /// <summary>Resolves the <c>node</c> path, or the <c>id</c> instance id when given instead.</summary>
+        public static Transform Require(EditTargetScope scope, NodeTargetParams p)
+        {
+            if (p?.Id == null)
+                return Require(scope, p?.Node);
+
+            var byId = RequireById(p.Id.Value);
+            if (scope.Kind == EditTargetKind.PrefabAsset && byId.scene != scope.Scene)
+            {
+                throw new ArgumentException(
+                    $"Instance ids address objects already in memory. To address a node inside a prefab asset, use '{ParamKeys.Node}'.");
+            }
+
+            return byId.transform;
+        }
 
         /// <summary>
         /// Resolves a parent argument. An empty path means "top level" (scene root / prefab root)
@@ -59,7 +73,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (string.IsNullOrWhiteSpace(path))
                 return scope.IsPrefabContent && scope.PrefabRoot != null ? scope.PrefabRoot.transform : null;
 
-            return Require(scope, path, "parent");
+            return Require(scope, path, ParamKeys.Parent);
         }
 
         /// <summary>Canonical path of <paramref name="node"/> within its scene / prefab contents.</summary>
@@ -77,22 +91,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
         }
 
         public static string Of(GameObject node) => node == null ? null : Of(node.transform);
-
-        /// <summary>Path relative to <paramref name="root"/> (exclusive of the root's own ancestors).</summary>
-        public static string RelativeTo(Transform root, Transform node)
-        {
-            if (node == null)
-                return null;
-            if (root == null)
-                return Of(node);
-
-            var segments = new List<string>();
-            for (var current = node; current != null && current != root.parent; current = current.parent)
-                segments.Add(Segment(current));
-
-            segments.Reverse();
-            return string.Join("/", segments);
-        }
 
         /// <summary>Every transform under the target, roots included, depth-first.</summary>
         public static IEnumerable<Transform> All(EditTargetScope scope)

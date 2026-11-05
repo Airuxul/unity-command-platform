@@ -50,6 +50,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandHostScope.Editor,
             "List a prefab instance's overrides: modified properties, added/removed components, added GameObjects");
 
+        protected override bool ReadOnly => true;
+
         protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverridesParams p) =>
             PrefabInstanceService.Overrides(scope, p);
     }
@@ -82,6 +84,8 @@ namespace Air.UcpAgent.Editor.Commands
             CommandNames.PrefabInstanceInfo,
             CommandHostScope.Editor,
             "Prefab linkage of a node: source asset, instance roots, connection status, override counts");
+
+        protected override bool ReadOnly => true;
 
         protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabInstanceParams p) =>
             PrefabInstanceService.Info(scope, p);

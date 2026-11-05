@@ -30,9 +30,9 @@ namespace Air.UcpAgent.Params
                 return (null, "Internal error: parameter type is missing.");
 
             var normalized = NormalizeKeys(paramType, values);
-            var requiredError = ValidateRequired(paramType, normalized);
-            if (requiredError != null)
-                return (null, requiredError);
+            var invalid = ValidateRequired(paramType, normalized) ?? ValidateAllowed(paramType, normalized);
+            if (invalid != null)
+                return (null, invalid);
 
             try
             {
@@ -110,6 +110,36 @@ namespace Air.UcpAgent.Params
 
                 if (raw is string s && string.IsNullOrWhiteSpace(s))
                     return $"Missing required parameter '--{key}'.";
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A value outside <see cref="CliParamAttribute.AllowedValues"/> fails here instead of the
+        /// command quietly falling back to its default. Comma-separated lists are checked item by item.
+        /// </summary>
+        private static string ValidateAllowed(Type paramType, Dictionary<string, object> normalized)
+        {
+            foreach (var prop in paramType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var attr = prop.GetCustomAttribute<CliParamAttribute>();
+                if (attr == null || string.IsNullOrEmpty(attr.AllowedValues))
+                    continue;
+
+                var key = CliParamContractResolver.GetPropertyKey(attr, prop);
+                if (!normalized.TryGetValue(key, out var raw) || !(raw is string text))
+                    continue;
+
+                var allowed = attr.AllowedValues.Split('|');
+                foreach (var item in text.Split(','))
+                {
+                    var value = item.Trim();
+                    if (value.Length == 0)
+                        continue;
+                    if (Array.FindIndex(allowed, a => string.Equals(a, value, StringComparison.OrdinalIgnoreCase)) < 0)
+                        return $"Invalid value '{value}' for '--{key}'. Valid: {attr.AllowedValues.Replace("|", ", ")}.";
+                }
             }
 
             return null;

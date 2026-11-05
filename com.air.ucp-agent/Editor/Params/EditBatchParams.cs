@@ -5,7 +5,7 @@ namespace Air.UcpAgent.Params
 {
     public sealed class PrefabEditParams
     {
-        [CliParam(Description = "prefab asset to edit, e.g. Assets/UI/Page.prefab", Required = true,
+        [CliParam(ParamKeys.Prefab, Description = "prefab asset to edit, e.g. Assets/UI/Page.prefab", Required = true,
             AlternateKeys = "prefab_path")]
         public string Prefab { get; set; }
 
@@ -20,7 +20,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class SceneEditParams
     {
-        [CliParam(Description = "loaded scene name or path (default: active scene)", AlternateKeys = "scene_name")]
+        [CliParam(ParamKeys.Scene, Description = "loaded scene name or path (default: active scene)", AlternateKeys = "scene_name")]
         public string Scene { get; set; }
 
         [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; "

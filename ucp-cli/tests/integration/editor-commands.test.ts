@@ -7,6 +7,7 @@ import {
   hasReadyEditorSession,
   runEditorCommand,
 } from "./helpers/editor-commands.js";
+import { recordShape, recordedShapes } from "./helpers/result-shape.js";
 
 const runEditorTests = process.env.UCP_EDITOR_INTEGRATION === "1";
 const includeSlow = process.env.UCP_EDITOR_SLOW === "1";
@@ -34,8 +35,16 @@ describe.skipIf(!runEditorTests)("editor commands (Unity required)", () => {
       }
       testCase.assert(result);
       expect(result.ok).toBe(!testCase.expectFailure);
+      // Slow cases are optional, so recording them would make the snapshot depend on the flags.
+      if (result.ok && !testCase.skip && testCase.shape !== false) {
+        recordShape(testCase.type, result.data);
+      }
     });
   }
+
+  it("returns results of the same shape", async () => {
+    await expect(recordedShapes()).toMatchFileSnapshot("./__snapshots__/shapes.editor.json");
+  });
 });
 
 describe("editor command catalog", () => {

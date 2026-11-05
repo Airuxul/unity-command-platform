@@ -2,8 +2,8 @@ namespace Air.UcpAgent.Params
 {
     public sealed class SceneOpenParams
     {
-        [CliParam(Description = "scene asset path, e.g. Assets/Scenes/Main.unity", Required = true,
-            AlternateKeys = "scene,scene_path")]
+        [CliParam(ParamKeys.Path, Description = "scene asset path, e.g. Assets/Scenes/Main.unity", Required = true,
+            AlternateKeys = "scene_path")]
         public string Path { get; set; }
 
         [CliParam(Description = "how to load it", AllowedValues = "single|additive|additive_without_loading")]
@@ -22,7 +22,7 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "replace the open scenes or add to them", AllowedValues = "single|additive")]
         public string Mode { get; set; } = "single";
 
-        [CliParam(Description = "save the new scene to this path straight away")]
+        [CliParam(ParamKeys.Path, Description = "save the new scene to this path straight away")]
         public string Path { get; set; }
 
         [CliParam(Description = "discard unsaved changes in the currently open scenes")]
@@ -31,7 +31,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class SceneSaveParams
     {
-        [CliParam(Description = "loaded scene name or path (default: active scene)",
+        [CliParam(ParamKeys.Scene, Description = "loaded scene name or path (default: active scene)",
             AlternateKeys = "scene_name")]
         public string Scene { get; set; }
 
@@ -41,18 +41,18 @@ namespace Air.UcpAgent.Params
 
     public sealed class SceneSaveAsParams
     {
-        [CliParam(Description = "path to save to, e.g. Assets/Scenes/Copy.unity", Required = true,
+        [CliParam(ParamKeys.Path, Description = "path to save to, e.g. Assets/Scenes/Copy.unity", Required = true,
             AlternateKeys = "scene_path,output,to")]
         public string Path { get; set; }
 
-        [CliParam(Description = "loaded scene to save (default: active scene)",
+        [CliParam(ParamKeys.Scene, Description = "loaded scene to save (default: active scene)",
             AlternateKeys = "scene_name")]
         public string Scene { get; set; }
     }
 
     public sealed class SceneCloseParams
     {
-        [CliParam(Description = "loaded scene name or path", Required = true, AlternateKeys = "scene_name")]
+        [CliParam(ParamKeys.Scene, Description = "loaded scene name or path", Required = true, AlternateKeys = "scene_name")]
         public string Scene { get; set; }
 
         [CliParam(Description = "also remove it from the hierarchy window (default: true)")]
@@ -62,15 +62,7 @@ namespace Air.UcpAgent.Params
         public bool Force { get; set; }
     }
 
-    public sealed class SceneListParams
+    public sealed class SceneListParams : FolderQueryParams
     {
-        [CliParam(Description = "folder to search under (default: Assets)")]
-        public string Folder { get; set; }
-
-        [CliParam(Description = "name substring filter")]
-        public string Name { get; set; }
-
-        [CliParam(Description = "max results (default: 200)")]
-        public int? Limit { get; set; }
     }
 }

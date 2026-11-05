@@ -103,7 +103,10 @@
           "components?": [
             "string"
           ],
-          "components_added?": [],
+          "components_added?": [
+            "string"
+          ],
+          "deleted?": "boolean",
           "full_type?": "string",
           "index?": "number",
           "instance_id?": "number",

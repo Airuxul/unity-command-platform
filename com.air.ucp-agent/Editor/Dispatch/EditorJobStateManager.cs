@@ -67,13 +67,13 @@ namespace Air.UcpAgent
             return fromDisk;
         }
 
-        public static void Fail(string id, string error)
+        public static void Fail(string id, CommandFailure failure)
         {
             var job = Get(id);
             if (job == null || IsFinished(job))
                 return;
 
-            Finish(job, InvokeJobStatus.Failed, error, null);
+            Finish(job, InvokeJobStatus.Failed, failure, null);
         }
 
         public static void MarkRunning(string id)
@@ -205,7 +205,7 @@ namespace Air.UcpAgent
                 if (IsFinished(job) || Policies.ContainsKey(job.CompletionKind ?? ""))
                     continue;
 
-                Finish(job, InvokeJobStatus.Orphaned, ReloadOrphanError, null);
+                Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Orphaned, ReloadOrphanError), null);
             }
         }
 
@@ -223,7 +223,7 @@ namespace Air.UcpAgent
 
                 if (TimedOut(job, now, out var timeoutError))
                 {
-                    Finish(job, InvokeJobStatus.Orphaned, timeoutError, null);
+                    Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Timeout, timeoutError), null);
                     continue;
                 }
 
@@ -234,12 +234,12 @@ namespace Air.UcpAgent
                     continue;
                 }
 
-                if (policy.TryComplete(job, state, out var result, out var error))
+                if (policy.TryComplete(job, state, out var result, out var failure))
                 {
-                    if (string.IsNullOrEmpty(error))
+                    if (failure == null)
                         Finish(job, InvokeJobStatus.Succeeded, null, result);
                     else
-                        Finish(job, InvokeJobStatus.Failed, error, null);
+                        Finish(job, InvokeJobStatus.Failed, failure, null);
                 }
                 else
                 {
@@ -270,10 +270,16 @@ namespace Air.UcpAgent
             Save();
         }
 
-        static void Finish(InvokeJobRecord job, InvokeJobStatus status, string error, object result)
+        /// <param name="result">The success payload; a failure carries its data in <paramref name="failure"/>.</param>
+        static void Finish(InvokeJobRecord job, InvokeJobStatus status, CommandFailure failure, object result)
         {
+            if (failure != null)
+                result = failure.Data;
+
             job.Status = status;
-            job.Error = error;
+            job.Error = failure?.Message;
+            job.ErrorCode = failure?.Code ?? "";
+            job.Hint = failure?.Hint ?? "";
             job.Result = result;
             // Kept as JSON too, so a reload between finishing and delivery does not lose it.
             job.ResultJson = result != null ? UcpJson.Serialize(result) : "";
@@ -337,7 +343,7 @@ namespace Air.UcpAgent
             public void Remove(string id) => EditorJobStateManager.Remove(id);
             public void MarkRunning(string id) => EditorJobStateManager.MarkRunning(id);
             public void Succeed(string id, object result) => EditorJobStateManager.Succeed(id, result);
-            public void Fail(string id, string error) => EditorJobStateManager.Fail(id, error);
+            public void Fail(string id, CommandFailure failure) => EditorJobStateManager.Fail(id, failure);
         }
     }
 }

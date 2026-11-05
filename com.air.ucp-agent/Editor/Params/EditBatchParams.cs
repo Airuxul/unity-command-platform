@@ -9,7 +9,8 @@ namespace Air.UcpAgent.Params
             AlternateKeys = "prefab_path")]
         public string Prefab { get; set; }
 
-        [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; "
+        [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with "
+            + "\"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; "
             + "saved once if all succeed, nothing kept if one fails", Required = true)]
         public List<EditBatchOp> Ops { get; set; }
 
@@ -23,7 +24,8 @@ namespace Air.UcpAgent.Params
         [CliParam(ParamKeys.Scene, Description = "loaded scene name or path (default: active scene)", AlternateKeys = "scene_name")]
         public string Scene { get; set; }
 
-        [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; "
+        [CliParam(Description = "ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with "
+            + "\"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; "
             + "undone together if one fails", Required = true)]
         public List<EditBatchOp> Ops { get; set; }
 

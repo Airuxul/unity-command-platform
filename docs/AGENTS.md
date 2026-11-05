@@ -52,7 +52,7 @@ cd ucp-cli
 
 - **No profiles**, no `POST /list`, no `~/.unity-cmd/`.
 - **Command names:** lowercase `{domain}_{operation}`; constants in `CommandNames.cs`.
-- **Command catalog:** `ucp-cli run help` (Editor scope) — 82 commands, generated from discovery.
+- **Command catalog:** `ucp-cli run help` (Editor scope), generated from discovery.
 - **Add command:** constant in `CommandNames.cs` + params in `Editor/Params/` + logic in
   `Editor/Services/` + an `EditorActionCommand<T>` shell in `Editor/Commands/`. See
   [MAINTENANCE.md](MAINTENANCE.md).

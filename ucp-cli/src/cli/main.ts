@@ -79,6 +79,31 @@ export async function run(argv: string[]): Promise<void> {
 
   registerTargetsCommand(program);
 
+  // `help` lists the Unity commands; this CLI's own usage stays on --help.
+  program.helpCommand(false);
+  program
+    .command("help [command]")
+    .description("List the Unity commands, or show one command's card (CLI usage: --help)")
+    .option("--md", "print the cards as markdown")
+    .action(async (command: string | undefined, opts: { md?: boolean }) => {
+      const g = globalOpts();
+      const args: Record<string, unknown> = {};
+      if (command) args.command = command;
+      if (opts.md) args.format = "md";
+      const result = await executeCommand("help", {
+        project: g.project,
+        session: g.session,
+        target: g.target ?? g.session,
+        sessionType: g.sessionType,
+        timeout: g.timeout,
+        args,
+      });
+      const markdown = (result.data as { markdown?: unknown } | null)?.markdown;
+      if (result.ok && opts.md && typeof markdown === "string") console.log(markdown);
+      else printResult(result);
+      exitFromResult(result);
+    });
+
   program
     .command("run <type>")
     .description("Run arbitrary UCP command type against Unity Editor")

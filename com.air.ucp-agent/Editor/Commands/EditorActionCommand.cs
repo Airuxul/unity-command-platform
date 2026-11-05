@@ -7,9 +7,9 @@ namespace Air.UcpAgent.Editor.Commands
 {
     /// <summary>
     /// Shell for editor commands whose work lives in a service: a returned dictionary becomes the
-    /// result payload, a thrown exception becomes <c>CompleteFail(ex.Message)</c>. Services signal
-    /// bad input by throwing — the exception message is the only thing the CLI caller sees, so it
-    /// must be actionable on its own.
+    /// result payload, a thrown exception becomes <c>CompleteFail(ex)</c>. Services signal bad input
+    /// by throwing; a <see cref="UcpException"/> sets the error code and hint, and the message must
+    /// be actionable on its own.
     /// </summary>
     public abstract class EditorActionCommand<TParams> : CliCommand<TParams>
     {
@@ -26,7 +26,7 @@ namespace Air.UcpAgent.Editor.Commands
             }
             catch (Exception ex)
             {
-                CompleteFail(ex.Message);
+                CompleteFail(ex);
             }
         }
     }
@@ -47,7 +47,7 @@ namespace Air.UcpAgent.Editor.Commands
             }
             catch (Exception ex)
             {
-                CompleteFail(ex.Message);
+                CompleteFail(ex);
             }
         }
     }

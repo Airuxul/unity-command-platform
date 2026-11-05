@@ -129,19 +129,19 @@ The catalog is generated from the agent itself, so there is no checked-in comman
 ucp-cli run help          # every command, its description and its parameters
 ```
 
-82 Editor commands, grouped by what they address:
+The Editor commands, grouped by what they address:
 
 | Family | What it covers |
 |--------|----------------|
 | `ping` `echo` `state` `console` `help` | Health, agent/editor state, console log, command catalog |
 | `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` `build` | Editor control and diagnostics |
-| `prefab_*` (20) | Prefab assets, variants, instances, overrides, nesting, Prefab Mode |
-| `gameobject_*` (12) | Create, delete, duplicate, rename, reparent, transform, activate, tag, layer, info, tree, find |
-| `component_*` (5) | Add, remove, list, and read/write serialized properties |
-| `scene_*` (7) | Open, new, save, save-as, close, list, info |
-| `asset_*` (9) | List, find, info, folders, delete, move, duplicate, dependencies, GUIDs |
-| `selection_*` (3) | Read and drive the Editor selection |
-| `tag_*` `layer_*` `tool_set` (7) | Project tag/layer tables and the active transform tool |
+| `prefab_*` | Prefab assets, variants, instances, overrides, nesting, Prefab Mode |
+| `gameobject_*` | Create, delete, duplicate, rename, reparent, transform, activate, tag, layer, info, tree, find |
+| `component_*` | Add, remove, list, and read/write serialized properties |
+| `scene_*` | Open, new, save, save-as, close, list, info |
+| `asset_*` | List, find, info, folders, delete, move, duplicate, dependencies, GUIDs |
+| `selection_*` | Read and drive the Editor selection |
+| `tag_*` `layer_*` `tool_set` | Project tag/layer tables and the active transform tool |
 | `prefab_edit` `scene_edit` | Several node commands on one prefab or scene, kept only if all succeed |
 | `ui_snapshot` | Play Mode only: canvases, text, and whether each button can be clicked |
 

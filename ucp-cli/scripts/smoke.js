@@ -107,10 +107,12 @@ function check(label, body) {
 check("help", async () => {
   const data = await ok("help");
   const names = (data.commands ?? []).map((c) => c.name);
-  eq(names.length, 82, "command count");
+  truthy(names.length, "command list");
+  eq(new Set(names).size, names.length, "each command listed once");
   eq(names.includes("manage"), false, "'manage' should be gone");
-  const aliases = Object.keys(data.alias_to_command ?? {});
-  eq(aliases.length, 5, "alias count");
+  const aliases = Object.entries(data.alias_to_command ?? {});
+  const dangling = aliases.filter(([, name]) => !names.includes(name)).map(([alias]) => alias);
+  eq(dangling.join(","), "", "aliases of unlisted commands");
   return `${names.length} commands, ${aliases.length} aliases, no 'manage'`;
 });
 

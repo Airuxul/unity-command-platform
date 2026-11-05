@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Job;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent;
@@ -7,10 +8,10 @@ namespace Air.UcpAgent.Completion
     {
         public string Kind => InvokeCompletionCatalog.CompletionEnterPlay;
 
-        public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out string error)
+        public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
         {
             result = null;
-            error = null;
+            failure = null;
 
             if (state.IsPlaying)
             {

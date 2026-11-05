@@ -340,8 +340,13 @@
   },
   "gameobject_tree": {
     "depth": "number",
+    "limit": "number",
+    "lines?": [
+      "string"
+    ],
     "node_count": "number",
-    "roots": [
+    "node_count_total": "number",
+    "roots?": [
       {
         "active": "boolean",
         "child_count": "number",
@@ -378,7 +383,8 @@
       "kind": "string",
       "prefab": "string",
       "scene": "null"
-    }
+    },
+    "truncated": "boolean"
   },
   "prefab_apply": {
     "applied_scope": "string",
@@ -656,12 +662,17 @@
   },
   "prefab_tree": {
     "depth": "number",
+    "limit": "number",
+    "lines?": [
+      "string"
+    ],
     "node_count": "number",
-    "roots": [
+    "node_count_total": "number",
+    "roots?": [
       {
-        "active": "boolean",
-        "child_count": "number",
-        "children": [
+        "active?": "boolean",
+        "child_count?": "number",
+        "children?": [
           {
             "active": "boolean",
             "child_count": "number",
@@ -684,18 +695,19 @@
             "node": "string"
           }
         ],
-        "components": [
+        "components?": [
           "string"
         ],
         "name": "string",
-        "node": "string"
+        "node?": "string"
       }
     ],
     "target": {
       "kind": "string",
       "prefab": "string",
       "scene": "null"
-    }
+    },
+    "truncated": "boolean"
   },
   "prefab_unpack": {
     "mode": "string",

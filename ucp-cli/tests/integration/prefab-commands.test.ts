@@ -5,6 +5,7 @@ import {
   expectShapesUnchanged,
   fails,
   ok,
+  rejected,
   releaseScratchStage,
   run,
 } from "./helpers/content-scenario.js";
@@ -366,6 +367,66 @@ describe.skipIf(!runEditorTests)("prefab content commands (Unity required)", () 
     await ok("gameobject_delete", { prefab: PREFAB, node: "Smoke/Throwaway" });
     await ok("prefab_close", { save: false });
     expect((await ok("prefab_stage_info")).open).toBe(false);
+  });
+
+  it("says what kind of failure it was and names the closest node", async () => {
+    await ok("gameobject_create", { prefab: PREFAB, parent: "Smoke", name: "Banner" });
+    try {
+      const typo = await rejected("gameobject_info", { prefab: PREFAB, node: "Smoke/Baner" });
+      expect(typo.error_code).toBe("node_not_found");
+      expect(typo.message).toContain("has no child 'Baner'");
+      expect(typo.hint).toContain("'Smoke/Banner'");
+
+      expect(
+        (await rejected("component_add", { prefab: PREFAB, node: "Smoke", component: "Nonsense" }))
+          .error_code,
+      ).toBe("type_not_found");
+      expect(
+        (await rejected("component_get", { prefab: PREFAB, node: "Smoke", component: "Rigidbody" }))
+          .error_code,
+      ).toBe("component_not_found");
+      expect((await rejected("prefab_tree", { path: PREFAB, format: "yaml" })).error_code).toBe(
+        "invalid_argument",
+      );
+    } finally {
+      await ok("gameobject_delete", { prefab: PREFAB, node: "Smoke/Banner" });
+    }
+  });
+
+  it("caps tree output and prints it one line per node", async () => {
+    await ok("gameobject_create", {
+      prefab: PREFAB,
+      parent: "Smoke",
+      name: "Hidden",
+      active: false,
+    });
+    try {
+      const capped = await ok("prefab_tree", { path: PREFAB, limit: 1 });
+      expect(capped.node_count).toBe(1);
+      expect(capped.truncated).toBe(true);
+      expect(Number(capped.node_count_total)).toBeGreaterThan(1);
+      const root = (capped.roots as Array<Record<string, unknown>>)[0];
+      expect(root.children).toEqual([]);
+
+      const compact = await ok("prefab_tree", { path: PREFAB, format: "compact" });
+      expect(compact.truncated).toBe(false);
+      const lines = compact.lines as string[];
+      expect(lines[0]).toMatch(/^Smoke \[Transform/);
+      expect(lines).toContain("Smoke/Hidden [Transform] (inactive)");
+
+      const sub = await ok("prefab_tree", { path: PREFAB, node: "Smoke/Hidden", fields: "name" });
+      expect(sub.roots).toEqual([{ name: "Hidden" }]);
+
+      const scoped = await ok("gameobject_tree", {
+        prefab: PREFAB,
+        node: "Smoke/Hidden",
+        format: "compact",
+        components: false,
+      });
+      expect(scoped.lines).toEqual(["Smoke/Hidden (inactive)"]);
+    } finally {
+      await ok("gameobject_delete", { prefab: PREFAB, node: "Smoke/Hidden" });
+    }
   });
 
   it("reports actionable errors instead of silent no-ops", async () => {

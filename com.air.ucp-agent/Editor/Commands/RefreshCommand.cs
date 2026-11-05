@@ -32,7 +32,7 @@ namespace Air.UcpAgent.Editor.Commands
             }
             catch (System.Exception ex)
             {
-                CompleteFail(ex.Message);
+                CompleteFail(ex);
             }
         }
     }

@@ -231,6 +231,7 @@ export async function executeCommand(
       data: result.data ?? null,
       message: result.message,
       error_code: result.success ? undefined : (result.error ?? "command_failed"),
+      hint: result.hint ?? undefined,
       timing,
     };
   }
@@ -244,9 +245,9 @@ export async function executeCommand(
 }
 
 /**
- * Why a command failed can land in any of three fields: `message` when the agent executed and
- * rejected it, `error_code` for a protocol-level failure, and `hint` when the host could not reach
- * Unity at all. Reading only one of them turns a real diagnosis into "unknown error".
+ * Why a command failed is split over three fields: `error_code` says what kind of failure it was,
+ * `message` says what went wrong, and `hint` what to try next. The host fills in only
+ * `error_code` and `hint` when it could not reach Unity, so reading one field is not enough.
  */
 export function describeFailure(result: CliResult): string {
   return [result.message, result.error_code, result.hint].filter(Boolean).join(" | ");

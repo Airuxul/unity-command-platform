@@ -6,6 +6,7 @@ using Air.UcpAgent.Params;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using Air.UcpAgent.Cli;
 
 namespace Air.UcpAgent.Editor.Services.Objects
 {
@@ -163,7 +164,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             if (matches.Length == 0)
             {
-                throw new ArgumentException(
+                throw new UcpException(
+                    UcpErrorCodes.ComponentNotFound,
                     $"'{GameObjectPath.Of(node.transform)}' has no {type.Name}. " +
                     $"It has: {string.Join(", ", Names(node))}.");
             }

@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Job;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
@@ -6,16 +7,17 @@ namespace Air.UcpAgent.Completion
 {
     /// <summary>
     /// Fallback completion when <see cref="Air.UcpAgent.Editor.Services.ScriptCompilationService"/> did not
-    /// finish the command (e.g. domain reload). Succeeds when Unity is not compiling.
+    /// finish the command (e.g. domain reload). Finishes once Unity is not compiling: failed if the
+    /// scripts do not compile, else succeeded.
     /// </summary>
     public sealed class CompilationPolicy : ICompletionPolicy
     {
         public string Kind => InvokeCompletionCatalog.CompletionCompilation;
 
-        public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out string error)
+        public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
         {
             result = null;
-            error = null;
+            failure = null;
 
             if (state.IsCompiling)
             {
@@ -29,25 +31,24 @@ namespace Air.UcpAgent.Completion
                 if (ScriptCompilationService.OwnsActiveCommand(command.Id))
                     return false;
 
-                result = new System.Collections.Generic.Dictionary<string, object>
-                {
-                    ["compiled"] = true,
-                    ["note"] = "compilation_idle",
-                };
+                failure = ScriptCompilationService.CompileFailure();
+                if (failure == null)
+                    result = Compiled("compilation_idle");
                 return true;
             }
 
             if (command.Status == InvokeJobStatus.Pending)
             {
-                result = new System.Collections.Generic.Dictionary<string, object>
-                {
-                    ["compiled"] = true,
-                    ["note"] = "already_idle",
-                };
+                failure = ScriptCompilationService.CompileFailure();
+                if (failure == null)
+                    result = Compiled("already_idle");
                 return true;
             }
 
             return false;
         }
+
+        static System.Collections.Generic.Dictionary<string, object> Compiled(string note) =>
+            new() { ["compiled"] = true, ["note"] = note };
     }
 }

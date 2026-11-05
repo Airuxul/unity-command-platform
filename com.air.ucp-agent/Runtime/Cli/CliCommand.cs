@@ -18,7 +18,11 @@ namespace Air.UcpAgent.Cli
 
         protected string CommandId => _invocation?.CommandId;
         protected void CompleteSuccess(object result) => _invocation?.Succeed(result);
-        protected void CompleteFail(string error) => _invocation?.Fail(error);
+        protected void CompleteFail(string error) =>
+            _invocation?.Fail(new CommandFailure(UcpErrorCodes.CommandFailed, error));
+
+        /// <summary>Fails with the exception's code (<see cref="UcpErrorCodes.Of"/>), message and hint.</summary>
+        protected void CompleteFail(Exception ex) => _invocation?.Fail(CommandFailure.From(ex));
         protected void MarkRunning() => _invocation?.MarkRunning();
 
         /// <summary>

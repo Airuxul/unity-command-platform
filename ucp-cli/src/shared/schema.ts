@@ -61,4 +61,5 @@ export const ucpResultSchema = z.object({
   message: z.string().optional(),
   data: z.record(z.unknown()).optional(),
   error: z.string().optional(),
+  hint: z.string().nullish(),
 });

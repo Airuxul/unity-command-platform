@@ -43,9 +43,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     catch (Exception revertError)
                     {
                         // The caller needs the reason the edit failed, not only the rollback's.
-                        throw new InvalidOperationException(
-                            $"{ex.Message} Rolling the edit back also failed, so the target may be half-edited: {revertError.Message}",
-                            ex);
+                        throw UcpException.Wrap(
+                            ex,
+                            $"{ex.Message} Rolling the edit back also failed, so the target may be half-edited: {revertError.Message}");
                     }
 
                     throw;
@@ -69,8 +69,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (dryRun && !target.CanRevert)
             {
                 target.Dispose();
-                throw new InvalidOperationException(
-                    $"dry_run needs undo to take the ops back, and Play Mode records none. Run {CommandNames.Stop} first.");
+                throw new UcpException(
+                    UcpErrorCodes.EditModeRequired,
+                    "dry_run needs undo to take the ops back, and Play Mode records none.",
+                    $"Run {CommandNames.Stop} first.");
             }
 
             return Run(target, scope =>
@@ -78,7 +80,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 var results = new List<Dictionary<string, object>>(resolved.Count);
                 for (var i = 0; i < resolved.Count; i++)
                 {
-                    var (command, args) = resolved[i];
+                    var (command, args, expect) = resolved[i];
+                    // Checked here rather than up front: the ops before this one have run.
+                    expect?.Check(scope, i, command.Name);
                     try
                     {
                         results.Add(new Dictionary<string, object>
@@ -89,8 +93,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     }
                     catch (Exception ex)
                     {
-                        throw new InvalidOperationException(
-                            $"ops[{i}] {command.Name} failed, so no op was kept: {ex.Message}", ex);
+                        throw UcpException.Wrap(ex, $"ops[{i}] {command.Name} failed, so no op was kept: {ex.Message}");
                     }
                 }
 
@@ -103,14 +106,14 @@ namespace Air.UcpAgent.Editor.Services.Objects
             }, keep: !dryRun);
         }
 
-        static List<(IEditTargetCommand command, object args)> Resolve(IReadOnlyList<EditBatchOp> ops)
+        static List<(IEditTargetCommand command, object args, OpExpectation expect)> Resolve(IReadOnlyList<EditBatchOp> ops)
         {
             if (ops == null || ops.Count == 0)
                 throw new ArgumentException("'ops' must list at least one {\"command\":..,\"args\":{..}}.");
             if (ops.Count > MaxOps)
                 throw new ArgumentException($"A batch takes at most {MaxOps} ops, got {ops.Count}.");
 
-            var resolved = new List<(IEditTargetCommand, object)>(ops.Count);
+            var resolved = new List<(IEditTargetCommand, object, OpExpectation)>(ops.Count);
             for (var i = 0; i < ops.Count; i++)
             {
                 var name = ops[i]?.Command?.Trim();
@@ -132,7 +135,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 if (!string.IsNullOrWhiteSpace(target.Prefab) || !string.IsNullOrWhiteSpace(target.Scene))
                     throw new ArgumentException($"ops[{i}] {name}: '{ParamKeys.Prefab}' / '{ParamKeys.Scene}' belong on the batch, not on an op.");
 
-                resolved.Add((command, args));
+                var expect = OpExpectation.Parse(ops[i].Expect, values, i, name);
+                resolved.Add((command, args, expect));
             }
 
             return resolved;
@@ -172,5 +176,90 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         [JsonProperty("args")]
         public JObject Args { get; set; }
+
+        /// <summary>Optional <c>{node?, exists?, components?}</c>, checked just before the op runs.</summary>
+        [JsonProperty("expect")]
+        public JObject Expect { get; set; }
+    }
+
+    /// <summary>
+    /// A batch op's precondition. A false one rolls the whole batch back, so an op never acts on
+    /// a hierarchy that differs from what the caller last read.
+    /// </summary>
+    public sealed class OpExpectation
+    {
+        public const string NodeKey = "node";
+        public const string ExistsKey = "exists";
+        public const string ComponentsKey = "components";
+        static readonly string[] Keys = { NodeKey, ExistsKey, ComponentsKey };
+
+        string _node;
+        bool? _exists;
+        List<(string name, Type type)> _components;
+
+        /// <summary>Null when the op has no expect. The node defaults to the op's own <c>node</c>.</summary>
+        public static OpExpectation Parse(JObject expect, Dictionary<string, object> opArgs, int index, string opName)
+        {
+            if (expect == null)
+                return null;
+
+            var where = $"ops[{index}] {opName} expect";
+            foreach (var property in expect.Properties())
+            {
+                if (Array.IndexOf(Keys, property.Name) < 0)
+                    throw new ArgumentException($"{where}: unknown key '{property.Name}'. Valid: {string.Join(", ", Keys)}.");
+            }
+
+            var result = new OpExpectation();
+            try
+            {
+                result._node = expect.Value<string>(NodeKey);
+                result._exists = expect.Value<bool?>(ExistsKey);
+                var components = expect[ComponentsKey]?.ToObject<string[]>();
+                result._components = components?
+                    .Select(c => (c, ComponentTypeResolver.RequireComponent(c)))
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is FormatException or InvalidCastException or JsonException)
+            {
+                throw new ArgumentException($"{where}: {ex.Message}");
+            }
+
+            if (string.IsNullOrWhiteSpace(result._node) && opArgs.TryGetValue(ParamKeys.Node, out var own))
+                result._node = own as string;
+            if (string.IsNullOrWhiteSpace(result._node))
+                throw new ArgumentException($"{where}: pass '{NodeKey}', the op has none of its own.");
+            if (result._exists == null && result._components == null)
+                throw new ArgumentException($"{where}: pass '{ExistsKey}' and/or '{ComponentsKey}'.");
+            if (result._exists == false && result._components != null)
+                throw new ArgumentException($"{where}: '{ComponentsKey}' cannot hold on a node expected not to exist.");
+
+            return result;
+        }
+
+        public void Check(EditTargetScope scope, int index, string opName)
+        {
+            var node = GameObjectPath.Resolve(scope, _node);
+            var exists = node != null;
+            if (_exists != null && _exists.Value != exists)
+                Fail(index, opName, exists ? $"'{_node}' exists, expected it not to." : $"'{_node}' does not exist.");
+
+            if (_components == null)
+                return;
+            if (!exists)
+                Fail(index, opName, $"'{_node}' does not exist, so it has none of {string.Join(", ", _components.Select(c => c.name))}.");
+
+            var missing = _components.Where(c => node.GetComponent(c.type) == null).Select(c => c.name).ToList();
+            if (missing.Count > 0)
+            {
+                Fail(index, opName, $"'{_node}' has no {string.Join(", ", missing)}. " +
+                    $"It has: {string.Join(", ", ComponentService.Names(node.gameObject))}.");
+            }
+        }
+
+        static void Fail(int index, string opName, string what) =>
+            throw new UcpException(
+                UcpErrorCodes.ExpectationFailed,
+                $"ops[{index}] {opName} expect failed, so no op was kept: {what}");
     }
 }

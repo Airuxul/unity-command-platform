@@ -487,6 +487,9 @@
         "--depth <int> levels of children to walk; -1 for the whole subtree (default: 3)",
         "--components <bool> list component type names on each node (default: true)",
         "--includeInactive <bool> include inactive GameObjects (default: true)",
+        "--limit <int> stop after this many nodes and report truncated (default: 500)",
+        "--format <string> [json|compact] json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
+        "--fields <string> [name|node|active|child_count|components|nested_prefab] json only: comma-separated fields to keep on each node (default: all)",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
@@ -503,7 +506,10 @@
       ],
       "default_timeout_ms": null,
       "allow_connection_retry": true,
-      "params": []
+      "params": [
+        "--command <string> one command by name or alias: its card, with an example call and the error codes",
+        "--format <string> [json|md] md: the cards as markdown in data.markdown"
+      ]
     },
     {
       "name": "layer_add",
@@ -696,7 +702,7 @@
       "allow_connection_retry": true,
       "params": [
         "--prefab <string> prefab asset to edit, e.g. Assets/UI/Page.prefab (required)",
-        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; saved once if all succeed, nothing kept if one fails (required)",
+        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with \"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; saved once if all succeed, nothing kept if one fails (required)",
         "--dry_run <bool> run every op and report the results, then keep nothing"
       ]
     },
@@ -874,6 +880,10 @@
       "params": [
         "--depth <int> levels of children to walk; -1 for the whole tree (default: -1)",
         "--components <bool> list component type names on each node (default: true)",
+        "--node <string> only the subtree under this node path (default: the root)",
+        "--limit <int> stop after this many nodes and report truncated (default: 500)",
+        "--format <string> [json|compact] json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
+        "--fields <string> [name|node|active|child_count|components|nested_prefab] json only: comma-separated fields to keep on each node (default: all)",
         "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
       ]
     },
@@ -966,7 +976,7 @@
       "allow_connection_retry": true,
       "params": [
         "--scene <string> loaded scene name or path (default: active scene)",
-        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; undone together if one fails (required)",
+        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with \"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; undone together if one fails (required)",
         "--dry_run <bool> run every op and report the results, then keep nothing"
       ]
     },
@@ -1175,12 +1185,15 @@
     {
       "name": "ui_snapshot",
       "scope": "editor",
-      "description": "Play mode only. List canvases with active state, Text and TextMeshProUGUI strings, and whether each Button can be clicked.",
+      "description": "Play mode only. List canvases with active state, Text and TextMeshProUGUI strings, input fields, and whether each Button can be clicked.",
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
       "allow_connection_retry": true,
-      "params": []
+      "params": [
+        "--root <string> only canvases and rows at or under this node path, as ui_snapshot prints it",
+        "--limit <int> max text / button / input rows in total; truncated says if more exist (default: 500)"
+      ]
     }
   ],
   "alias_to_command": {

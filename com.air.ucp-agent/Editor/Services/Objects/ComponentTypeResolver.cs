@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Cli;
 using UnityEditor;
 using UnityEngine;
 
@@ -63,8 +64,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 .Take(8)
                 .ToArray();
 
-            var hint = suggestions.Length > 0 ? $" Did you mean: {string.Join(", ", suggestions)}?" : string.Empty;
-            throw new ArgumentException($"Unknown {kind} type '{name}'.{hint}");
+            throw new UcpException(
+                UcpErrorCodes.TypeNotFound,
+                $"Unknown {kind} type '{name}'.",
+                suggestions.Length > 0 ? $"Did you mean: {string.Join(", ", suggestions)}?" : null);
         }
 
         static bool TryLookup(

@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Job;
 
 namespace Air.UcpAgent
@@ -5,7 +6,8 @@ namespace Air.UcpAgent
     public interface ICompletionPolicy
     {
         string Kind { get; }
-        bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out string error);
+        /// <returns>True once the job is done: with <paramref name="result"/>, or with <paramref name="failure"/> set.</returns>
+        bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure);
     }
 
     public sealed class EditorStateSnapshot

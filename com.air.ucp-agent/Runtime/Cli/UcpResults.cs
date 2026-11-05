@@ -11,8 +11,8 @@ namespace Air.UcpAgent.Cli
     {
         public static UcpResult From(string commandId, CommandInvocation invocation)
         {
-            if (!string.IsNullOrEmpty(invocation.Error))
-                return Failure(commandId, invocation.Error, invocation.Error);
+            if (invocation.Failure != null)
+                return Failure(commandId, invocation.Failure);
 
             var (data, _, message) = Unwrap(invocation.Result);
             return new UcpResult
@@ -27,7 +27,7 @@ namespace Air.UcpAgent.Cli
         public static UcpResult FromJob(string commandId, InvokeJobRecord job)
         {
             if (job == null)
-                return Failure(commandId, "job_not_found", "Job not found");
+                return Failure(commandId, new CommandFailure("job_not_found", "Job not found"));
 
             if (job.Status == InvokeJobStatus.Succeeded)
             {
@@ -41,16 +41,27 @@ namespace Air.UcpAgent.Cli
                 };
             }
 
-            return Failure(commandId, job.Status.ToString().ToLowerInvariant(), job.Error ?? "command_failed");
+            // Records from before 0.5 carry no code; their status is the closest thing to one.
+            var fallbackCode = job.Status == InvokeJobStatus.Orphaned
+                ? UcpErrorCodes.Orphaned
+                : UcpErrorCodes.CommandFailed;
+            return Failure(commandId, new CommandFailure(
+                string.IsNullOrEmpty(job.ErrorCode) ? fallbackCode : job.ErrorCode,
+                job.Error,
+                string.IsNullOrEmpty(job.Hint) ? null : job.Hint,
+                job.Result ?? FromJson(job.ResultJson)));
         }
 
-        public static UcpResult Failure(string commandId, string error, string message) =>
+        /// <remarks><c>error</c> carries the code; agents before 0.5 put the message text there.</remarks>
+        public static UcpResult Failure(string commandId, CommandFailure failure) =>
             new UcpResult
             {
                 id = commandId,
                 success = false,
-                error = string.IsNullOrEmpty(error) ? "command_failed" : error,
-                message = message ?? error,
+                error = failure.Code,
+                message = failure.Message,
+                hint = failure.Hint,
+                data = ToDictionary(failure.Data),
             };
 
         static (object data, string code, string message) Unwrap(object result) =>

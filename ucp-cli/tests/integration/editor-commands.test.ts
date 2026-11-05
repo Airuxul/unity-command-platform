@@ -64,7 +64,6 @@ describe("editor command catalog", () => {
 
   it("lists each command once", () => {
     expect(new Set(ALL_EDITOR_COMMANDS).size).toBe(ALL_EDITOR_COMMANDS.length);
-    expect(ALL_EDITOR_COMMANDS.length).toBe(82);
   });
 });
 
@@ -89,5 +88,35 @@ describe.skipIf(!runEditorTests)("editor capability advertisement (Unity require
     expect(result.ok, String(result.message ?? result.error)).toBe(true);
     const data = (result.data ?? {}) as Record<string, unknown>;
     expect(Array.isArray(data.commands)).toBe(true);
+  });
+
+  it("shows one command's card, by name or alias", async () => {
+    const result = await run("help", { command: "recompile" });
+    expect(result.ok, String(result.message ?? result.error)).toBe(true);
+    const card = (result.data as { command: Record<string, unknown> }).command;
+    expect(card.name).toBe("compile");
+    expect(card.example).toBe("ucp-cli run compile");
+    const codes = (card.errors as Array<{ code: string }>).map((e) => e.code);
+    expect(codes).toContain("compile_error");
+
+    const required = await run("help", { command: "prefab_tree" });
+    const example = (required.data as { command: { example: string } }).command.example;
+    expect(example).toBe(`ucp-cli run prefab_tree --args '{"path":"<path>"}'`);
+
+    const unknown = await run("help", { command: "prefab_treee" });
+    expect(unknown.error_code).toBe("unknown_command");
+    expect(unknown.hint).toContain("prefab_tree");
+  });
+
+  it("renders the cards as markdown", async () => {
+    const one = await run("help", { command: "prefab_tree", format: "md" });
+    const md = String((one.data as { markdown: string }).markdown);
+    expect(md).toMatch(/^## prefab_tree\n/);
+    expect(md).toContain("- `--limit`");
+    expect(md).toContain("| `node_not_found` |");
+
+    const all = await run("help", { format: "md" });
+    const everything = String((all.data as { markdown: string }).markdown);
+    for (const name of ALL_EDITOR_COMMANDS) expect(everything).toContain(`## ${name}\n`);
   });
 });

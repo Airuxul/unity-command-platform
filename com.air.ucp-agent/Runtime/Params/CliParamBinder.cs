@@ -48,12 +48,27 @@ namespace Air.UcpAgent.Params
             }
         }
 
+        /// <summary>The help lines: <c>--key &lt;type&gt; [allowed] description (required)</c>.</summary>
         public static string[] Describe(Type paramType)
         {
-            if (paramType == null)
-                return Array.Empty<string>();
-
             var lines = new List<string>();
+            foreach (var param in Inspect(paramType))
+            {
+                var values = string.IsNullOrEmpty(param.AllowedValues) ? "" : $" [{param.AllowedValues}]";
+                var req = param.Required ? " (required)" : "";
+                lines.Add($"--{param.Key} <{param.TypeName}>{values} {param.Description}{req}".TrimEnd());
+            }
+
+            return lines.ToArray();
+        }
+
+        /// <summary>The parameters <paramref name="paramType"/> declares, in declaration order.</summary>
+        public static IReadOnlyList<CliParamInfo> Inspect(Type paramType)
+        {
+            if (paramType == null)
+                return Array.Empty<CliParamInfo>();
+
+            var list = new List<CliParamInfo>();
             foreach (var prop in paramType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 var attr = prop.GetCustomAttribute<CliParamAttribute>();
@@ -68,13 +83,15 @@ namespace Air.UcpAgent.Params
                     : type == typeof(string[]) ? "string[]"
                     : type.Name.ToLowerInvariant();
 
-                var key = CliParamContractResolver.GetPropertyKey(attr, prop);
-                var values = string.IsNullOrEmpty(attr.AllowedValues) ? "" : $" [{attr.AllowedValues}]";
-                var req = attr.Required ? " (required)" : "";
-                lines.Add($"--{key} <{typeName}>{values} {attr.Description}{req}".TrimEnd());
+                list.Add(new CliParamInfo(
+                    CliParamContractResolver.GetPropertyKey(attr, prop),
+                    typeName,
+                    attr.Required,
+                    attr.AllowedValues,
+                    attr.Description));
             }
 
-            return lines.ToArray();
+            return list;
         }
 
         private static Dictionary<string, object> NormalizeKeys(Type paramType, Dictionary<string, object> values)
@@ -182,5 +199,26 @@ namespace Air.UcpAgent.Params
             raw = null;
             return false;
         }
+    }
+
+    public sealed class CliParamInfo
+    {
+        public CliParamInfo(string key, string typeName, bool required, string allowedValues, string description)
+        {
+            Key = key;
+            TypeName = typeName;
+            Required = required;
+            AllowedValues = allowedValues ?? "";
+            Description = description ?? "";
+        }
+
+        public string Key { get; }
+
+        /// <summary>string, bool, int, float, string[], or the lowercased CLR name (jtoken, list`1, ...).</summary>
+        public string TypeName { get; }
+
+        public bool Required { get; }
+        public string AllowedValues { get; }
+        public string Description { get; }
     }
 }

@@ -9,6 +9,7 @@ using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
+using Air.UcpAgent.Cli;
 
 namespace Air.UcpAgent.Editor.Services.Scenes
 {
@@ -281,7 +282,7 @@ namespace Air.UcpAgent.Editor.Services.Scenes
         static void RequireEditMode(string action)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
-                throw new InvalidOperationException($"Cannot {action} in play mode. Run '{CommandNames.Stop}' first.");
+                throw new UcpException(UcpErrorCodes.EditModeRequired, $"Cannot {action} in play mode.", $"Run {CommandNames.Stop} first.");
         }
 
         static void RequireNoUnsavedChanges(bool force, string consequence)

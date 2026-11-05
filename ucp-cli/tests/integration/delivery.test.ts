@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { projectIdFromPath, queueLayout, resolveUcpRoot } from "#shared/index.js";
-import { fails, ok, run } from "./helpers/content-scenario.js";
+import { fails, ok, rejected, run } from "./helpers/content-scenario.js";
 import { gameDemoProjectPath, hasReadyEditorSession } from "./helpers/editor-commands.js";
 import { ensureEditMode } from "./helpers/play-mode.js";
 
@@ -134,6 +134,31 @@ describe.skipIf(!runEditorTests)("command delivery (Unity required)", () => {
       expect(queueFiles()).toEqual([]);
     },
     COMPILE_TIMEOUT,
+  );
+
+  it(
+    "compile fails with compile_error and the compiler's errors",
+    async () => {
+      const broken = `${PROBE_FOLDER}/UcpProbeBroken.cs`;
+      fs.writeFileSync(projectFile(broken), "public static class UcpProbeBroken { int x = ; }\n");
+      try {
+        const failed = await rejected("compile", {}, COMPILE_TIMEOUT);
+        expect(failed.error_code).toBe("compile_error");
+        const errors = (failed.data as { errors: Array<{ file: string; line: number }> }).errors;
+        expect(errors[0].file).toContain("UcpProbeBroken.cs");
+        expect(errors[0].line).toBe(1);
+
+        // Nothing changed, so Unity may skip compiling; the project is still broken.
+        expect((await rejected("compile", {}, COMPILE_TIMEOUT)).error_code).toBe("compile_error");
+      } finally {
+        fs.rmSync(projectFile(broken), { force: true });
+        fs.rmSync(projectFile(`${broken}.meta`), { force: true });
+      }
+
+      expect((await ok("compile", {}, COMPILE_TIMEOUT)).compiled).toBe(true);
+      expect(queueFiles()).toEqual([]);
+    },
+    COMPILE_TIMEOUT * 3,
   );
 
   it("play and stop deliver once and clean up", async () => {

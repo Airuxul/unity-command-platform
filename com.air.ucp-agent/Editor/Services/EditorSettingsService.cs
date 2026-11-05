@@ -6,6 +6,7 @@ using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using Air.UcpAgent.Cli;
 
 namespace Air.UcpAgent.Editor.Services
 {
@@ -21,7 +22,7 @@ namespace Air.UcpAgent.Editor.Services
         public static Dictionary<string, object> Pause(PauseParams p)
         {
             if (!EditorApplication.isPlaying)
-                throw new InvalidOperationException($"Not in play mode. Start it with '{CommandNames.Play}' first.");
+                throw new UcpException(UcpErrorCodes.PlayModeRequired, "Not in play mode.", $"Run {CommandNames.Play} first.");
 
             EditorApplication.isPaused = p?.Paused ?? !EditorApplication.isPaused;
 

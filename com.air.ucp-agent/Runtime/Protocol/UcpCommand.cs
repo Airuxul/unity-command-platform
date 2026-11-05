@@ -17,7 +17,12 @@ namespace Air.UcpAgent.Protocol
         public int duration;
         public string message;
         public Dictionary<string, object> data;
+
+        /// <summary>On failure, a code from <see cref="Cli.UcpErrorCodes"/>; the text is in <see cref="message"/>.</summary>
         public string error;
+
+        /// <summary>On failure, what to try next.</summary>
+        public string hint;
     }
 
     public sealed class UcpSession

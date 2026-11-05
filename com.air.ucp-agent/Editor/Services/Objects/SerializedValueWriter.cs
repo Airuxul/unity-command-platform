@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
+using Air.UcpAgent.Cli;
 
 namespace Air.UcpAgent.Editor.Services.Objects
 {
@@ -450,7 +451,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 var type = ComponentTypeResolver.RequireComponent(componentType);
                 var component = node.GetComponent(type);
                 if (component == null)
-                    throw new ArgumentException($"Node '{nodePath}' has no {type.Name}.");
+                    throw new UcpException(UcpErrorCodes.ComponentNotFound, $"Node '{nodePath}' has no {type.Name}.");
 
                 return component;
             }
@@ -462,7 +463,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
             {
                 var component = node.GetComponent(expectedType);
                 if (component == null)
-                    throw new ArgumentException($"Node '{nodePath}' has no {expectedType.Name}.");
+                    throw new UcpException(UcpErrorCodes.ComponentNotFound, $"Node '{nodePath}' has no {expectedType.Name}.");
 
                 return component;
             }

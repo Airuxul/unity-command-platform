@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEngine.SceneManagement;
+using Air.UcpAgent.Cli;
+using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Services
 {
@@ -13,8 +15,10 @@ namespace Air.UcpAgent.Editor.Services
 
             if (!p.Force && EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                throw new System.InvalidOperationException(
-                    "Cannot refresh while Unity is in or entering play mode. Exit play mode first, or pass force=true.");
+                throw new UcpException(
+                    UcpErrorCodes.EditModeRequired,
+                    "Cannot refresh while Unity is in or entering play mode.",
+                    $"Run {CommandNames.Stop} first, or pass force=true.");
             }
 
             var options = p.Force

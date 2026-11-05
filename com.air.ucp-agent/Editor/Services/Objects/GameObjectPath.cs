@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Params;
 using UnityEditor;
 using UnityEngine;
@@ -44,8 +45,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (resolved != null)
                 return resolved;
 
-            throw new ArgumentException(
-                $"Node '{path}' not found. {DescribeNearestMiss(scope, path)}");
+            var (where, hint) = DescribeNearestMiss(scope, path);
+            throw new UcpException(UcpErrorCodes.NodeNotFound, $"Node '{path}' not found. {where}", hint);
         }
 
         /// <summary>Resolves the <c>node</c> path, or the <c>id</c> instance id when given instead.</summary>
@@ -128,7 +129,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 case Component component:
                     return component.gameObject;
                 case null:
-                    throw new ArgumentException($"No object with instance id {instanceId}.");
+                    throw new UcpException(UcpErrorCodes.NodeNotFound, $"No object with instance id {instanceId}.");
                 default:
                     throw new ArgumentException(
                         $"Instance id {instanceId} is a {obj.GetType().Name}, not a GameObject.");
@@ -214,21 +215,24 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return scene.GetRootGameObjects().Select(go => go.transform);
         }
 
+        const int SuggestionCount = 3;
+
         /// <summary>
         /// Walks as far down <paramref name="path"/> as it can and reports what was available at the
-        /// point it gave up, so a caller can correct the path without a separate query.
+        /// point it gave up, so a caller can correct the path without a separate query. The hint
+        /// names the siblings closest to the missing segment.
         /// </summary>
-        static string DescribeNearestMiss(EditTargetScope scope, string path)
+        static (string where, string hint) DescribeNearestMiss(EditTargetScope scope, string path)
         {
             var segments = Split(path);
             if (segments.Length == 0)
-                return "Path is empty.";
+                return ("Path is empty.", null);
 
             var current = MatchAmong(scope.Roots().Select(go => go.transform), segments[0]);
             if (current == null)
             {
                 var roots = scope.Roots().Where(go => go != null).Select(go => go.name).ToArray();
-                return $"Available roots: {Join(roots)}.";
+                return ($"Available roots: {Join(roots)}.", Closest(segments[0].name, roots));
             }
 
             for (var i = 1; i < segments.Length; i++)
@@ -237,13 +241,44 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 if (next == null)
                 {
                     var names = Children(current).Where(c => c != null).Select(c => c.name).ToArray();
-                    return $"'{Of(current)}' has no child '{segments[i].name}'. Children: {Join(names)}.";
+                    return ($"'{Of(current)}' has no child '{segments[i].name}'. Children: {Join(names)}.",
+                        Closest(segments[i].name, names, Of(current) + "/"));
                 }
 
                 current = next;
             }
 
-            return string.Empty;
+            return (string.Empty, null);
+        }
+
+        static string Closest(string wanted, string[] names, string prefix = "")
+        {
+            var closest = names
+                .Distinct()
+                .OrderBy(n => EditDistance(wanted.ToLowerInvariant(), n.ToLowerInvariant()))
+                .ThenBy(n => n, StringComparer.Ordinal)
+                .Take(SuggestionCount)
+                .Select(n => $"'{prefix}{n}'")
+                .ToArray();
+            return closest.Length == 0 ? null : $"Did you mean {string.Join(", ", closest)}?";
+        }
+
+        static int EditDistance(string a, string b)
+        {
+            var row = Enumerable.Range(0, b.Length + 1).ToArray();
+            for (var i = 1; i <= a.Length; i++)
+            {
+                var diagonal = row[0];
+                row[0] = i;
+                for (var j = 1; j <= b.Length; j++)
+                {
+                    var above = row[j];
+                    row[j] = Math.Min(Math.Min(row[j] + 1, row[j - 1] + 1), diagonal + (a[i - 1] == b[j - 1] ? 0 : 1));
+                    diagonal = above;
+                }
+            }
+
+            return row[b.Length];
         }
 
         static string Join(string[] names) =>

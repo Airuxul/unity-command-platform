@@ -24,5 +24,10 @@ namespace Air.UcpAgent.Job
 
         /// <summary>When the job gives up. 0 on records from versions before 0.5.</summary>
         public long DeadlineUtcMs;
+
+        /// <summary>The failure's code from <see cref="Cli.UcpErrorCodes"/>. Empty before 0.5.</summary>
+        public string ErrorCode;
+
+        public string Hint;
     }
 }

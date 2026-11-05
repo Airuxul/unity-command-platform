@@ -15,7 +15,7 @@ namespace Air.UcpAgent.Cli
         void Remove(string id);
         void MarkRunning(string id);
         void Succeed(string id, object result);
-        void Fail(string id, string error);
+        void Fail(string id, CommandFailure failure);
     }
 
     /// <summary>One run of one command: its id, and how it finished.</summary>
@@ -37,7 +37,9 @@ namespace Air.UcpAgent.Cli
 
         public bool IsCompleted { get; private set; }
         public object Result { get; private set; }
-        public string Error { get; private set; }
+
+        /// <summary>Null unless the command failed.</summary>
+        public CommandFailure Failure { get; private set; }
 
         /// <summary>True once a job exists for this run: it finishes through the job, not synchronously.</summary>
         public bool HasJob => _jobs != null && _jobs.Has(CommandId);
@@ -56,15 +58,15 @@ namespace Air.UcpAgent.Cli
                 _jobs.Succeed(CommandId, result);
         }
 
-        public void Fail(string error)
+        public void Fail(CommandFailure failure)
         {
             if (IsCompleted)
                 return;
 
             IsCompleted = true;
-            Error = string.IsNullOrEmpty(error) ? "command_failed" : error;
+            Failure = failure ?? new CommandFailure(UcpErrorCodes.CommandFailed, null);
             if (ReturnedFromRun && HasJob)
-                _jobs.Fail(CommandId, Error);
+                _jobs.Fail(CommandId, Failure);
         }
 
         public void MarkRunning()

@@ -116,11 +116,20 @@ export async function expectShapesUnchanged(snapshot: string): Promise<void> {
 
 /** Runs a command expecting rejection, and returns the reason so the test can assert on it. */
 export async function fails(type: string, args: Record<string, unknown> = {}): Promise<string> {
-  const result = await run(type, args);
+  return describeFailure(await rejected(type, args));
+}
+
+/** Like `fails`, but returns the whole result, for asserting on error_code, hint and data. */
+export async function rejected(
+  type: string,
+  args: Record<string, unknown> = {},
+  timeout = 30_000,
+): Promise<CliResult> {
+  const result = await run(type, args, timeout);
   expect(result.ok, `${type} was expected to fail but succeeded`).toBe(false);
   // A dead session is an infrastructure problem, not the rejection the test is asserting about.
   expect(result.error_code, `${type}: agent unreachable`).not.toBe("no_ready_session");
-  return describeFailure(result);
+  return result;
 }
 
 /**

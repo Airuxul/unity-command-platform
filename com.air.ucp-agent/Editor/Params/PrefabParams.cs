@@ -67,6 +67,20 @@ namespace Air.UcpAgent.Params
 
         [CliParam(Description = "list component type names on each node (default: true)")]
         public bool? Components { get; set; }
+
+        [CliParam(ParamKeys.Node, Description = "only the subtree under this node path (default: the root)")]
+        public string Node { get; set; }
+
+        [CliParam(Description = "stop after this many nodes and report truncated (default: 500)")]
+        public int? Limit { get; set; }
+
+        [CliParam(Description = "json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
+            AllowedValues = TreeShape.Formats)]
+        public string Format { get; set; } = TreeShape.Json;
+
+        [CliParam(Description = "json only: comma-separated fields to keep on each node (default: all)",
+            AllowedValues = TreeShape.Fields)]
+        public string Fields { get; set; }
     }
 
     /// <summary>

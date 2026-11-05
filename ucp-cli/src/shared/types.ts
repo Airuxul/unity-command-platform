@@ -25,7 +25,9 @@ export interface UcpResult {
   duration: number;
   message?: string;
   data?: Record<string, unknown>;
+  /** A code such as node_not_found; agents before 0.5 put the message text here. */
   error?: string;
+  hint?: string | null;
 }
 
 export interface UcpSession {

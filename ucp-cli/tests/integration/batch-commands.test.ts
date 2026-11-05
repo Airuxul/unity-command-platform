@@ -7,6 +7,7 @@ import {
   expectShapesUnchanged,
   fails,
   ok,
+  rejected,
   releaseScratchStage,
   run,
 } from "./helpers/content-scenario.js";
@@ -103,6 +104,55 @@ describe.skipIf(!runEditorTests)("batch edits (Unity required)", () => {
     expect(notBatchable).toContain("cannot run in a batch");
 
     expect(prefabBytes().equals(before)).toBe(true);
+  });
+
+  it("checks each op's expect after the ops before it, and rolls back when one fails", async () => {
+    const before = prefabBytes();
+
+    const failed = await rejected("prefab_edit", {
+      prefab: PREFAB,
+      ops: [
+        {
+          command: "gameobject_create",
+          args: { parent: "Batch", name: "Guarded" },
+          expect: { node: "Batch/Guarded", exists: false },
+        },
+        {
+          command: "gameobject_rename",
+          args: { node: "Batch/Guarded", name: "Renamed" },
+          expect: { exists: true, components: ["Image"] },
+        },
+      ],
+    });
+    expect(failed.error_code).toBe("expectation_failed");
+    expect(failed.message).toContain("ops[1] gameobject_rename expect failed");
+    expect(failed.message).toContain("has no Image");
+    expect(prefabBytes().equals(before)).toBe(true);
+
+    // The same batch passes once the precondition holds; ops[0] already ran when ops[1] is checked.
+    await ok("prefab_edit", {
+      prefab: PREFAB,
+      ops: [
+        {
+          command: "gameobject_create",
+          args: { parent: "Batch", name: "Guarded", components: ["Image"] },
+          expect: { node: "Batch/Guarded", exists: false },
+        },
+        {
+          command: "gameobject_rename",
+          args: { node: "Batch/Guarded", name: "Renamed" },
+          expect: { exists: true, components: ["Image"] },
+        },
+        { command: "gameobject_delete", args: { node: "Batch/Renamed" } },
+      ],
+    });
+
+    const badShape = await rejected("prefab_edit", {
+      prefab: PREFAB,
+      ops: [{ command: "gameobject_create", args: { name: "X" }, expect: { exist: true } }],
+    });
+    expect(badShape.error_code).toBe("invalid_argument");
+    expect(badShape.message).toContain("unknown key 'exist'");
   });
 
   it("dry_run reports every op's real result and keeps nothing", async () => {

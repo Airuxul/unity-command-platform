@@ -143,4 +143,25 @@ namespace Air.UcpAgent.Params
         [CliParam(Description = "stacktrace verbosity", AllowedValues = "none|user|all")]
         public string Stacktrace { get; set; }
     }
+
+    public sealed class UiSnapshotParams
+    {
+        [CliParam(Description = "only canvases and rows at or under this node path, as ui_snapshot prints it")]
+        public string Root { get; set; }
+
+        [CliParam(Description = "max text / button / input rows in total; truncated says if more exist (default: 500)")]
+        public int? Limit { get; set; }
+    }
+
+    public sealed class HelpParams
+    {
+        public const string Json = "json";
+        public const string Markdown = "md";
+
+        [CliParam(Description = "one command by name or alias: its card, with an example call and the error codes")]
+        public string Command { get; set; }
+
+        [CliParam(Description = "md: the cards as markdown in data.markdown", AllowedValues = Json + "|" + Markdown)]
+        public string Format { get; set; } = Json;
+    }
 }

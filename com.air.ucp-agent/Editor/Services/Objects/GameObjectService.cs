@@ -337,16 +337,12 @@ namespace Air.UcpAgent.Editor.Services.Objects
         public static Dictionary<string, object> Tree(EditTargetScope scope, GameObjectTreeParams p)
         {
             var depth = p.Depth ?? DefaultTreeDepth;
-            var withComponents = p.Components ?? true;
             var includeInactive = p.IncludeInactive ?? true;
-
-            var roots = new List<object>();
-            var count = 0;
+            var tree = new TreeShape(p.Limit, p.Format, p.Fields, p.Components ?? true, includeInactive);
 
             if (!string.IsNullOrWhiteSpace(p.Node) || p.Id != null || scope.IsPrefabContent)
             {
-                var node = GameObjectPath.Require(scope, p);
-                roots.Add(Describe(node, depth, withComponents, includeInactive, ref count));
+                tree.Add(GameObjectPath.Require(scope, p), depth);
             }
             else
             {
@@ -355,16 +351,11 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     if (root == null || (!includeInactive && !root.activeSelf))
                         continue;
 
-                    roots.Add(Describe(root.transform, depth, withComponents, includeInactive, ref count));
+                    tree.Add(root.transform, depth);
                 }
             }
 
-            return new Dictionary<string, object>
-            {
-                ["depth"] = depth,
-                ["node_count"] = count,
-                ["roots"] = roots,
-            };
+            return tree.Result(depth);
         }
 
         public static Dictionary<string, object> Find(EditTargetScope scope, GameObjectFindParams p)
@@ -444,52 +435,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
         }
 
         // --- shared shaping ----------------------------------------------------------------
-
-        static Dictionary<string, object> Describe(
-            Transform node,
-            int depth,
-            bool withComponents,
-            bool includeInactive,
-            ref int count)
-        {
-            count++;
-
-            var entry = new Dictionary<string, object>
-            {
-                ["name"] = node.name,
-                ["node"] = GameObjectPath.Of(node),
-                ["active"] = node.gameObject.activeSelf,
-                ["child_count"] = node.childCount,
-            };
-
-            if (withComponents)
-                entry["components"] = ComponentService.Names(node.gameObject);
-
-            // Nested prefabs read as instance roots even inside prefab contents, so this marks the
-            // boundary where edits become overrides instead of direct changes.
-            if (PrefabUtility.IsAnyPrefabInstanceRoot(node.gameObject))
-            {
-                var source = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(node.gameObject);
-                if (!string.IsNullOrEmpty(source))
-                    entry["nested_prefab"] = source;
-            }
-
-            if (depth == 0 || node.childCount == 0)
-                return entry;
-
-            var children = new List<object>();
-            for (var i = 0; i < node.childCount; i++)
-            {
-                var child = node.GetChild(i);
-                if (!includeInactive && !child.gameObject.activeSelf)
-                    continue;
-
-                children.Add(Describe(child, depth < 0 ? -1 : depth - 1, withComponents, includeInactive, ref count));
-            }
-
-            entry["children"] = children;
-            return entry;
-        }
 
         static IEnumerable<Transform> Targets(Transform node, bool recursive) =>
             recursive ? GameObjectPath.Descend(node) : new[] { node };

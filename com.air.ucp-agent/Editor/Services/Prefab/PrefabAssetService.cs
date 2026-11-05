@@ -239,9 +239,13 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             using var scope = EditTargetScope.Peek(path);
             var tree = GameObjectService.Tree(scope, new GameObjectTreeParams
             {
+                Node = p.Node,
                 Depth = p.Depth ?? -1,
                 Components = p.Components,
                 IncludeInactive = true,
+                Limit = p.Limit,
+                Format = p.Format,
+                Fields = p.Fields,
             });
             // Says whether the tree came from the asset or from the open Prefab Mode stage.
             tree["target"] = scope.Describe();

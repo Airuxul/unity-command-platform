@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Params;
 using Air.UcpAgent.Protocol;
 using Newtonsoft.Json.Linq;
@@ -30,14 +31,24 @@ namespace Air.UcpAgent.Cli
         {
             var entry = CommandRegistry.Find(host, command.type);
             if (entry == null)
-                return UcpResults.Failure(command.id, "unknown_command", "Handler not found: " + command.type);
+            {
+                return UcpResults.Failure(command.id, new CommandFailure(
+                    UcpErrorCodes.UnknownCommand,
+                    "Handler not found: " + command.type,
+                    $"Run {CommandNames.Help} to list the commands on this host."));
+            }
 
             object parameters = null;
             if (entry.ParamType != null)
             {
                 var (bound, error) = CliParamBinder.Bind(entry.ParamType, NormalizeArgs(command.args));
                 if (error != null)
-                    return UcpResults.Failure(command.id, error, error);
+                {
+                    return UcpResults.Failure(command.id, new CommandFailure(
+                        UcpErrorCodes.InvalidArgument,
+                        error,
+                        $"Run {CommandNames.Help} with command={entry.Name} for its parameters."));
+                }
 
                 parameters = bound;
             }
@@ -57,7 +68,7 @@ namespace Air.UcpAgent.Cli
             }
             catch (Exception ex)
             {
-                invocation.Fail(CommandRegistry.Unwrap(ex).Message);
+                invocation.Fail(CommandFailure.From(CommandRegistry.Unwrap(ex)));
             }
 
             invocation.ReturnedFromRun = true;
@@ -73,7 +84,8 @@ namespace Air.UcpAgent.Cli
             if (invocation.HasJob)
                 return null;
 
-            return UcpResults.Failure(command.id, "command did not complete synchronously", null);
+            return UcpResults.Failure(command.id, new CommandFailure(
+                UcpErrorCodes.CommandFailed, $"'{entry.Name}' returned without completing."));
         }
 
         /// <summary>Newtonsoft leaves nested JSON as JTokens; commands expect plain values.</summary>

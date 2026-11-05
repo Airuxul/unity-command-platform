@@ -129,19 +129,19 @@ EditorAgentBootstrap (static ctor, [InitializeOnLoad])
 ucp-cli run help          # 列出全部命令、说明与参数
 ```
 
-Editor 侧共 82 个命令，按操作对象分组：
+Editor 侧命令按操作对象分组：
 
 | 命令族 | 覆盖范围 |
 |--------|----------|
 | `ping` `echo` `state` `console` `help` | 健康检查、Agent/Editor 状态、Console 日志、命令目录 |
 | `compile` `play` `stop` `pause` `refresh` `reserialize` `menu` `screenshot` `profiler` `exec` `build` | 编辑器控制与诊断 |
-| `prefab_*`（20 个） | Prefab 资产、变体、实例、Overrides、嵌套、Prefab Mode |
-| `gameobject_*`（12 个） | 增删、复制、改名、换父级、Transform、启用、Tag、Layer、详情、层级、查找 |
-| `component_*`（5 个） | 加组件、删组件、列组件、读写序列化属性 |
-| `scene_*`（7 个） | 打开、新建、保存、另存、关闭、列表、详情 |
-| `asset_*`（9 个） | 列表、搜索、详情、建目录、删除、移动、复制、依赖、GUID |
-| `selection_*`（3 个） | 读取与设置编辑器选中项 |
-| `tag_*` `layer_*` `tool_set`（7 个） | 工程 Tag/Layer 表与当前变换工具 |
+| `prefab_*` | Prefab 资产、变体、实例、Overrides、嵌套、Prefab Mode |
+| `gameobject_*` | 增删、复制、改名、换父级、Transform、启用、Tag、Layer、详情、层级、查找 |
+| `component_*` | 加组件、删组件、列组件、读写序列化属性 |
+| `scene_*` | 打开、新建、保存、另存、关闭、列表、详情 |
+| `asset_*` | 列表、搜索、详情、建目录、删除、移动、复制、依赖、GUID |
+| `selection_*` | 读取与设置编辑器选中项 |
+| `tag_*` `layer_*` `tool_set` | 工程 Tag/Layer 表与当前变换工具 |
 | `prefab_edit` `scene_edit` | 在一个 Prefab 或场景上连续执行多条节点命令，全部成功才保留 |
 | `ui_snapshot` | 仅 Play Mode：列出 Canvas、文本，以及每个按钮能否点击 |
 

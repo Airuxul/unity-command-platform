@@ -14,6 +14,10 @@ that loaded it (a `compile` or `refresh compile=true` sent to the old agent) and
 records 0.3 kept forever; nothing is delivered twice. An older `ucp-host` still running is
 restarted by the new CLI the first time it is idle.
 
+Update **every** `ucp-cli` on the machine at once. They share one ucp-host, and a 0.2 CLI cannot
+talk to a 0.3 host: every call it makes fails with `unauthorized` (it sends no token), and it never
+restarts the host itself.
+
 Parameters and results that changed. An unknown parameter name is ignored, so a caller still
 sending an old one gets `invalid_argument` only where the new name is required; check each row.
 
@@ -39,9 +43,24 @@ sending an old one gets `invalid_argument` only where the new name is required; 
 | `compile` | succeeded with compile errors | fails as `compile_error` with `data.errors` |
 | any value outside a parameter's allowed list | fell back to the default | `invalid_argument` naming the valid values |
 
-Every failure now has `error` = a code (`ucp-cli help <command>` lists them), `message` = the text,
-`hint` = what to try. Before, `error` held the text and the CLI reported most failures as
-`command_failed`. Successful results also carry `timing` (`queued_ms`, `unity_ms`, `run_ms`).
+Every failure now has `error_code` = a code, `message` = the text, `hint` = what to try, whether
+Unity or ucp-host decided it. Before, `error` held the text and the CLI reported most failures as
+`command_failed` or a bare `failed`. Successful results also carry `timing` (`queued_ms`,
+`unity_ms`, `run_ms`). `ucp-cli help <command>` lists the agent's codes; the ones ucp-host and the
+CLI add are:
+
+| Code | Meaning |
+|------|---------|
+| `no_ready_session` | no Editor (or, with `--session-type runtime`, no Play Mode) for the project |
+| `editor_not_running` | the Editor's process has exited |
+| `session_unavailable` | the runtime went away (Play Mode ended) before the command was sent |
+| `unknown_command` | the session does not offer that command (was `failed`) |
+| `timeout` | no result before the deadline; the hint says if Unity was in the background |
+| `caller_disconnected` | the caller stopped waiting; the command was dropped before it ran |
+| `command_failed` | ucp-host could not deliver the command; the message says why |
+| `host_lost` | ucp-host died while the CLI waited; the command may still have run (was an exception) |
+| `host_restarting` | ucp-host is making way for a newer one; the CLI sends again by itself |
+| `unauthorized` | no or wrong `X-UCP-Token`, usually a 0.2 `ucp-cli` |
 
 Anything calling ucp-host directly (not through `ucp-cli`) must send `X-UCP-Token` from
 `~/.ucp/host.json`; only `/health` is open.
@@ -82,8 +101,26 @@ Anything calling ucp-host directly (not through `ucp-cli`) must send `X-UCP-Toke
   reported success.
 - A command sent while the Editor imports assets waits for it instead of failing as
   `no_ready_session`; an Editor whose process has exited fails at once as `editor_not_running`.
-- The agent checks its inbox every editor tick instead of every 250 ms. With Unity minimized, 20
-  pings: median 147 ms → 25 ms from handing the command over to reading the result.
+- The agent checks its inbox every editor tick instead of every 250 ms. With Unity minimized
+  (about 10 ticks a second), 20 pings back to back: median 295 ms → 96 ms from handing the
+  command over to reading the result (`background.test.ts`).
+- `ping`, `state`, `console`, `help` and `echo` no longer wait for another command on the Editor
+  to finish (`test_run`, `compile`); they used to queue behind it until their own timeout. During
+  the domain reload itself they still wait, since Unity does not tick then.
+- `ui_wait` and `ui_snapshot` see TextMeshPro text: the lookup skipped `TMPro.TMP_Text` because it
+  is abstract, so `ui_wait until=text` never matched a TMP label.
+- A command queued behind a long one times out at its own deadline, not when the long one ends.
+- Unity does not start a command whose deadline has passed (left in the inbox by a host that
+  died), and drops a result that comes in after it (`exec` blocking past its timeout). Both used to
+  leave an outbox file nobody reads.
+- An unreachable runtime target in `targets.json` no longer slows the Editor down: the host saw an
+  Editor turn ready up to 6 s late, waiting for the device's 3 s `/health` probe to give up.
+- ucp-host no longer takes the Editor for gone when it reads the session file just as the agent
+  replaces it (1 read in about 1000 on Windows). That failed a submit with `no_ready_session`.
+- The first runtime command after `play` no longer fails with `no_ready_session` when it comes
+  before the next 2 s probe; the host probes once more before turning it away.
+- Restarting an older idle host goes through `POST /shutdown`, which the host refuses while a
+  command is in flight. A kill could lose a command submitted just before it.
 - Security: ucp-host refuses requests with an `Origin` or a foreign `Host` (a web page could POST
   `exec`) and needs its token; the runtime agent refuses `Origin` and starts only in the Editor,
   Development Builds, or with `UCP_RUNTIME_AGENT`.
@@ -98,13 +135,18 @@ Anything calling ucp-host directly (not through `ucp-cli`) must send `X-UCP-Toke
   `DeferredInvokeDescriptor` or `CliCommand.Defer(kind[, args])`; a completion policy finishes it,
   also after a domain reload. Inbox files are claimed by renaming them to `.claimed`.
 - Host: `SessionDirectory` and `CommandRunner` replace seven queue / scheduler / router modules.
-  One lane per session; deadlines count from submission; `GET /commands/:id?wait=` long-polls;
-  the outbox is watched with `fs.watch`. `/health` reports a build id and the CLI restarts an
-  older idle host.
+  One lane per session; read-only commands skip it; deadlines count from submission;
+  `GET /commands/:id?wait=` long-polls; the outbox is watched with `fs.watch`. `/health` reports a
+  build id and the CLI restarts an older idle host. Editor sessions are read apart from runtime
+  probes.
+- Protocol additions (old agents and hosts ignore them): the command carries `deadline` (Unix ms);
+  the session file carries `readOnlyCommands`, `pid`, `focused`, `defaultTimeouts`; ucp-host has
+  `POST /shutdown`.
 - Content layer: one copy of each helper (`SceneLookup`, `AssetQuery`, `TransformValues`,
   `TagsAndLayers`); `ParamKeys` holds the shared parameter names; binder-enforced `AllowedValues`.
 - Tests: catalog snapshots lock every command's name and parameters, shape snapshots lock the keys
-  of every result; integration suite 116 cases.
+  of every result. Every behaviour above has a test, and every fix's test was seen failing
+  without the fix; nothing is left to check by hand ([MAINTENANCE.md](MAINTENANCE.md#every-claim-has-a-test)).
 
 ## 0.4.0 — content command surface (not released on its own; part of 0.5.0)
 

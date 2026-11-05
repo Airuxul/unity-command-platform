@@ -15,12 +15,6 @@ namespace Air.UcpAgent.Editor.Services
     {
         const string SessionKey = "Air.UcpAgent.TestRun";
 
-        /// <summary>What may run while tests do: none of these change the project or the play state.</summary>
-        static readonly string[] AllowedDuringRun =
-        {
-            CommandNames.Ping, CommandNames.State, CommandNames.Console, CommandNames.Help, CommandNames.Echo,
-        };
-
         [Serializable]
         sealed class Record
         {
@@ -38,8 +32,9 @@ namespace Air.UcpAgent.Editor.Services
         /// <summary>Any test run, started by test_run or from the Test Runner window.</summary>
         public static bool IsRunActive() => Load()?.Running == true;
 
+        /// <summary>Everything but <see cref="CommandNames.ReadOnly"/> waits for the run to end.</summary>
         public static bool BlocksCommand(string command) =>
-            Array.IndexOf(AllowedDuringRun, command) < 0 && IsRunActive();
+            Array.IndexOf(CommandNames.ReadOnly, command) < 0 && IsRunActive();
 
         /// <summary>Called by test_run before it starts the run, so the result finds its job.</summary>
         public static void Begin(string jobId, string mode) =>

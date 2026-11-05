@@ -5,7 +5,7 @@ const port = process.env.UCP_HOST_PORT ? Number.parseInt(process.env.UCP_HOST_PO
 const logLevel = process.env.UCP_LOG_LEVEL as "debug" | "info" | "warn" | "error" | undefined;
 const ucpRoot = process.env.UCP_ROOT;
 
-createUcpHost({ port, ucpRoot, logLevel }).catch((err) => {
+createUcpHost({ port, ucpRoot, logLevel, onShutdown: () => process.exit(0) }).catch((err) => {
   console.error("[ucp-host] fatal", err);
   process.exit(1);
 });

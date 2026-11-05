@@ -64,7 +64,7 @@ Naming: [CONVENTIONS.md](CONVENTIONS.md) · Docs: [docs/](docs/)
 - **Auto-discovered sessions** — the agent writes `~/.ucp/sessions/{projectId}.json` every 2 s; `ucp-host` promotes it to a ready session automatically.
 - **Targets config** — `~/.ucp/targets.json` stores Editor and Runtime targets. Runtime targets are probed via `/health`; Editor targets fall back to session-file discovery.
 - **Capability gating** — each session advertises which command types it supports; `ucp-host` rejects unsupported commands before dispatching.
-- **Waits instead of failing** — a command sent while the Editor imports assets waits until it is ready; each command has its own default timeout (`build` 30 min, `test_run` 10 min, `compile` 180 s, most others 30 s).
+- **Waits instead of failing** — a command sent while the Editor imports assets waits until it is ready; each command has its own default timeout (`build` 30 min, `test_run` 10 min, `compile` 180 s, most others 30 s). `ping`, `state` and `console` do not wait for a test run or a compile to finish (only for the few seconds of a domain reload).
 - **Domain Reload Safe** — commands that cause a reload still return their result, once; see below.
 - **Play Mode runtime channel** — `RuntimeAgentHost` starts automatically on `AfterSceneLoad`, binds `127.0.0.1:6620` (configurable), and shuts down cleanly when Play Mode exits.
 - **Multi-project safe** — queue paths are keyed by `SHA-256(projectPath)[0:16]`; multiple Unity instances coexist without conflicts.
@@ -206,8 +206,9 @@ Open the Unity project and wait for compile — the agent writes `~/.ucp/session
 
 ### Upgrading from 0.3
 
-Update the CLI and the Unity package together. Several parameters were renamed and every failure
-now carries a code; the list is in
+Update the CLI and the Unity package together, and every `ucp-cli` install on the machine at
+once: a 0.2 CLI gets `unauthorized` from the 0.3 host for every call. Several parameters were
+renamed and every failure now carries a code; the list is in
 [docs/CHANGELOG_AGENT.md](docs/CHANGELOG_AGENT.md#upgrading-from-03).
 
 ### Runtime (Play Mode)
@@ -276,7 +277,7 @@ npm run verify                       # build + lint + unit tests (+ integration,
 # Against an open, compiled Editor
 $env:UCP_EDITOR_INTEGRATION="1"
 $env:UCP_TEST_PROJECT="C:/path/to/UnityProject"
-npm run test:integration             # about 3 min; $env:UCP_EDITOR_SLOW="1" adds compile/play and a real build
+npm run test:integration             # about 6 min; $env:UCP_EDITOR_SLOW="1" adds compile/play and a real build
 npm run smoke                        # one Prefab round trip, a few seconds
 ```
 

@@ -16,6 +16,7 @@ const runEditorTests = process.env.UCP_EDITOR_INTEGRATION === "1";
 
 const PLAIN = "com.ucp.probe.plain";
 const SCRIPTED = "com.ucp.probe.scripted";
+const EMBEDDED = "com.ucp.probe.embedded";
 const RESOLVE_TIMEOUT = 180_000;
 
 function packagesFile(name: string): string {
@@ -122,12 +123,46 @@ describe.skipIf(!runEditorTests)("package commands (Unity required)", () => {
     );
   });
 
-  it("refuses to remove ucp-agent or a package the manifest does not list", async () => {
+  it("refuses to remove ucp-agent, its dependencies, or a package the manifest does not list", async () => {
     const self = await rejected("package_remove", { package: "com.air.ucp-agent" });
     expect(self.message).toContain("ucp-agent itself");
 
+    // Only a direct dependency can be removed, so the test lists it first.
+    await ok("package_add", { package: "com.unity.nuget.newtonsoft-json@3.2.1" }, RESOLVE_TIMEOUT);
+    const dependency = await rejected("package_remove", {
+      package: "com.unity.nuget.newtonsoft-json",
+    });
+    expect(dependency.message).toContain("dependency of ucp-agent");
+
     const missing = await rejected("package_remove", { package: "com.ucp.probe.none" });
     expect(missing.error_code).toBe("invalid_argument");
+  });
+
+  it("refuses to remove an embedded package", async () => {
+    const dir = packagesFile(EMBEDDED);
+    writePackage(path.dirname(dir), EMBEDDED, false);
+    // A folder dropped into Packages/ is picked up on the next resolve, not on an asset refresh.
+    const resolve = "UnityEditor.PackageManager.Client.Resolve(); return 0;";
+    try {
+      await run("exec", { code: resolve });
+      let entry: { package: string; source: string } | undefined;
+      const deadline = Date.now() + 60_000;
+      while (!entry && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1_000));
+        const listed = await run("package_list", {}, RESOLVE_TIMEOUT);
+        entry = (
+          (listed.data as { packages?: Array<{ package: string; source: string }> })?.packages ?? []
+        ).find((p) => p.package === EMBEDDED);
+      }
+      expect(entry?.source).toBe("embedded");
+
+      const refused = await rejected("package_remove", { package: EMBEDDED });
+      expect(refused.message).toContain("embedded");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      await run("exec", { code: resolve });
+      await run("ping", {}, RESOLVE_TIMEOUT);
+    }
   });
 
   it("reports a package that cannot be resolved", async () => {
@@ -136,7 +171,7 @@ describe.skipIf(!runEditorTests)("package commands (Unity required)", () => {
       { package: `file:${path.join(root, "missing").replace(/\\/g, "/")}` },
       RESOLVE_TIMEOUT,
     );
-    expect(result.message).toContain("missing");
+    expect(result.message, JSON.stringify(result)).toContain("missing");
     expect(queueFiles()).toEqual([]);
   });
 

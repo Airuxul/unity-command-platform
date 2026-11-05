@@ -53,7 +53,11 @@ namespace Air.UcpAgent.Cli
                 parameters = bound;
             }
 
-            var timeoutMs = command.timeout > 0 ? command.timeout : entry.DefaultTimeoutMs;
+            // The host's deadline when it sent one, so a job gives up exactly when the host does;
+            // `timeout` was measured before delivery and runs out a little later.
+            var timeoutMs = command.deadline > 0
+                ? (int)Math.Max(1, command.deadline - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                : command.timeout > 0 ? command.timeout : entry.DefaultTimeoutMs;
             var invocation = new CommandInvocation(command.id, entry.Name, timeoutMs, jobs);
             try
             {

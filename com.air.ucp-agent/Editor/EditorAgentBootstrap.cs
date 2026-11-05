@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Air.UcpAgent.Cli;
+using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services;
 using Air.UcpAgent.IO;
 using Air.UcpAgent.Protocol;
@@ -84,6 +85,7 @@ namespace Air.UcpAgent.Editor
                 pid = Pid,
                 focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive,
                 defaultTimeouts = DefaultTimeouts,
+                readOnlyCommands = new List<string>(CommandNames.ReadOnly),
             };
             UcpPaths.WriteJsonAtomic(
                 UcpPaths.SessionFile(_projectId),
@@ -147,7 +149,12 @@ namespace Air.UcpAgent.Editor
                 // An inbox file is only ever executed once. Before this, a deferred command's file
                 // stayed in the inbox, and the first poll after a domain reload ran it again.
                 var outbox = UcpPaths.OutboxFile(_projectId, command.id);
-                if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
+                if (command.IsPastDeadline(UtcNowMs()))
+                {
+                    // Left by a host that died, or seen only after its caller gave up.
+                    Debug.LogWarning($"[ucp-agent] skipped '{command.type}' ({command.id}): its caller had already given up.");
+                }
+                else if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
                 {
                     var result = TestRunState.BlocksCommand(command.type)
                         ? UcpResults.Failure(command.id, new CommandFailure(
@@ -156,13 +163,23 @@ namespace Air.UcpAgent.Editor
                             "Retry once state reports tests_running=false; ping, state, console, help and echo run meanwhile."))
                         : CommandExecutor.Execute(CommandRegistry.EditorHost, command, EditorJobStateManager.Jobs);
                     // Null: the command continues as a job, delivered by DeliverFinishedJobs.
-                    if (result != null)
+                    if (result != null && command.IsPastDeadline(UtcNowMs()))
+                    {
+                        // It ran past the deadline (exec blocking the main thread); ucp-host has
+                        // already answered timeout and would never read this.
+                        Debug.LogWarning($"[ucp-agent] '{command.type}' ({command.id}) finished after its caller gave up; result dropped.");
+                    }
+                    else if (result != null)
+                    {
                         WriteOutbox(command.id, result);
+                    }
                 }
 
                 TryDelete(claimed);
             }
         }
+
+        static long UtcNowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         const string ClaimedExtension = ".claimed";
 

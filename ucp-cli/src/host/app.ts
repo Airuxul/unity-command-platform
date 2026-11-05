@@ -14,6 +14,8 @@ export interface UcpHostOptions {
   logLevel?: LogLevel;
   build?: number;
   token?: string;
+  /** After POST /shutdown was accepted and the host has stopped. */
+  onShutdown?: () => void;
 }
 
 export interface UcpHost {
@@ -40,6 +42,11 @@ export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHo
   const logger = new Logger({ level: options.logLevel ?? "info" });
   const sessions = new SessionDirectory(logger, ucpRoot);
   const runner = new CommandRunner(sessions, createDispatch(logger, ucpRoot), logger);
+  const stop = async () => {
+    await server.stop();
+    runner.stop();
+    sessions.stop();
+  };
   const server = new UcpHostServer({
     runner,
     sessions,
@@ -48,6 +55,8 @@ export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHo
     ucpRoot,
     build: options.build ?? readBuildId(),
     token: options.token,
+    // After the 200 has gone out.
+    onShutdown: () => setImmediate(() => void stop().then(options.onShutdown)),
   });
 
   sessions.start();
@@ -55,15 +64,5 @@ export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHo
   runner.start();
   await server.start();
 
-  return {
-    logger,
-    sessions,
-    runner,
-    server,
-    async stop() {
-      await server.stop();
-      runner.stop();
-      sessions.stop();
-    },
-  };
+  return { logger, sessions, runner, server, stop };
 }

@@ -52,6 +52,7 @@ export const ucpSessionSchema = z.object({
   pid: z.number().int().positive().nullish(),
   focused: z.boolean().nullish(),
   defaultTimeouts: z.record(z.number()).nullish(),
+  readOnlyCommands: z.array(z.string()).nullish(),
 });
 
 export const ucpResultSchema = z.object({

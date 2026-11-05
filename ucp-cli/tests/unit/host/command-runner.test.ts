@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CommandRunner, type Dispatch } from "#host/commands/command-runner.js";
 import { Logger } from "#host/logger/logger.js";
 import { SessionDirectory } from "#host/sessions/session-directory.js";
+import { writeJsonAtomic } from "#shared/index.js";
 import type { QueuedCommand, UcpSession } from "#shared/types.js";
 
 const logger = new Logger({ level: "error" });
@@ -125,6 +128,65 @@ describe("CommandRunner", () => {
     expect(outcome).toMatchObject({ ok: false, error: "editor_not_running" });
   });
 
+  it("probes a runtime again before turning a command for it away", async () => {
+    // Play Mode has just started: the runtime answers, but the last probe still says offline.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ucp-runtime-"));
+    const runtime = http.createServer((_, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, capabilities: ["echo"] }));
+    });
+    await new Promise<void>((r) => runtime.listen(0, "127.0.0.1", r));
+    const port = (runtime.address() as AddressInfo).port;
+    writeJsonAtomic(path.join(root, "targets.json"), {
+      targets: [
+        { id: "game", type: "runtime", host: "127.0.0.1", port, projectPath: "C:/Project/Demo" },
+      ],
+    });
+    const directory = new SessionDirectory(logger, root);
+    directory.set([session({ id: "game", type: "runtime", status: "offline", runtimePort: port })]);
+    const runner = new CommandRunner(directory, pong, logger);
+    runners.push(runner);
+    runner.start();
+    try {
+      for (const body of [
+        { type: "echo", target: "game" },
+        { type: "echo", sessionType: "runtime" as const, project: "C:/Project/Demo" },
+      ]) {
+        const outcome = await runner.submit(body);
+        expect(outcome.ok, JSON.stringify(outcome)).toBe(true);
+        if (outcome.ok) expect((await finished(runner, outcome.entry)).status).toBe("completed");
+      }
+    } finally {
+      runtime.close();
+    }
+  });
+
+  it("turns a runtime command away within the probe timeout when the device does not answer", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ucp-deadrt-"));
+    const device = http.createServer(() => {});
+    await new Promise<void>((r) => device.listen(0, "127.0.0.1", r));
+    const port = (device.address() as AddressInfo).port;
+    writeJsonAtomic(path.join(root, "targets.json"), {
+      targets: [{ id: "game", type: "runtime", host: "127.0.0.1", port }],
+    });
+    const directory = new SessionDirectory(logger, root);
+    directory.set([session({ id: "game", type: "runtime", status: "offline", runtimePort: port })]);
+    const runner = new CommandRunner(directory, pong, logger);
+    runners.push(runner);
+    try {
+      const started = Date.now();
+      const outcome = await runner.submit({ type: "echo", sessionType: "runtime" });
+      const waited = Date.now() - started;
+      expect(outcome).toMatchObject({ ok: false, error: "no_ready_session" });
+      // The re-probe is what costs: PROBE_TIMEOUT_MS (3 s), never the caller's whole timeout.
+      expect(waited).toBeGreaterThanOrEqual(2_500);
+      expect(waited).toBeLessThan(4_500);
+    } finally {
+      device.closeAllConnections();
+      device.close();
+    }
+  }, 15_000);
+
   it("does not wait for a runtime: no ready one means no_ready_session", async () => {
     const { runner } = setup(pong, [
       session({ pid: process.pid }),
@@ -209,10 +271,107 @@ describe("CommandRunner", () => {
     expect(dispatches).toBe(0);
   });
 
-  it("rejects a command type the session does not advertise", async () => {
+  it("fails a command type the session does not advertise as unknown_command", async () => {
     const { runner } = setup(pong);
     const done = await finished(runner, await submit(runner, { type: "build" }));
-    expect(done.status).toBe("failed");
-    expect(done.hint).toMatch(/does not support/);
+    expect(done).toMatchObject({ status: "failed", error: "unknown_command" });
+    expect(done.message).toContain("build");
+    expect(done.hint).toContain("help");
+  });
+
+  it("gives every failure the host decides a code and a message", async () => {
+    const hang: Dispatch = () => new Promise<never>(() => {});
+    const failures: QueuedCommand[] = [];
+
+    const timedOut = setup(hang).runner;
+    failures.push(await finished(timedOut, await submit(timedOut, { type: "ping", timeout: 100 })));
+
+    const thrown = setup(async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:6620");
+    }).runner;
+    failures.push(await finished(thrown, await submit(thrown, { type: "ping" })));
+
+    const { runner: gone, directory } = setup(pong, [
+      session({ status: "busy", pid: process.pid }),
+    ]);
+    const waiting = await submit(gone, { type: "ping", timeout: 5_000 });
+    directory.set([session({ status: "offline", pid: process.pid })]);
+    failures.push(await finished(gone, waiting));
+
+    expect(failures.map((f) => f.error)).toEqual([
+      "timeout",
+      "command_failed",
+      "editor_not_running",
+    ]);
+    for (const failure of failures) expect(failure.message, failure.error).toBeTruthy();
+    expect(failures[1].message).toContain("ECONNREFUSED");
+
+    const rejected = await setup(pong, []).runner.submit({ type: "ping" });
+    expect(rejected).toMatchObject({ ok: false, error: "no_ready_session" });
+    expect(!rejected.ok && rejected.message).toBeTruthy();
+  });
+
+  it("times out a queued command at its deadline, not when the command ahead of it ends", async () => {
+    const { runner } = setup(() => new Promise<never>(() => {}));
+    await submit(runner, { type: "ping", timeout: 30_000 });
+    const behind = await submit(runner, { type: "ping", timeout: 300 });
+
+    const started = Date.now();
+    const done = await finished(runner, behind);
+    expect(done).toMatchObject({ status: "timeout", error: "timeout" });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(done.message).toBeTruthy();
+  });
+
+  it("lets a read-only command past a command still running on the same editor", async () => {
+    let release = () => {};
+    const testRun = new Promise<void>((r) => {
+      release = r;
+    });
+    const order: string[] = [];
+    const { runner } = setup(
+      async (_, command) => {
+        if (command.type === "test_run") await testRun;
+        order.push(command.type);
+        return { id: command.id, success: true, duration: 1 };
+      },
+      [session({ capabilities: ["test_run", "state", "ping"], readOnlyCommands: ["state"] })],
+    );
+
+    const long = await submit(runner, { type: "test_run", timeout: 10_000 });
+    const state = await submit(runner, { type: "state", timeout: 1_000 });
+    const ping = await submit(runner, { type: "ping", timeout: 10_000 });
+
+    expect((await finished(runner, state)).status).toBe("completed");
+    // ping is not read-only: it keeps its place behind test_run.
+    expect(runner.get(ping.command.id)?.status).toBe("queued");
+
+    release();
+    await Promise.all([finished(runner, long), finished(runner, ping)]);
+    expect(order).toEqual(["state", "test_run", "ping"]);
+  });
+
+  it("keeps every command in line for an agent that names no read-only commands", async () => {
+    const { runner } = setup(
+      (_, command) =>
+        command.type === "test_run"
+          ? new Promise<never>(() => {})
+          : Promise.resolve({ id: command.id, success: true, duration: 1 }),
+      [session({ capabilities: ["test_run", "state"] })],
+    );
+    await submit(runner, { type: "test_run", timeout: 10_000 });
+    const state = await finished(runner, await submit(runner, { type: "state", timeout: 300 }));
+    expect(state.status).toBe("timeout");
+  });
+
+  it("hands Unity the deadline as well as what is left of the timeout", async () => {
+    const seen: number[] = [];
+    const { runner } = setup(async (_, command) => {
+      seen.push(command.deadline ?? 0);
+      return { id: command.id, success: true, duration: 1 };
+    });
+    const entry = await submit(runner, { type: "ping", timeout: 5_000 });
+    await finished(runner, entry);
+    expect(seen).toEqual([entry.deadline]);
   });
 });

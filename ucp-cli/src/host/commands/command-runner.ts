@@ -26,7 +26,14 @@ export type Dispatch = (session: UcpSession, command: UcpCommand) => Promise<Ucp
 
 export type SubmitOutcome =
   | { ok: true; entry: QueuedCommand }
-  | { ok: false; error: string; hint: string };
+  | { ok: false; error: string; message: string; hint: string };
+
+/** A failure the host decides itself; the agent's own failures arrive in the result. */
+interface Failure {
+  error: string;
+  message: string;
+  hint?: string;
+}
 
 interface Entry extends QueuedCommand {
   waiters: Set<() => void>;
@@ -37,8 +44,10 @@ interface Entry extends QueuedCommand {
 
 /**
  * Accepts commands and runs them one at a time per session, in submission order; different
- * sessions (an editor and its play-mode runtime) run side by side. A command that finds its
- * editor busy waits for it, but never past its deadline, which counts from submission.
+ * sessions (an editor and its play-mode runtime) run side by side. A command the session lists
+ * as read-only skips the line, so `state` answers while a test run holds the editor. A command
+ * that finds its editor busy waits for it, but never past its deadline, which counts from
+ * submission.
  */
 export class CommandRunner {
   #entries = new Map<string, Entry>();
@@ -75,6 +84,10 @@ export class CommandRunner {
       // Its cached state may predate a stop; one local /health call settles it.
       await this.sessions.refresh(session.id);
       session = this.sessions.resolve(criteria, accept);
+    } else if (!session && mayMeanRuntime(criteria, this.sessions)) {
+      // Or predate a start: the probe runs every 2 s, Play Mode may have begun since.
+      await this.sessions.refreshRuntimes();
+      session = this.sessions.resolve(criteria, accept);
     }
     if (!session) return this.#rejection(criteria, body.sessionType);
 
@@ -93,7 +106,10 @@ export class CommandRunner {
     this.#entries.set(entry.command.id, entry);
 
     const lane = this.#lanes.get(session.id);
-    if (lane) {
+    if (isReadOnly(session, body.type)) {
+      // Changes nothing, so it cannot disturb what the lane is running, nor be disturbed by it.
+      void this.#run(entry);
+    } else if (lane) {
       lane.push(entry);
     } else {
       this.#lanes.set(session.id, [entry]);
@@ -151,15 +167,20 @@ export class CommandRunner {
       return {
         ok: false,
         error: "editor_not_running",
-        hint: `Unity (pid ${editor.pid}) for ${editor.path} has exited. Start it and wait for the agent.`,
+        message: `Unity (pid ${editor.pid}) for ${editor.path} has exited.`,
+        hint: "Start it and wait for the agent to compile.",
       };
     }
     return {
       ok: false,
       error: "no_ready_session",
-      hint: sessionType
-        ? `No ready ${sessionType} session for this project`
-        : "Open Unity Editor with com.air.ucp-agent installed",
+      message: sessionType
+        ? `No ready ${sessionType} session for this project.`
+        : "No Unity Editor with com.air.ucp-agent is open.",
+      hint:
+        sessionType === "runtime"
+          ? "A runtime session exists only in Play Mode: run play first."
+          : "Open the project in Unity, or pass --project when several are open.",
     };
   }
 
@@ -180,16 +201,27 @@ export class CommandRunner {
     const session = await this.#awaitReady(entry);
     if (!session) return;
 
+    if (!supports(session, entry.command.type)) {
+      this.#finish(entry, "failed", {
+        error: "unknown_command",
+        message: `'${entry.command.type}' is not a command of ${session.name} (${session.type}).`,
+        hint: "Run ucp-cli help for its commands. A command added since the last compile appears after ucp-cli run compile.",
+      });
+      return;
+    }
+
     const startedAt = Date.now();
     entry.status = "running";
     entry.startedAt = startedAt;
-    // Unity is handed what is left of the caller's timeout, so its own job deadline matches ours.
-    const command = { ...entry.command, timeout: Math.max(1, entry.deadline - startedAt) };
+    // Unity is handed what is left of the caller's timeout and the deadline itself, so it neither
+    // starts nor answers a command the host has already given up on.
+    const command = {
+      ...entry.command,
+      timeout: Math.max(1, entry.deadline - startedAt),
+      deadline: entry.deadline,
+    };
 
     try {
-      if (!supports(session, command.type)) {
-        throw new Error(`session ${session.id} does not support command type: ${command.type}`);
-      }
       // The adapters time out on their own (and withdraw the inbox file); this only guarantees a
       // lane is never stuck behind a dispatch that does not.
       const result = await withTimeout(command.timeout, this.dispatch(session, command));
@@ -204,9 +236,17 @@ export class CommandRunner {
       // dispatch would run a non-idempotent command (gameobject_create, asset_delete, exec) twice.
       const message = err instanceof Error ? err.message : String(err);
       if (message === "timeout") {
-        this.#finish(entry, "timeout", { error: "timeout", hint: timeoutHint(session, entry) });
+        this.#finish(entry, "timeout", {
+          error: "timeout",
+          message: `No result within ${Math.round(entry.command.timeout / 1000)} s.`,
+          hint: timeoutHint(session),
+        });
       } else {
-        this.#finish(entry, "failed", { error: "failed", hint: message });
+        this.#finish(entry, "failed", {
+          error: "command_failed",
+          message,
+          hint: `ucp-host could not deliver the command to ${session.name} (${session.type}).`,
+        });
       }
       this.logger.error("command failed", { id: command.id, error: message });
     }
@@ -217,19 +257,20 @@ export class CommandRunner {
     for (;;) {
       if (entry.status !== "queued") return null;
       if (Date.now() >= entry.deadline) {
-        this.#finish(entry, "timeout", {
-          error: "timeout",
-          hint: "Timed out before reaching Unity: the session was busy or other commands ran first.",
-        });
+        this.#expire(entry);
         return null;
       }
 
       const session = this.sessions.get(entry.sessionId);
       if (session?.status === "ready") return session;
       if (!session || session.status === "offline") {
+        const editor = session?.type === "editor";
         this.#finish(entry, "failed", {
-          error: session?.type === "editor" ? "editor_not_running" : "session_unavailable",
-          hint: `Session ${entry.sessionId} went offline before the command was sent.`,
+          error: editor ? "editor_not_running" : "session_unavailable",
+          message: `${entry.sessionId} went offline before the command was sent.`,
+          hint: editor
+            ? "Unity quit or crashed; start it and wait for the agent."
+            : "Play Mode ended; run play again.",
         });
         return null;
       }
@@ -251,14 +292,26 @@ export class CommandRunner {
     });
   }
 
+  /** A command whose deadline passed before it could be sent; it never reaches Unity. */
+  #expire(entry: Entry): void {
+    this.#finish(entry, "timeout", {
+      error: "timeout",
+      message: `Timed out after ${Math.round(entry.command.timeout / 1000)} s before reaching Unity.`,
+      hint: entry.waitedForSession
+        ? "The editor stayed busy (importing, compiling or a modal dialog). Pass a longer --timeout."
+        : "Commands ahead of it on the same editor were still running. Pass a longer --timeout.",
+    });
+  }
+
   #finish(
     entry: Entry,
     status: CommandStatus,
-    extra: { result?: UcpResult; error?: string; hint?: string },
+    extra: { result?: UcpResult } & Partial<Failure>,
   ): void {
     entry.status = status;
     entry.result = extra.result;
     entry.error = extra.error;
+    entry.message = extra.message;
     entry.hint = extra.hint;
     entry.completedAt = Date.now();
     entry.timing = timing(entry);
@@ -271,13 +324,17 @@ export class CommandRunner {
         if (now - entry.completedAt > FINISHED_RETENTION_MS) this.#entries.delete(id);
         continue;
       }
-      if (entry.status === "queued" && entry.attached === 0) {
-        if (now - entry.lastSeen > this.detachedCancelMs) {
-          this.#finish(entry, "cancelled", {
-            error: "caller_disconnected",
-            hint: "Nobody was waiting for the result any more; dropped before it reached Unity.",
-          });
-        }
+      if (entry.status !== "queued") continue;
+
+      // Behind a long command it would otherwise only notice when its turn came.
+      if (now >= entry.deadline) {
+        this.#expire(entry);
+      } else if (entry.attached === 0 && now - entry.lastSeen > this.detachedCancelMs) {
+        this.#finish(entry, "cancelled", {
+          error: "caller_disconnected",
+          message: "Nobody was waiting for the result any more.",
+          hint: "Dropped before it reached Unity; nothing ran.",
+        });
       }
     }
   }
@@ -306,6 +363,18 @@ function supports(session: UcpSession, commandType: string): boolean {
   return session.capabilities.some((c) => c.toLowerCase() === type);
 }
 
+/** A submit nothing took that a runtime could, once probed: asked for by type, or by its id. */
+function mayMeanRuntime(criteria: SessionCriteria, sessions: SessionDirectory): boolean {
+  if (criteria.sessionType) return criteria.sessionType === "runtime";
+  if (criteria.sessionId) return sessions.get(criteria.sessionId)?.type === "runtime";
+  return false;
+}
+
+function isReadOnly(session: UcpSession, commandType: string): boolean {
+  const type = commandType.toLowerCase();
+  return (session.readOnlyCommands ?? []).some((c) => c.toLowerCase() === type);
+}
+
 /** The descriptor's own default (compile, play, ...) when the caller did not pass --timeout. */
 function defaultTimeout(session: UcpSession, type: string): number {
   const table = session.defaultTimeouts;
@@ -317,7 +386,8 @@ function defaultTimeout(session: UcpSession, type: string): number {
  * Where the time went. `queued_ms` covers other commands ahead in the lane and waiting for a
  * busy editor; `unity_ms` is from handing the command over to reading its result, of which
  * `run_ms` is the agent's own measure of the command itself. The rest of `unity_ms` is delivery:
- * the agent noticing the inbox file (it polls every 250 ms) and writing the outbox.
+ * the agent noticing the inbox file (once per editor tick, about 10 a second in the background)
+ * and writing the outbox.
  */
 function timing(entry: QueuedCommand): CommandTiming {
   const end = entry.completedAt ?? Date.now();
@@ -331,10 +401,9 @@ function timing(entry: QueuedCommand): CommandTiming {
   };
 }
 
-function timeoutHint(session: UcpSession, entry: QueuedCommand): string {
-  const waited = `Waited ${Math.round((Date.now() - entry.createdAt) / 1000)}s of ${Math.round(entry.command.timeout / 1000)}s.`;
+function timeoutHint(session: UcpSession): string {
   if (session.type === "editor" && session.focused === false) {
-    return `${waited} Unity is in the background, where it ticks about 10 times a second and only imports on focus. Bring it to the front, or pass a longer --timeout.`;
+    return "Unity is in the background, where it ticks about 10 times a second and only imports on focus. Bring it to the front, or pass a longer --timeout.";
   }
-  return `${waited} Unity did not answer in time: it may be blocked by a modal dialog or a long import, or the command itself is stuck.`;
+  return "Unity did not answer in time: it may be blocked by a modal dialog or a long import, or the command itself is stuck. The command may still finish in Unity.";
 }

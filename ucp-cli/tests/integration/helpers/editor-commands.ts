@@ -360,6 +360,26 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
   // A real build is in build.test.ts (UCP_EDITOR_SLOW).
   {
     type: "build",
+    description: "build refuses to write the player under Assets/",
+    args: { output_path: "Assets/UcpBuild/x.exe", scenes: ["Assets/Scenes/SampleScene.unity"] },
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.error_code).toBe("invalid_argument");
+      expect(r.message).toContain("Assets/");
+    },
+  },
+  {
+    type: "build",
+    description: "build without scenes refuses an empty Build Settings list",
+    args: { output_path: "Builds/x.exe" },
+    expectFailure: true,
+    assert: (r) => {
+      expect(r.error_code).toBe("invalid_argument");
+      expect(r.message).toContain("no enabled scenes");
+    },
+  },
+  {
+    type: "build",
     description: "build names the installed targets for an unknown one",
     args: { target: "NoSuchTarget", output_path: "Builds/x.exe" },
     expectFailure: true,

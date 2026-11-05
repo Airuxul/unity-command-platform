@@ -45,7 +45,7 @@ describe.skipIf(!runEditorTests)("editor + runtime play workflow (Unity required
       target: LOCAL_RUNTIME_TARGET_ID,
       args: { message: "runtime-in-play" },
     });
-    expect(runtimeEcho.ok).toBe(true);
+    expect(runtimeEcho.ok, JSON.stringify(runtimeEcho)).toBe(true);
     expect((runtimeEcho.data as Record<string, unknown>)?.channel).toBe("runtime");
     expect((runtimeEcho.data as Record<string, unknown>)?.message).toBe("runtime-in-play");
 

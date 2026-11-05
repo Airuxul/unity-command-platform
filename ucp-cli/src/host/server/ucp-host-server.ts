@@ -67,6 +67,7 @@ function commandBody(entry: QueuedCommand) {
     status: entry.status,
     result: entry.result ?? null,
     error: entry.error ?? null,
+    message: entry.message ?? null,
     hint: entry.hint ?? null,
     timing: entry.timing ?? null,
   };
@@ -82,6 +83,8 @@ export interface UcpHostServerOptions {
   build?: number;
   /** Fixed in tests; random otherwise. */
   token?: string;
+  /** Called once POST /shutdown is accepted; the process entry point exits from it. */
+  onShutdown?: () => void;
 }
 
 export class UcpHostServer {
@@ -96,9 +99,13 @@ export class UcpHostServer {
    * home directory, so only the user (and their own processes) can read the token from it.
    */
   readonly token: string;
+  readonly onShutdown?: () => void;
   server: http.Server | null = null;
+  /** Set once a shutdown is accepted: from then on no command is taken, so none can be lost. */
+  #closing = false;
 
   constructor(options: UcpHostServerOptions) {
+    this.onShutdown = options.onShutdown;
     this.runner = options.runner;
     this.sessions = options.sessions;
     this.logger = options.logger;
@@ -173,8 +180,28 @@ export class UcpHostServer {
       sendJson(res, 401, {
         ok: false,
         error: "unauthorized",
-        hint: `Send the token from host.json in the ${HOST_TOKEN_HEADER} header`,
+        message: `Missing or wrong ${HOST_TOKEN_HEADER} header.`,
+        hint: "ucp-cli older than 0.3 does not send it: update every ucp-cli on this machine. Other clients read the token from ~/.ucp/host.json.",
       });
+      return;
+    }
+
+    // Answered from the single request loop, so no submit can slip in between the idle check
+    // and the host going away.
+    if (method === "POST" && url.pathname === "/shutdown") {
+      const busy = this.runner.busyCount();
+      if (busy > 0) {
+        sendJson(res, 409, {
+          ok: false,
+          error: "busy",
+          message: `${busy} command(s) still in flight.`,
+        });
+        return;
+      }
+      this.#closing = true;
+      sendJson(res, 200, { ok: true });
+      this.logger.info("shutting down on request");
+      this.onShutdown?.();
       return;
     }
 
@@ -206,6 +233,15 @@ export class UcpHostServer {
     }
 
     if (method === "POST" && url.pathname === "/commands") {
+      if (this.#closing) {
+        sendJson(res, 503, {
+          ok: false,
+          error: "host_restarting",
+          message: "This ucp-host is shutting down to make way for a newer one.",
+          hint: "Send the command again; ucp-cli starts the new host.",
+        });
+        return;
+      }
       const raw = await readJsonBody(req);
       const parsed = submitCommandSchema.safeParse(raw);
       if (!parsed.success) {
@@ -215,7 +251,12 @@ export class UcpHostServer {
 
       const outcome = await this.runner.submit(parsed.data);
       if (!outcome.ok) {
-        sendJson(res, 503, { ok: false, error: outcome.error, hint: outcome.hint });
+        sendJson(res, 503, {
+          ok: false,
+          error: outcome.error,
+          message: outcome.message,
+          hint: outcome.hint,
+        });
         return;
       }
       sendJson(res, 202, {

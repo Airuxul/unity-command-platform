@@ -58,6 +58,12 @@ fields or reorder `InvokeJobStatus`, add fields only at the end, and treat their
 Declared `aliases` really dispatch — `CommandRegistry` uses them as lookup keys *and* lists them
 as session capabilities, which ucp-host checks before forwarding.
 
+`CommandNames.ReadOnly` lists the commands that change nothing in the project or the play state.
+The agent advertises it in the session file, ucp-host lets those commands past a command still
+running on the Editor, and they still run during a test run. Add a command there only if running
+it in the middle of a compile, a test run or Play Mode entry can do no harm, and it answers
+synchronously.
+
 ## Command shape (C#)
 
 | Piece | Location |
@@ -146,14 +152,35 @@ npm run verify                    # build + lint + unit + fake-agent e2e (Unity 
 
 $env:UCP_EDITOR_INTEGRATION="1"
 $env:UCP_TEST_PROJECT="C:/path/to/UnityProject"
-npm run test:integration          # needs Unity, about 3 min
+npm run test:integration          # needs Unity, about 6 min
 $env:UCP_EDITOR_SLOW="1"          # also compile/play cases and a real player build
 ```
 
-The gate before a commit: `npm run check`, `npm test`, the integration suite with
-`UCP_EDITOR_SLOW=1`, and `delivery.test.ts` once more with Unity minimized. Afterwards
-`~/.ucp/queues/{projectId}/{inbox,outbox}` and `~/.ucp/jobs/{projectId}` must be empty. No hosted
-CI runs the Unity suites: they need a licensed Editor.
+The gate before a commit: `npm run check`, `npm test`, and the integration suite with
+`UCP_EDITOR_SLOW=1`. Nothing is checked by hand: `delivery.test.ts` and `background.test.ts`
+minimize Unity themselves (Windows) and put the window back, and every test asserts
+`~/.ucp/queues/{projectId}/{inbox,outbox}` and `~/.ucp/jobs/{projectId}` empty. No hosted CI runs
+the Unity suites: they need a licensed Editor.
+
+### Every claim has a test
+
+A behaviour this repository states — in a doc, a changelog entry, a commit message, a code
+comment that promises something — is backed by an automated test, or it is not stated.
+
+- **A fix starts with its test.** Write the test, run it on the code before the fix and see it fail
+  for the reason the fix addresses, then fix it and see it pass. A test that passes without the
+  fix does not test the fix.
+- **A finding is a failing test**, not a reading of the code. Two of the problems fixed in 0.5
+  (the session file read mid-replace, a runtime command just after `play`) were found only by
+  writing tests; one sentence in RELIABILITY ("answers during a compile") was wrong until a test
+  measured it.
+- **Numbers come from tests**, which print them (`MEASURED …` in `background.test.ts`) and assert
+  a bound, so a regression fails the suite instead of only changing a number nobody reads.
+- **What cannot be tested deterministically** (a race of a few milliseconds) is said so in the
+  doc, and the code is changed so that a deterministic mechanism closes it — that mechanism is
+  what gets the test (see `POST /shutdown`).
+- Do not hand anything to a person to confirm by hand. [RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md)
+  §6 maps each guarantee to its tests; add the row when you add the guarantee.
 
 The integration suites change the test project and put it back: scratch assets under
 `Assets/UcpIntegration`, a probe test assembly, `Packages/manifest.json` (package tests), Enter Play
@@ -167,8 +194,9 @@ When changing session/command JSON shape or releasing:
 2. Bump `com.air.ucp-agent/package.json`, and `UcpAgentBuild.Id` (reported by `state`).
 3. Bump `ucp-cli/package.json` and `.version(...)` in `ucp-cli/src/cli/main.ts`. The host build id
    is written by tsup on every build; nothing to bump.
-4. Re-run Unity + integration tests, and the upgrade from the previous release
-   ([RELIABILITY.zh-CN.md](RELIABILITY.zh-CN.md) §3).
+4. Re-run Unity + integration tests. The upgrade from the previous release is a test too
+   (`delivery.test.ts`, "finishes a 0.3 compile after the upgrade reload…"): when the job record
+   gains a field, seed the previous version's format there.
 5. Add the release to [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md), with an upgrade table if a
    parameter or result key changed.
 

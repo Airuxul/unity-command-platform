@@ -22,6 +22,8 @@ import type { Logger } from "../logger/logger.js";
 export const STALE_MS = 30_000;
 const PROBE_TIMEOUT_MS = 3_000;
 const WATCH_DEBOUNCE_MS = 100;
+/** A replace takes well under a millisecond; a file gone for longer than this is really gone. */
+const UNREADABLE_GRACE_MS = 1_000;
 const POLL_INTERVAL_MS = 2_000;
 
 export interface RuntimeHealthResponse {
@@ -102,18 +104,29 @@ export function listConfiguredAndDiscoveredTargets(ucpRoot?: string): UcpTarget[
  * theirs can only be called offline.
  */
 export function readEditorSession(target: EditorTarget, ucpRoot?: string): UcpSession {
-  const queueId = target.queueId ?? projectIdFromPath(target.projectPath);
-  const parsed = ucpSessionSchema.safeParse(readJsonFile(sessionFilePath(queueId, ucpRoot)));
-  const base = {
+  return tryReadEditorSession(target, ucpRoot) ?? { ...editorBase(target), status: "offline" };
+}
+
+function editorBase(target: EditorTarget) {
+  return {
     id: target.id,
     name: target.name ?? path.basename(target.projectPath),
     path: target.projectPath,
     type: "editor" as const,
-    queueId,
+    queueId: target.queueId ?? projectIdFromPath(target.projectPath),
     capabilities: [] as string[],
     updatedAt: new Date().toISOString(),
   };
-  if (!parsed.success) return { ...base, status: "offline" };
+}
+
+/**
+ * Null when the file cannot be read right now. The agent replaces it every 2 s, and a read that
+ * lands on the replace finds it missing or cannot open it (about 0.1% of reads on Windows).
+ */
+function tryReadEditorSession(target: EditorTarget, ucpRoot?: string): UcpSession | null {
+  const base = editorBase(target);
+  const parsed = ucpSessionSchema.safeParse(readJsonFile(sessionFilePath(base.queueId, ucpRoot)));
+  if (!parsed.success) return null;
 
   const file = parsed.data;
   const updatedAt = Date.parse(file.updatedAt || "");
@@ -136,6 +149,7 @@ export function readEditorSession(target: EditorTarget, ucpRoot?: string): UcpSe
     pid: file.pid ?? undefined,
     focused: file.focused ?? undefined,
     defaultTimeouts: file.defaultTimeouts ?? undefined,
+    readOnlyCommands: file.readOnlyCommands ?? undefined,
   };
 }
 
@@ -211,15 +225,21 @@ function normalizePath(p: string): string {
 /**
  * Every editor and runtime the host can reach, rescanned when a session file or targets.json
  * changes (debounced) and every 2 s in case fs.watch misses an event.
+ *
+ * Editors and runtimes are read apart. An editor is a local file read; a runtime is a /health
+ * call that can take PROBE_TIMEOUT_MS when the device does not answer, and an editor turning
+ * ready must not wait for that.
  */
 export class SessionDirectory {
-  #sessions = new Map<string, UcpSession>();
+  #editors = new Map<string, UcpSession>();
+  #runtimes = new Map<string, UcpSession>();
+  #unreadableSince = new Map<string, number>();
   #listeners = new Set<() => void>();
   #watchers: fs.FSWatcher[] = [];
   #pollTimer: ReturnType<typeof setInterval> | null = null;
   #debounce: ReturnType<typeof setTimeout> | null = null;
-  #scanning: Promise<void> | null = null;
-  #rescan = false;
+  #probing: Promise<void> | null = null;
+  #reprobe = false;
 
   constructor(
     readonly logger: Logger,
@@ -231,10 +251,10 @@ export class SessionDirectory {
     fs.mkdirSync(sessionsDir, { recursive: true });
     void this.scan();
 
-    const watch = (dir: string, accept: (name: string) => boolean) => {
+    const watch = (dir: string, accept: (name: string) => boolean, onChange: () => void) => {
       try {
         const watcher = fs.watch(dir, (_, name) => {
-          if (!name || accept(String(name))) this.#scheduleScan();
+          if (!name || accept(String(name))) this.#debounced(onChange);
         });
         watcher.on("error", () => {});
         this.#watchers.push(watcher);
@@ -242,8 +262,20 @@ export class SessionDirectory {
         this.logger.warn("fs.watch unavailable; relying on the poll", { dir });
       }
     };
-    watch(sessionsDir, (name) => name.endsWith(".json"));
-    watch(root, (name) => name === "targets.json");
+    watch(
+      sessionsDir,
+      (name) => name.endsWith(".json"),
+      () => this.#readEditors(),
+    );
+    // A new or removed runtime target needs a fresh probe round, not the one already running.
+    watch(
+      root,
+      (name) => name === "targets.json",
+      () => {
+        this.#readEditors();
+        void this.#probeRuntimes(true);
+      },
+    );
 
     this.#pollTimer = setInterval(() => void this.scan(), POLL_INTERVAL_MS);
   }
@@ -255,35 +287,102 @@ export class SessionDirectory {
     if (this.#debounce) clearTimeout(this.#debounce);
   }
 
-  /** Rereads everything; a call during a scan runs one more scan after it. */
+  /** Rereads the editors now; resolves once the runtimes have been probed too. */
   scan(): Promise<void> {
-    if (this.#scanning) {
-      this.#rescan = true;
-      return this.#scanning;
-    }
-    this.#scanning = (async () => {
-      try {
-        do {
-          this.#rescan = false;
-          const targets = listConfiguredAndDiscoveredTargets(this.ucpRoot);
-          const sessions = await Promise.all(targets.map((t) => readSession(t, this.ucpRoot)));
-          this.#sessions = new Map(sessions.map((s) => [s.id, s]));
-          for (const listener of this.#listeners) listener();
-        } while (this.#rescan);
-      } catch (err) {
-        this.logger.warn("session scan failed", { error: String(err) });
-      } finally {
-        this.#scanning = null;
-      }
-    })();
-    return this.#scanning;
+    this.#readEditors();
+    return this.#probeRuntimes(false);
   }
 
-  #scheduleScan(): void {
+  /**
+   * An editor whose file cannot be read keeps its last state for UNREADABLE_GRACE_MS: the read
+   * most likely landed on the agent replacing the file. Calling it offline would fail a submit
+   * with no_ready_session, or a queued command with editor_not_running.
+   */
+  #readEditors(): void {
+    try {
+      const now = Date.now();
+      const editors = listConfiguredAndDiscoveredTargets(this.ucpRoot).filter(
+        (t): t is EditorTarget => t.type === "editor",
+      );
+      const next = new Map<string, UcpSession>();
+      for (const target of editors) {
+        const session = tryReadEditorSession(target, this.ucpRoot);
+        if (session) {
+          next.set(target.id, session);
+          this.#unreadableSince.delete(target.id);
+        } else {
+          next.set(
+            target.id,
+            this.#lastKnown(target.id, now) ?? readEditorSession(target, this.ucpRoot),
+          );
+        }
+      }
+      // Gone from the listing: mid-replace for the old agent, which deletes before it moves.
+      for (const id of this.#editors.keys()) {
+        if (next.has(id)) continue;
+        const kept = this.#lastKnown(id, now);
+        if (kept) next.set(id, kept);
+      }
+      this.#editors = next;
+      this.#notify();
+    } catch (err) {
+      this.logger.warn("editor session scan failed", { error: String(err) });
+    }
+  }
+
+  /** The editor's last good state, while it has been unreadable for less than the grace. */
+  #lastKnown(id: string, now: number): UcpSession | null {
+    const previous = this.#editors.get(id);
+    if (!previous || previous.status === "offline") return null;
+    const since = this.#unreadableSince.get(id) ?? now;
+    this.#unreadableSince.set(id, since);
+    if (now - since > UNREADABLE_GRACE_MS) {
+      this.#unreadableSince.delete(id);
+      return null;
+    }
+    return previous;
+  }
+
+  /** Probes every runtime target now, after any round already running. */
+  refreshRuntimes(): Promise<void> {
+    return this.#probeRuntimes(true);
+  }
+
+  /** One round at a time. `force`: run another round after the current one instead of joining it. */
+  #probeRuntimes(force: boolean): Promise<void> {
+    if (this.#probing) {
+      if (force) this.#reprobe = true;
+      return this.#probing;
+    }
+    this.#probing = (async () => {
+      try {
+        do {
+          this.#reprobe = false;
+          const runtimes = listConfiguredAndDiscoveredTargets(this.ucpRoot).filter(
+            (t): t is RuntimeTarget => t.type === "runtime",
+          );
+          const sessions = await Promise.all(runtimes.map((t) => readSession(t, this.ucpRoot)));
+          this.#runtimes = new Map(sessions.map((s) => [s.id, s]));
+          this.#notify();
+        } while (this.#reprobe);
+      } catch (err) {
+        this.logger.warn("runtime probe failed", { error: String(err) });
+      } finally {
+        this.#probing = null;
+      }
+    })();
+    return this.#probing;
+  }
+
+  #notify(): void {
+    for (const listener of this.#listeners) listener();
+  }
+
+  #debounced(run: () => void): void {
     if (this.#debounce) clearTimeout(this.#debounce);
     this.#debounce = setTimeout(() => {
       this.#debounce = null;
-      void this.scan();
+      run();
     }, WATCH_DEBOUNCE_MS);
   }
 
@@ -301,23 +400,24 @@ export class SessionDirectory {
     const target = listConfiguredAndDiscoveredTargets(this.ucpRoot).find((t) => t.id === id);
     if (!target) return this.get(id);
     const session = await readSession(target, this.ucpRoot);
-    this.#sessions.set(id, session);
-    for (const listener of this.#listeners) listener();
+    (session.type === "editor" ? this.#editors : this.#runtimes).set(id, session);
+    this.#notify();
     return session;
   }
 
   /** Test hook: replaces what the last scan found. */
   set(sessions: UcpSession[]): void {
-    this.#sessions = new Map(sessions.map((s) => [s.id, s]));
-    for (const listener of this.#listeners) listener();
+    this.#editors = new Map(sessions.filter((s) => s.type === "editor").map((s) => [s.id, s]));
+    this.#runtimes = new Map(sessions.filter((s) => s.type !== "editor").map((s) => [s.id, s]));
+    this.#notify();
   }
 
   list(): UcpSession[] {
-    return [...this.#sessions.values()];
+    return [...this.#editors.values(), ...this.#runtimes.values()];
   }
 
   get(id: string): UcpSession | null {
-    return this.#sessions.get(id) ?? null;
+    return this.#editors.get(id) ?? this.#runtimes.get(id) ?? null;
   }
 
   /**

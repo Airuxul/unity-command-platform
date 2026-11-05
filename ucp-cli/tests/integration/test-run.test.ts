@@ -189,6 +189,23 @@ describe.skipIf(!runEditorTests)("test_run (Unity required)", () => {
     expect(result.error_code).toBe("invalid_argument");
   });
 
+  it("runs the tests a filter regex matches", async () => {
+    // Passes and Fails match, Skipped and Slow do not.
+    const result = await rejected("test_run", { filter: "ProbeTests\\.(Passes|Fails)$" }, 120_000);
+    expect(result.error_code).toBe("tests_failed");
+    expect(result.data).toMatchObject({ total: 2, passed: 1, failed: 1 });
+  });
+
+  it("refuses to start in Play Mode", async () => {
+    expect((await run("play", {}, 60_000)).ok).toBe(true);
+    try {
+      const result = await rejected("test_run", { tests: ["UcpProbe.ProbeTests.Passes"] });
+      expect(result.error_code).toBe("edit_mode_required");
+    } finally {
+      await ensureEditMode();
+    }
+  }, 150_000);
+
   it("refuses to start with unsaved scenes, where the Test Runner would ask in a dialog", async () => {
     const scene = `${SCRATCH_FOLDER}/TestRun.unity`;
     await ok("asset_create_folder", { path: SCRATCH_FOLDER });
@@ -251,6 +268,22 @@ describe.skipIf(!runEditorTests)("test_run (Unity required)", () => {
       await setPlayModeOptions(before);
     }
   }, 240_000);
+
+  it("answers state and ping from another caller while a test run is going", async () => {
+    // The run's own caller is still waiting, so the editor's lane is taken for its whole length.
+    const slow = run("test_run", { categories: ["Slow"] }, 60_000);
+    await new Promise((r) => setTimeout(r, 1_000));
+
+    const started = Date.now();
+    const state = await run("state", {}, 3_000);
+    expect(state.ok, state.error_code).toBe(true);
+    expect((state.data as Record<string, unknown>).tests_running).toBe(true);
+    expect((await run("ping", {}, 3_000)).ok).toBe(true);
+    expect(Date.now() - started).toBeLessThan(3_000);
+
+    expect((await slow).ok).toBe(true);
+    expect(queueFiles()).toEqual([]);
+  }, 90_000);
 
   it("returns results of the same shape", async () => {
     await expectShapesUnchanged("shapes.tests.json");

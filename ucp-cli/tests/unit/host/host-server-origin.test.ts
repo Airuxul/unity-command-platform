@@ -63,6 +63,7 @@ describe("UcpHostServer", () => {
   let server: UcpHostServer;
   let runner: CommandRunner;
   let root: string;
+  let shutdowns = 0;
 
   beforeAll(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "ucp-origin-"));
@@ -95,6 +96,9 @@ describe("UcpHostServer", () => {
       ucpRoot: root,
       build: 7,
       token: TOKEN,
+      onShutdown: () => {
+        shutdowns += 1;
+      },
     });
     await server.start();
   });
@@ -126,8 +130,11 @@ describe("UcpHostServer", () => {
     expect(res.body.error).toBe("forbidden_origin");
   });
 
-  it("refuses a missing or wrong token", async () => {
-    expect((await request("GET", "/sessions", local)).status).toBe(401);
+  it("refuses a missing or wrong token, and says an old ucp-cli is the likely cause", async () => {
+    const missing = await request("GET", "/sessions", local);
+    expect(missing.status).toBe(401);
+    expect(missing.body.message).toBeTruthy();
+    expect(String(missing.body.hint)).toContain("0.3");
     expect((await request("GET", "/sessions", { ...local, "x-ucp-token": "nope" })).status).toBe(
       401,
     );
@@ -147,10 +154,36 @@ describe("UcpHostServer", () => {
     expect(res.body.timing).toBeTruthy();
   });
 
+  it("returns the message of a failure it decided itself", async () => {
+    const submit = await request("POST", "/commands", authed, JSON.stringify({ type: "exec" }));
+    const res = await request("GET", `/commands/${submit.body.id}?wait=5000`, authed);
+    expect(res.body).toMatchObject({ status: "failed", error: "unknown_command" });
+    expect(String(res.body.message)).toContain("exec");
+  });
+
   it("answers a GET without wait at once", async () => {
     const submit = await request("POST", "/commands", authed, JSON.stringify({ type: "ping" }));
     const res = await request("GET", `/commands/${submit.body.id}`, authed);
     expect(res.body.status).not.toBe("completed");
     await runner.wait(String(submit.body.id), 5_000);
+  });
+
+  // Last: the server takes no commands afterwards.
+  it("refuses to shut down while a command is in flight, and takes nothing once it has", async () => {
+    const submit = await request("POST", "/commands", authed, JSON.stringify({ type: "ping" }));
+    const busy = await request("POST", "/shutdown", authed);
+    expect(busy.status).toBe(409);
+    expect(busy.body.error).toBe("busy");
+    expect(shutdowns).toBe(0);
+
+    await runner.wait(String(submit.body.id), 5_000);
+    const idle = await request("POST", "/shutdown", authed);
+    expect(idle.status).toBe(200);
+    expect(shutdowns).toBe(1);
+
+    // A submit that lands after the host agreed to go is refused, never accepted and then lost.
+    const late = await request("POST", "/commands", authed, JSON.stringify({ type: "ping" }));
+    expect(late.status).toBe(503);
+    expect(late.body.error).toBe("host_restarting");
   });
 });

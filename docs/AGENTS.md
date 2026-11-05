@@ -54,12 +54,20 @@ ucp-cli host status
 
 ## Reading results
 
-- `ok: false` comes with `error_code` (a fixed code such as `node_not_found`,
-  `play_mode_required`, `invalid_argument`, `busy`), `message`, and usually `hint`. Branch on the
-  code, show the message, follow the hint. `ucp-cli help <type>` lists a command's codes.
+- `ok: false` always comes with `error_code`, `message`, and usually `hint`. Branch on the code,
+  show the message, follow the hint. `ucp-cli help <type>` lists a command's codes (`node_not_found`,
+  `play_mode_required`, `invalid_argument`, `busy`, ...).
+- Codes from ucp-host rather than Unity: `no_ready_session`, `editor_not_running`,
+  `unknown_command`, `timeout`, `host_lost`, `unauthorized`; the full table is in
+  [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md#upgrading-from-03).
+- After `timeout` or `host_lost` the command may still have run: check with a read command before
+  sending a non-idempotent one (`gameobject_create`, `exec`) again.
 - `node_not_found` hints the closest sibling names; `timeout` hints whether Unity was in the
   background (it then ticks about 10 times a second).
 - Tree and snapshot reads are capped (`limit`, default 500); `truncated: true` means there is more.
+- `ping`, `state`, `console`, `help` and `echo` do not wait for another command (a test run, a
+  compile) to finish; other commands wait their turn. During a domain reload itself nothing
+  answers until it is over, a few seconds.
 
 ## Quick facts
 

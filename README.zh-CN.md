@@ -64,7 +64,7 @@
 - **会话自动发现** — Agent 每 2 秒写一次 `~/.ucp/sessions/{projectId}.json`；`ucp-host` 自动将其提升为 ready 会话。
 - **Targets 配置** — `~/.ucp/targets.json` 存储 Editor 和 Runtime 目标；Runtime 目标通过 `/health` 探测，Editor 目标自动回退到 Session 文件发现。
 - **Capability 校验** — 每个会话声明自己支持哪些命令类型；`ucp-host` 在派发前拦截不支持的命令。
-- **等待而不是失败** — Editor 导入资源期间发来的命令会等它就绪；每条命令有自己的默认超时（`build` 30 分钟、`test_run` 10 分钟、`compile` 180 秒，其余多数 30 秒）。
+- **等待而不是失败** — Editor 导入资源期间发来的命令会等它就绪；每条命令有自己的默认超时（`build` 30 分钟、`test_run` 10 分钟、`compile` 180 秒，其余多数 30 秒）。`ping`、`state`、`console` 不用等测试或编译结束（只有域重载的那几秒要等）。
 - **域重载安全（Domain Reload Safe）** — 触发域重载的命令照样返回结果，且只返回一次，详见下方说明。
 - **Play Mode Runtime 通道** — `RuntimeAgentHost` 在 `AfterSceneLoad` 自动启动，绑定 `127.0.0.1:6620`（可配置），退出 Play Mode 时干净关闭。
 - **多项目安全** — 队列路径以 `SHA-256(项目路径)[0:16]` 为键，多个 Unity 实例互不干扰。
@@ -196,7 +196,7 @@ Unity `Packages/manifest.json`，用本地克隆或直接用 git 地址：
 
 ### 从 0.3 升级
 
-CLI 和 Unity 包要一起升级。有若干参数改了名，所有失败结果都带上了错误码；完整清单见
+CLI 和 Unity 包要一起升级，同一台机器上装的所有 `ucp-cli` 也要一起升级：0.2 的 CLI 连 0.3 的 host，每次调用都会得到 `unauthorized`。有若干参数改了名，所有失败结果都带上了错误码；完整清单见
 [docs/CHANGELOG_AGENT.md](docs/CHANGELOG_AGENT.md#upgrading-from-03)。
 
 ### Runtime（Play Mode）
@@ -266,7 +266,7 @@ npm run verify                       # 构建 + lint + 单元测试（集成测�
 # 连接一个已打开且编译完成的 Editor
 $env:UCP_EDITOR_INTEGRATION="1"
 $env:UCP_TEST_PROJECT="C:/path/to/UnityProject"
-npm run test:integration             # 约 3 分钟；加 $env:UCP_EDITOR_SLOW="1" 会跑 compile/play 和真实出包
+npm run test:integration             # 约 6 分钟；加 $env:UCP_EDITOR_SLOW="1" 会跑 compile/play 和真实出包
 npm run smoke                        # 一次 Prefab 往返，几秒
 ```
 

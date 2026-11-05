@@ -31,6 +31,22 @@ namespace Air.UcpAgent.Editor.Services.Objects
             return TryLookup(name, _componentsByFullName, _componentsBySimpleName, typeof(Component), out type);
         }
 
+        /// <summary>
+        /// A type by full name from a package that may not be installed, abstract ones included
+        /// (TMPro.TMP_Text), which the component index leaves out because they cannot be added.
+        /// </summary>
+        public static Type FindOptional(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType(fullName, throwOnError: false);
+                if (type != null)
+                    return type;
+            }
+
+            return null;
+        }
+
         /// <summary>Any <see cref="UnityEngine.Object"/> subtype — assets, components, ScriptableObjects.</summary>
         public static bool TryResolveObject(string name, out Type type)
         {

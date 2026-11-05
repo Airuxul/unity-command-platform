@@ -17,7 +17,7 @@
 
 ### 背景：Unity 在后台时的降频
 
-UCP 的 inbox 检查跑在 `EditorApplication.update` 里，每个 tick 一次。Unity 失去焦点后 tick 降到约每秒 10 次，没有线程能唤醒它。最小化时 `ping` 中位 25 ms（实测见 [RELIABILITY §4](docs/RELIABILITY.zh-CN.md)），普通命令已够用；长任务期间的降频仍是开放问题（AGENT-14）。
+UCP 的 inbox 检查跑在 `EditorApplication.update` 里，每个 tick 一次。Unity 失去焦点后 tick 降到每秒约 10 次，没有线程能唤醒它。最小化时连发 `ping` 中位 96 ms、随机到达约 75 ms（`background.test.ts` 自动测得，见 [RELIABILITY §4](docs/RELIABILITY.zh-CN.md)），普通命令已够用；长任务期间的降频仍是开放问题（AGENT-14）。
 
 unity-mcp 的做法供参考：
 1. **普通命令**：后台线程收到命令后，`SynchronizationContext.Post` 投递到主线程并调 `QueuePlayerLoopUpdate()`（`TransportCommandDispatcher.cs:113-177`，best-effort）。
@@ -65,7 +65,9 @@ unity-mcp 的做法供参考：
 ### 现有能力
 
 - `ucp-cli` + `ucp-host` 单 npm 包（TypeScript, vitest）
-- host 按 session 分执行链，deadline 从提交时算，Editor 忙时等待而非拒绝，长轮询取结果
+- host 按 session 分执行链，只读命令不排队；deadline 从提交时算，并随命令交给 Unity；Editor 忙时等待而非拒绝；长轮询取结果
+- host 判定的失败也带错误码、message、hint；host 死掉时 CLI 返回 `host_lost` 而不是抛异常
+- 重启旧 host 走 `POST /shutdown`，host 有命令在跑时拒绝
 - host 本机 token（`X-UCP-Token`），拒绝带 `Origin` 或 Host 不是 127.0.0.1/localhost 的请求
 - host 构建号：CLI 发现空闲的旧 host 自动重启
 - `ucp-cli help [command] [--md]`、`run-script`、`build <output_path>`
@@ -100,7 +102,7 @@ unity-mcp 的做法供参考：
 | AGENT-04 | `profiler` 的 `action` 默认 `hierarchy`，`sort` 支持 `calls`，取值由 binder 校验 |
 | AGENT-05 | `test_run`：EditMode / PlayMode（域重载开关两种都测过） |
 | AGENT-06 | `package_list` / `package_add` / `package_remove` |
-| AGENT-12 | 延迟基线：最小化时 `ping` 中位 147 ms → 25 ms；前台没有单独对比 |
+| AGENT-12 | 延迟基线（`background.test.ts`，自动最小化）：后台 tick 每秒约 10 次；连发 `ping` 中位 295 ms → 96 ms；前台不测，要抢用户焦点 |
 | AGENT-16 | 结构化错误码 + `hint`，`compile` 编译失败返回 `compile_error` |
 | AGENT-17 | 树类读命令 `limit` / `truncated` / `format=compact` / `fields`，`ui_snapshot` 有 `root` / `limit` |
 | AGENT-18 | batch op 的 `expect` 前置条件 |
@@ -120,7 +122,7 @@ unity-mcp 的做法供参考：
 - `material_*` / `shader_*` / `texture_*`（AGENT-07）：Renderer 上的材质属性已能用 `component_set` 改。
 - `prefab_replace` 保留 overrides（AGENT-10）：要么逐项搬运 override，要么按 Unity 版本切到 2022.2+ 的 API，使用频率低。
 - Play Mode 真实合成帧截图（AGENT-11）：`screenshot view=ui` 已能核对布局，后处理画面需求低。
-- 后台线程唤醒主线程（AGENT-13）：每个 tick 检查 inbox 后最小化 `ping` 中位 25 ms，唤醒的收益不再值得一个后台线程。
+- 后台线程唤醒主线程（AGENT-13）：每个 tick 检查 inbox 后，最小化 `ping` 中位已降到约一个 tick（约 100 ms）以内，唤醒的收益不再值得一个后台线程。
 - 抢焦点唤醒（AGENT-22）：会打断用户操作。
 - SQLite Editor 适配器（CLI-03）：FileQueue 已满足需求。
 - 单工具 MCP 适配层（CLI-08）：方向是 CLI 原生；需要时 `help --md` 可直接作为 AI 说明。

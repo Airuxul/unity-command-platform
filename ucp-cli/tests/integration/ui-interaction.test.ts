@@ -10,6 +10,7 @@ import { ensureEditMode, runUcpCommand, waitForPlayMode } from "./helpers/play-m
 const runEditorTests = process.env.UCP_EDITOR_INTEGRATION === "1";
 
 const ROOT = "UcpUiProbe";
+const SCENE_ROOT = "UcpUiSceneProbe";
 const USINGS = ["UnityEngine.UI", "UnityEngine.EventSystems", "UnityEditor"];
 
 /** Runs `body` on the editor tick after `seconds`, once; a stopped game makes it a no-op. */
@@ -142,6 +143,52 @@ describe.skipIf(!runEditorTests)("play mode UI interaction (Unity required)", ()
     const shown = await ok("ui_wait", { node: `${ROOT}/Status`, text: "ended ucp" });
     expect(shown.text).toBe("ended ucp");
     expect(shown.elapsed_ms).toBe(0);
+  });
+
+  it("drives a canvas in the loaded scene, not only in DontDestroyOnLoad", async () => {
+    await exec(`
+var canvas = new GameObject("${SCENE_ROOT}", typeof(Canvas), typeof(GraphicRaycaster));
+canvas.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+var label = new GameObject("Label", typeof(Text)).GetComponent<Text>();
+label.transform.SetParent(canvas.transform, false);
+var button = new GameObject("Tap", typeof(Image), typeof(Button)).GetComponent<Button>();
+button.transform.SetParent(canvas.transform, false);
+button.onClick.AddListener(() => label.text = "tapped in scene");
+return canvas.scene.name;`);
+
+    const clicked = await ok("ui_click", { node: `${SCENE_ROOT}/Tap` });
+    expect(clicked.handler).toBe(`${SCENE_ROOT}/Tap`);
+    const shown = await ok("ui_wait", { node: SCENE_ROOT, text: "tapped in scene" }, 5_000);
+    expect(shown.node).toBe(SCENE_ROOT);
+  });
+
+  it("types into a TMP_InputField and waits for TextMeshPro text", async () => {
+    await exec(
+      `
+var root = GameObject.Find("${ROOT}").transform;
+var field = new GameObject("TmpName", typeof(RectTransform)).AddComponent<TMPro.TMP_InputField>();
+field.transform.SetParent(root, false);
+var area = new GameObject("Area", typeof(RectTransform));
+area.transform.SetParent(field.transform, false);
+field.textViewport = area.GetComponent<RectTransform>();
+var text = new GameObject("Text", typeof(RectTransform)).AddComponent<TMPro.TextMeshProUGUI>();
+text.transform.SetParent(area.transform, false);
+field.textComponent = text;
+var echo = new GameObject("TmpEcho", typeof(RectTransform)).AddComponent<TMPro.TextMeshProUGUI>();
+echo.transform.SetParent(root, false);
+field.onEndEdit.AddListener(s => echo.text = "tmp " + s);
+return "built";`,
+    );
+
+    const typed = await ok("ui_input", { node: `${ROOT}/TmpName`, text: "ucp", submit: true });
+    expect(typed).toMatchObject({ text: "ucp", events: ["value_changed", "submit", "end_edit"] });
+    const shown = await ok("ui_wait", { node: `${ROOT}/TmpEcho`, text: "tmp ucp" }, 5_000);
+    expect(shown.text).toBe("tmp ucp");
+
+    const snapshot = await ok("ui_snapshot", { root: ROOT });
+    const [canvas] = snapshot.canvases as Array<Record<string, unknown>>;
+    const inputs = (canvas.inputs as Array<{ node: string; text: string }>).map((i) => i.node);
+    expect(inputs).toContain(`${ROOT}/TmpName`);
   });
 
   it("ui_click on a button's label clicks the button, and ui_wait sees what follows", async () => {

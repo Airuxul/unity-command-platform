@@ -84,7 +84,8 @@ export async function ensureUcpHost(
   if (health?.ok) {
     const outdated = (health.build ?? 0) < (options.build ?? readBuildId()) && !health.busy;
     if (!outdated || !health.pid) return { port, spawned: false };
-    await stopHost(health.pid, port);
+    // A command may have arrived since /health said idle; the host checks again and refuses.
+    if (!(await retireHost(health.pid, port, options.ucpRoot))) return { port, spawned: false };
   }
 
   // Another CLI is starting a host right now; a lock older than the start timeout is left over.
@@ -133,14 +134,28 @@ function takeLock(lockPath: string): boolean {
   }
 }
 
-async function stopHost(pid: number, port: number): Promise<void> {
+/**
+ * Asks the host to exit, which it does only when idle. Hosts from before POST /shutdown are
+ * killed instead. False if the host is busy after all and stays.
+ */
+async function retireHost(pid: number, port: number, ucpRoot?: string): Promise<boolean> {
+  let status = 0;
   try {
-    process.kill(pid);
+    status = (await hostFetch("/shutdown", { method: "POST" }, ucpRoot)).status;
   } catch {
-    // Already gone, or another CLI got there first.
+    // Gone already.
+  }
+  if (status === 409) return false;
+  if (status !== 200) {
+    try {
+      process.kill(pid);
+    } catch {
+      // Already gone, or another CLI got there first.
+    }
   }
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline && (await fetchUcpHostHealth(port))?.ok) await sleep(100);
+  return true;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -166,22 +181,39 @@ export async function submitCommand(
 /**
  * Long-polls until the command finishes. The host enforces the command's deadline, so there is
  * no second clock here; each request is held at most LONG_POLL_MAX_MS.
+ *
+ * A host that dies (or restarts and forgets the command) ends the wait with `host_lost` rather
+ * than an exception, so run-script can still report the steps before it.
  */
 export async function waitForCommand(
   commandId: string,
   ucpRoot = process.env.UCP_ROOT,
 ): Promise<Record<string, unknown>> {
   for (;;) {
-    const res = await hostFetch(
-      `/commands/${encodeURIComponent(commandId)}?wait=${LONG_POLL_MAX_MS}`,
-      { signal: AbortSignal.timeout(LONG_POLL_MAX_MS + 15_000) },
-      ucpRoot,
-    );
-    const body = (await res.json()) as Record<string, unknown>;
-    // 404: the host restarted and forgot the command.
-    if (!body.ok) throw new Error(String(body.error ?? "command_not_found"));
+    let body: Record<string, unknown>;
+    try {
+      const res = await hostFetch(
+        `/commands/${encodeURIComponent(commandId)}?wait=${LONG_POLL_MAX_MS}`,
+        { signal: AbortSignal.timeout(LONG_POLL_MAX_MS + 15_000) },
+        ucpRoot,
+      );
+      body = (await res.json()) as Record<string, unknown>;
+    } catch (err) {
+      return hostLost(err instanceof Error ? err.message : String(err));
+    }
+    if (!body.ok) return hostLost(`ucp-host does not know the command (${body.error}).`);
     if (TERMINAL_STATUSES.includes(body.status as never)) return body;
   }
+}
+
+function hostLost(reason: string): Record<string, unknown> {
+  return {
+    ok: true,
+    status: "failed",
+    error: "host_lost",
+    message: `Lost ucp-host while waiting for the result: ${reason}`,
+    hint: "The command may still have run in Unity; check with a read command before sending it again.",
+  };
 }
 
 export interface ExecuteCommandOptions {
@@ -199,24 +231,28 @@ export async function executeCommand(
   options: ExecuteCommandOptions = {},
 ): Promise<CliResult> {
   const ucpRoot = process.env.UCP_ROOT;
+  const body = {
+    type,
+    project: options.project,
+    session: options.session,
+    target: options.target ?? options.session,
+    sessionType: options.sessionType,
+    timeout: options.timeout,
+    args: options.args ?? {},
+  };
   await ensureUcpHost({ ucpRoot });
-  const submit = await submitCommand(
-    {
-      type,
-      project: options.project,
-      session: options.session,
-      target: options.target ?? options.session,
-      sessionType: options.sessionType,
-      timeout: options.timeout,
-      args: options.args ?? {},
-    },
-    ucpRoot,
-  );
+  let submit = await trySubmit(body, ucpRoot);
+  // The host is giving way to a newer one: nothing was queued, so sending again is safe.
+  if (submit.error === "host_restarting" || submit.error === "host_unreachable") {
+    await ensureUcpHost({ ucpRoot });
+    submit = await trySubmit(body, ucpRoot);
+  }
 
   if (!submit.ok || !submit.id) {
     return {
       ok: false,
       error_code: String(submit.error ?? "submit_failed"),
+      message: (submit.message as string | undefined) ?? undefined,
       hint: submit.hint as string | undefined,
       data: submit,
     };
@@ -239,9 +275,26 @@ export async function executeCommand(
   return {
     ok: false,
     error_code: String(final.error ?? final.status ?? "command_failed"),
+    message: (final.message as string | null) ?? undefined,
     hint: (final.hint as string | null) ?? undefined,
     timing,
   };
+}
+
+/** A submit that never reached the host (it exited between the health check and now) comes back as host_unreachable. */
+async function trySubmit(
+  body: Record<string, unknown>,
+  ucpRoot?: string,
+): Promise<Record<string, unknown>> {
+  try {
+    return await submitCommand(body, ucpRoot);
+  } catch (err) {
+    return {
+      ok: false,
+      error: "host_unreachable",
+      message: `Could not reach ucp-host: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 /**

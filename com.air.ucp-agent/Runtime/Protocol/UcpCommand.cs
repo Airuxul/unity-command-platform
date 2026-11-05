@@ -7,7 +7,16 @@ namespace Air.UcpAgent.Protocol
         public string id;
         public string type;
         public int timeout;
+
+        /// <summary>
+        /// When ucp-host gives up, Unix ms; 0 from hosts before 0.5. A command past it is not
+        /// started, and a result that comes in later is not written: nobody would read it.
+        /// </summary>
+        public long deadline;
+
         public Dictionary<string, object> args = new Dictionary<string, object>();
+
+        public bool IsPastDeadline(long nowUtcMs) => deadline > 0 && nowUtcMs > deadline;
     }
 
     public sealed class UcpResult
@@ -44,5 +53,11 @@ namespace Air.UcpAgent.Protocol
 
         /// <summary>Commands that declare a default timeout, by name and alias; used when the caller sets none.</summary>
         public Dictionary<string, int> defaultTimeouts;
+
+        /// <summary>
+        /// Commands that change nothing; ucp-host does not hold them behind a command still running
+        /// on this Editor (a test run, a build, Play Mode entry).
+        /// </summary>
+        public List<string> readOnlyCommands;
     }
 }

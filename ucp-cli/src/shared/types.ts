@@ -15,7 +15,13 @@ export type SessionType = "editor" | "runtime";
 export interface UcpCommand {
   id: string;
   type: string;
+  /** What is left of the caller's timeout when the command is sent, in ms. */
   timeout: number;
+  /**
+   * When the host gives up, Unix ms. The agent does not start a command past it, and drops a
+   * result that comes in later; agents before 0.5 ignore it.
+   */
+  deadline?: number;
   args?: Record<string, unknown>;
 }
 
@@ -46,6 +52,11 @@ export interface UcpSession {
   focused?: boolean;
   /** Commands whose descriptor declares a default timeout, by name and alias. */
   defaultTimeouts?: Record<string, number>;
+  /**
+   * Commands that change nothing (ping, state, console, ...). They do not wait behind a command
+   * still running on the same editor. Agents before 0.5 send none, so everything waits.
+   */
+  readOnlyCommands?: string[];
 }
 
 export interface EditorTarget {
@@ -81,8 +92,10 @@ export interface QueuedCommand {
   status: CommandStatus;
   sessionId: string;
   result?: UcpResult;
-  /** Host-level failure code (timeout, no_ready_session, ...); the agent's own goes in result. */
+  /** Host-level failure code (timeout, unknown_command, ...); the agent's own goes in result. */
   error?: string;
+  /** What went wrong, when the host failed the command itself. */
+  message?: string;
   hint?: string;
   createdAt: number;
   /** createdAt + timeout: time spent queued counts against the caller's timeout. */

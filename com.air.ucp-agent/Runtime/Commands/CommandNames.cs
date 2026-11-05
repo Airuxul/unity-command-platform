@@ -113,6 +113,12 @@ namespace Air.UcpAgent.Commands
         public const string SelectionSet = "selection_set";
         public const string SelectionClear = "selection_clear";
 
+        /// <summary>
+        /// Commands that change nothing in the project or the play state. ucp-host lets them past a
+        /// command still running on the same Editor, and they still run while tests do.
+        /// </summary>
+        public static readonly string[] ReadOnly = { Ping, State, Console, Help, Echo };
+
         // --- Play Mode UI --------------------------------------------------------------
         public const string UiSnapshot = "ui_snapshot";
         public const string UiClick = "ui_click";

@@ -38,8 +38,8 @@ namespace Air.UcpAgent.Editor.Services
                 list = KeepAround(list, root);
 
             // TextMeshPro is an optional package, so it is looked up by name rather than referenced.
-            ComponentTypeResolver.TryResolveComponent("TMPro.TextMeshProUGUI", out var tmpType);
-            ComponentTypeResolver.TryResolveComponent("TMPro.TMP_InputField", out var tmpInputType);
+            var tmpType = ComponentTypeResolver.FindOptional("TMPro.TextMeshProUGUI");
+            var tmpInputType = ComponentTypeResolver.FindOptional("TMPro.TMP_InputField");
             var budget = new Budget(p?.Limit is > 0 ? p.Limit.Value : DefaultLimit, root);
             var rows = new List<Dictionary<string, object>>(list.Count);
             for (int i = 0; i < list.Count; i++)

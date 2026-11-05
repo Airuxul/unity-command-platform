@@ -2,9 +2,10 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ensureUcpHost,
+  executeCommand,
   fetchUcpHostHealth,
   hostFetch,
   waitForCommand,
@@ -48,7 +49,7 @@ function startFakeAgent(projectId: string, ucpRoot: string) {
       path: process.cwd().replace(/\\/g, "/"),
       type: "editor",
       status: "ready",
-      capabilities: ["ping", "build"],
+      capabilities: ["ping", "build", "slow"],
       updatedAt: new Date().toISOString(),
       pid: process.pid,
       focused: true,
@@ -59,6 +60,7 @@ function startFakeAgent(projectId: string, ucpRoot: string) {
     heartbeat();
     for (const file of fs.readdirSync(layout.inbox).filter((f) => f.endsWith(".json"))) {
       const inbox = path.join(layout.inbox, file);
+      if ((readJsonFile(inbox) as { type?: string } | null)?.type === "slow") continue;
       const claimed = inbox.replace(/\.json$/, ".claimed");
       try {
         fs.renameSync(inbox, claimed);
@@ -122,11 +124,12 @@ describe("ping e2e", () => {
     }
   });
 
-  it("replaces an idle host older than the CLI", async () => {
+  it("replaces an idle host older than the CLI by asking it to shut down", async () => {
     const ucpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ucp-int-"));
     const port = 17610 + Math.floor(Math.random() * 1000);
 
     const host = startHost(ucpRoot, port);
+    const exited = new Promise<number | null>((r) => host.on("exit", (code) => r(code)));
     let replacement: number | undefined;
     try {
       const before = await waitHealth(port);
@@ -138,9 +141,82 @@ describe("ping e2e", () => {
       replacement = after.pid;
       expect(after.pid).not.toBe(before.pid);
       expect(fs.existsSync(path.join(ucpRoot, "host.lock"))).toBe(false);
+      // It left on its own (exit 0) after checking it was idle; a kill ends it with exit 1.
+      expect(await exited).toBe(0);
     } finally {
       host.kill();
       if (replacement) process.kill(replacement);
     }
   });
+
+  describe("through executeCommand", () => {
+    const ucpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ucp-int-"));
+    const projectId = "testproject00002";
+    const session = `editor-${projectId}`;
+    let previousRoot: string | undefined;
+
+    beforeAll(() => {
+      previousRoot = process.env.UCP_ROOT;
+      process.env.UCP_ROOT = ucpRoot;
+      // executeCommand starts its host on host.json's port; without one it would find the
+      // user's real host on 6610.
+      writeJsonAtomic(path.join(ucpRoot, "host.json"), {
+        port: 18610 + Math.floor(Math.random() * 1000),
+      });
+    });
+
+    afterAll(() => {
+      if (previousRoot === undefined) Reflect.deleteProperty(process.env, "UCP_ROOT");
+      else process.env.UCP_ROOT = previousRoot;
+    });
+
+    it("reports a failure the host decided with a code and a message", async () => {
+      const agent = startFakeAgent(projectId, ucpRoot);
+      try {
+        const result = await executeCommand("prefab_create", { session });
+        expect(result).toMatchObject({ ok: false, error_code: "unknown_command" });
+        expect(result.message).toContain("prefab_create");
+        expect(result.hint).toBeTruthy();
+      } finally {
+        clearInterval(agent.timer);
+        await stopHost(ucpRoot);
+      }
+    });
+
+    it("says the host was lost when it dies under a command, instead of throwing", async () => {
+      const agent = startFakeAgent(projectId, ucpRoot);
+      try {
+        // The fake agent never answers "slow", so the command is still waiting when the host goes.
+        const pending = executeCommand("slow", { session, timeout: 20_000 });
+        await new Promise((r) => setTimeout(r, 1_000));
+        const host = readJsonFile(path.join(ucpRoot, "host.json")) as { pid: number };
+        process.kill(host.pid);
+
+        const result = await pending;
+        expect(result).toMatchObject({ ok: false, error_code: "host_lost" });
+        expect(result.message).toBeTruthy();
+        expect(result.hint).toContain("may");
+      } finally {
+        clearInterval(agent.timer);
+        await stopHost(ucpRoot);
+      }
+    }, 30_000);
+  });
 });
+
+async function stopHost(ucpRoot: string) {
+  const host = readJsonFile(path.join(ucpRoot, "host.json")) as {
+    pid?: number;
+    port?: number;
+  } | null;
+  if (!host?.pid) return;
+  try {
+    process.kill(host.pid);
+  } catch {
+    // Already gone.
+  }
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline && (await fetchUcpHostHealth(host.port))?.ok) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}

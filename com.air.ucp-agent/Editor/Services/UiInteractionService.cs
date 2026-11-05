@@ -180,7 +180,8 @@ namespace Air.UcpAgent.Editor.Services
             foreach (var label in node.GetComponentsInChildren<Text>(false))
                 yield return label.text ?? "";
 
-            if (!ComponentTypeResolver.TryResolveComponent(TmpText, out var tmpType))
+            var tmpType = ComponentTypeResolver.FindOptional(TmpText);
+            if (tmpType == null)
                 yield break;
 
             var text = tmpType.GetProperty("text");
@@ -194,9 +195,8 @@ namespace Air.UcpAgent.Editor.Services
             if (field != null)
                 return field;
 
-            return ComponentTypeResolver.TryResolveComponent(TmpInputField, out var tmpType)
-                ? node.GetComponent(tmpType) as Selectable
-                : null;
+            var tmpType = ComponentTypeResolver.FindOptional(TmpInputField);
+            return tmpType != null ? node.GetComponent(tmpType) as Selectable : null;
         }
 
         static void RequireActive(GameObject node)

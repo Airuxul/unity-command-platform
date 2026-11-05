@@ -35,7 +35,8 @@ ucp-cli run gameobject_create --args '{...}'
     ↓ POST /commands, then GET /commands/:id?wait=25000 until done   (127.0.0.1:6610, X-UCP-Token)
 ucp-host
     ├── SessionDirectory   picks the session (sessions/*.json, targets.json, runtime /health probes)
-    ├── CommandRunner      one lane per session; deadline from submission; waits for a busy Editor
+    ├── CommandRunner      one lane per session (read-only commands skip it); deadline from
+    │                      submission; waits for a busy Editor
     └── EditorFileQueueAdapter
             writes ~/.ucp/queues/{projectId}/inbox/{cmdId}.json, watches outbox/
     ↓
@@ -60,7 +61,7 @@ commands cannot defer.
 | `host.json` | ucp-host | pid, port, token |
 | `host.lock` | ucp-cli | spawn guard |
 | `targets.json` | ucp-cli `targets` | configured Editor / runtime targets |
-| `sessions/{projectId}.json` | Unity agent | status, capabilities, pid, focused, default timeouts; every 2 s |
+| `sessions/{projectId}.json` | Unity agent | status, capabilities, pid, focused, default timeouts, read-only commands; every 2 s |
 | `queues/{projectId}/inbox/` | ucp-host | commands to Unity |
 | `queues/{projectId}/outbox/` | Unity agent | results |
 | `jobs/{projectId}/` | Unity agent | deferred commands in flight, for recovery after a reload |
@@ -69,9 +70,9 @@ commands cannot defer.
 
 | Module | Responsibility |
 |--------|----------------|
-| `server/ucp-host-server.ts` | HTTP: `/health` (open), `/sessions`, `/targets`, `/commands` (token); refuses `Origin` and foreign `Host` |
-| `sessions/session-directory.ts` | Watches `sessions/`, probes runtime targets, decides ready / busy / gone |
-| `commands/command-runner.ts` | Lanes, deadlines, long polling, results kept 10 min, timeout hints |
+| `server/ucp-host-server.ts` | HTTP: `/health` (open), `/sessions`, `/targets`, `/commands`, `POST /shutdown` (token); refuses `Origin` and foreign `Host` |
+| `sessions/session-directory.ts` | Watches `sessions/` and decides ready / busy / gone; probes runtime targets separately, so a dead device cannot delay an Editor |
+| `commands/command-runner.ts` | Lanes, deadlines, long polling, results kept 10 min; every failure it decides gets a code, message and hint |
 | `adapter/editor-file-queue/` | Inbox / outbox exchange, sweep of files older than an hour |
 | `adapter/runtime-http/` | POST to the runtime agent |
 
@@ -103,15 +104,21 @@ commands cannot defer.
 ## Command protocol
 
 ```json
-{ "id": "cmd-…", "type": "ping", "timeout": 30000, "args": {} }
+{ "id": "cmd-…", "type": "ping", "timeout": 29950, "deadline": 1793866230549, "args": {} }
 ```
+
+`timeout` is what was left of the caller's timeout when the host sent the command; `deadline` is
+the absolute time the host gives up. The agent does not start a command past it and drops a
+result that comes in later.
 
 ```json
 { "id": "cmd-…", "success": false, "duration": 3, "error": "node_not_found",
   "message": "Node 'Canvas/Gp' not found. …", "hint": "Did you mean 'Canvas/Go'?", "data": null }
 ```
 
-ucp-cli turns this into `{ ok, data, message, error_code, hint, timing }`.
+ucp-cli turns this into `{ ok, data, message, error_code, hint, timing }`. A failure ucp-host
+decides itself (`timeout`, `unknown_command`, `no_ready_session`, ...) arrives in the same three
+fields.
 
 Declared `aliases` are lookup keys and are advertised as capabilities, so they dispatch like real
 names.

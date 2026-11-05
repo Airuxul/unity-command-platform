@@ -59,7 +59,7 @@ Two tiers, same transport:
 | | Command | Covers | Time |
 |-|---------|--------|------|
 | Smoke | `npm run smoke -- --project <path>` | One Prefab round trip, 18 assertions | a few seconds |
-| Full | `npm run test:integration` (needs `UCP_EDITOR_INTEGRATION=1`) | Every editor command | ~3 min |
+| Full | `npm run test:integration` (needs `UCP_EDITOR_INTEGRATION=1`) | Every editor command | ~6 min |
 
 ```powershell
 npm run smoke -- --project C:/Path/To/UnityProject

@@ -35,7 +35,7 @@ namespace Air.UcpAgent.Runtime
         sealed class PendingRequest
         {
             public HttpListenerContext Context;
-            public UcpCommand Command;
+            public UcpRequest Command;
         }
 
         /// <remarks>
@@ -282,10 +282,10 @@ namespace Air.UcpAgent.Runtime
             using (var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8))
                 body = reader.ReadToEnd();
 
-            UcpCommand command;
+            UcpRequest command;
             try
             {
-                command = JsonConvert.DeserializeObject<UcpCommand>(body);
+                command = JsonConvert.DeserializeObject<UcpRequest>(body);
             }
             catch (Exception ex)
             {

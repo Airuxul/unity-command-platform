@@ -8,7 +8,7 @@ namespace Air.UcpAgent.Params
     /// </summary>
     public class PrefabPathParams
     {
-        [CliParam(ParamKeys.Path, Description = "prefab asset path, e.g. Assets/Prefabs/Player.prefab", Required = true)]
+        [UcpParam(ParamKeys.Path, Description = "prefab asset path, e.g. Assets/Prefabs/Player.prefab", Required = true)]
         public string Path { get; set; }
     }
 
@@ -19,27 +19,26 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabCreateParams : NodeTargetParams
     {
-        [CliParam(ParamKeys.Path, Description = "prefab asset path to write, e.g. Assets/Prefabs/Player.prefab",
-            Required = true, AlternateKeys = "output,to")]
+        [UcpParam(ParamKeys.Path, Description = "prefab asset path to write, e.g. Assets/Prefabs/Player.prefab",
+            Required = true)]
         public string Path { get; set; }
 
-        [CliParam(Description = "leave the source node linked to the new prefab as an instance (default: true)")]
+        [UcpParam(Description = "leave the source node linked to the new prefab as an instance (default: true)")]
         public bool? Connect { get; set; }
     }
 
     public sealed class PrefabCreateEmptyParams
     {
-        [CliParam(ParamKeys.Path, Description = "prefab asset path to create", Required = true,
-            AlternateKeys = "output")]
+        [UcpParam(ParamKeys.Path, Description = "prefab asset path to create", Required = true)]
         public string Path { get; set; }
 
-        [CliParam(Description = "root GameObject name (default: the file name)")]
+        [UcpParam(Description = "root GameObject name (default: the file name)")]
         public string Name { get; set; }
 
-        [CliParam(Description = "built-in shape for the root", AllowedValues = Primitives.Allowed)]
+        [UcpParam(Description = "built-in shape for the root", AllowedValues = Primitives.Allowed)]
         public string Primitive { get; set; } = "empty";
 
-        [CliParam(Description = "component type names to add to the root")]
+        [UcpParam(Description = "component type names to add to the root")]
         public string[] Components { get; set; }
     }
 
@@ -50,35 +49,35 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabListParams : FolderQueryParams
     {
-        [CliParam(Description = "include variants and model prefabs (default: true)")]
+        [UcpParam(Description = "include variants and model prefabs (default: true)")]
         public bool? IncludeVariants { get; set; }
     }
 
     public sealed class PrefabInfoParams : PrefabPathParams
     {
-        [CliParam(Description = "also list asset dependencies")]
+        [UcpParam(Description = "also list asset dependencies")]
         public bool Dependencies { get; set; }
     }
 
     public sealed class PrefabTreeParams : PrefabPathParams
     {
-        [CliParam(Description = "levels of children to walk; -1 for the whole tree (default: -1)")]
+        [UcpParam(Description = "levels of children to walk; -1 for the whole tree (default: -1)")]
         public int? Depth { get; set; }
 
-        [CliParam(Description = "list component type names on each node (default: true)")]
+        [UcpParam(Description = "list component type names on each node (default: true)")]
         public bool? Components { get; set; }
 
-        [CliParam(ParamKeys.Node, Description = "only the subtree under this node path (default: the root)")]
+        [UcpParam(ParamKeys.Node, Description = "only the subtree under this node path (default: the root)")]
         public string Node { get; set; }
 
-        [CliParam(Description = "stop after this many nodes and report truncated (default: 500)")]
+        [UcpParam(Description = "stop after this many nodes and report truncated (default: 500)")]
         public int? Limit { get; set; }
 
-        [CliParam(Description = "json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
+        [UcpParam(Description = "json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
             AllowedValues = TreeShape.Formats)]
         public string Format { get; set; } = TreeShape.Json;
 
-        [CliParam(Description = "json only: comma-separated fields to keep on each node (default: all)",
+        [UcpParam(Description = "json only: comma-separated fields to keep on each node (default: all)",
             AllowedValues = TreeShape.Fields)]
         public string Fields { get; set; }
     }
@@ -90,15 +89,13 @@ namespace Air.UcpAgent.Params
     /// </summary>
     public sealed class PrefabInstantiateParams : PlacementParams
     {
-        [CliParam(ParamKeys.Source, Description = "prefab asset to instantiate", Required = true,
-            AlternateKeys = "asset")]
+        [UcpParam(ParamKeys.Source, Description = "prefab asset to instantiate", Required = true)]
         public string Source { get; set; }
 
-        [CliParam(Description = "name for the instance (default: the prefab name)")]
+        [UcpParam(Description = "name for the instance (default: the prefab name)")]
         public string Name { get; set; }
 
-        [CliParam(Description = "sibling index under the parent (default: last)",
-            AlternateKeys = "sibling_index")]
+        [UcpParam(Description = "sibling index under the parent (default: last)")]
         public int? Index { get; set; }
     }
 
@@ -112,8 +109,7 @@ namespace Air.UcpAgent.Params
 
     public sealed class PrefabOverridesParams : PrefabInstanceParams
     {
-        [CliParam(Description = "include Unity's default overrides (transform position, name, …)",
-            AlternateKeys = "include_default_overrides")]
+        [UcpParam(Description = "include Unity's default overrides (transform position, name, …)")]
         public bool IncludeDefaults { get; set; }
     }
 
@@ -123,47 +119,46 @@ namespace Air.UcpAgent.Params
     /// </summary>
     public sealed class PrefabOverrideParams : PrefabInstanceParams
     {
-        [CliParam(Description = "limit to this component's overrides", AlternateKeys = "type")]
+        [UcpParam(Description = "limit to this component's overrides")]
         public string Component { get; set; }
 
-        [CliParam(Description = "which component when the node has several of this type (default: 0)")]
+        [UcpParam(Description = "which component when the node has several of this type (default: 0)")]
         public int? Index { get; set; }
 
-        [CliParam(Description = "limit to this serialized property (requires 'component')")]
+        [UcpParam(Description = "limit to this serialized property (requires 'component')")]
         public string Property { get; set; }
     }
 
     public sealed class PrefabUnpackParams : PrefabInstanceParams
     {
-        [CliParam(Description = "also unpack nested prefab instances")]
+        [UcpParam(Description = "also unpack nested prefab instances")]
         public bool Completely { get; set; }
     }
 
     public sealed class PrefabReplaceParams : PrefabInstanceParams
     {
-        [CliParam(ParamKeys.Source, Description = "prefab asset to swap in", Required = true,
-            AlternateKeys = "asset")]
+        [UcpParam(ParamKeys.Source, Description = "prefab asset to swap in", Required = true)]
         public string Source { get; set; }
 
-        [CliParam(Description = "keep the instance's current transform values (default: true)")]
+        [UcpParam(Description = "keep the instance's current transform values (default: true)")]
         public bool? KeepTransform { get; set; }
     }
 
     public sealed class PrefabStageOpenParams : PrefabPathParams
     {
-        [CliParam(ParamKeys.Node, Description = "instance to open the prefab in the context of (optional)")]
+        [UcpParam(ParamKeys.Node, Description = "instance to open the prefab in the context of (optional)")]
         public string Node { get; set; }
 
-        [CliParam(Description = "discard unsaved changes in the prefab that is already open")]
+        [UcpParam(Description = "discard unsaved changes in the prefab that is already open")]
         public bool Force { get; set; }
     }
 
     public sealed class PrefabCloseParams
     {
-        [CliParam(Description = "save the open prefab before leaving Prefab Mode (default: true)")]
+        [UcpParam(Description = "save the open prefab before leaving Prefab Mode (default: true)")]
         public bool? Save { get; set; }
 
-        [CliParam(Description = "with save=false, discard unsaved changes instead of refusing")]
+        [UcpParam(Description = "with save=false, discard unsaved changes instead of refusing")]
         public bool Force { get; set; }
     }
 }

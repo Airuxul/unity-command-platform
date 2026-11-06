@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect } from "vitest";
 import {
   describeFailure,
@@ -129,6 +130,15 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     },
   },
   {
+    type: "call",
+    description: "list the [UcpFunction] methods on this host",
+    assert: (r) => {
+      expect(r.ok).toBe(true);
+      const data = r.data as Record<string, unknown> | null;
+      expect(Array.isArray(data?.functions)).toBe(true);
+    },
+  },
+  {
     type: "tag_list",
     description: "list project tags",
     assert: (r) => {
@@ -176,11 +186,16 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
     },
   },
   // In Play Mode they are covered by ui-interaction.test.ts.
-  ...["ui_click", "ui_input", "ui_wait"].map(
-    (type): EditorCommandCase => ({
-      type,
+  // Only keys that command declares: an unknown key is invalid_argument before the play-mode check.
+  ...[
+    ["ui_click", { node: "Canvas" }],
+    ["ui_input", { node: "Canvas", text: "x" }],
+    ["ui_wait", { node: "Canvas", text: "x" }],
+  ].map(
+    ([type, args]): EditorCommandCase => ({
+      type: type as string,
       description: `${type} is rejected outside play mode`,
-      args: { node: "Canvas", text: "x" },
+      args: args as Record<string, unknown>,
       expectFailure: true,
       assert: (r) => {
         expect(r.ok).toBe(false);
@@ -400,122 +415,21 @@ export const EDITOR_COMMAND_CASES: EditorCommandCase[] = [
   },
 ];
 
-/**
- * Every command type the Editor agent advertises. Kept here rather than derived so that adding a
- * command is a deliberate two-step: the constant lands in CommandNames.cs, and a test case has to
- * appear in EDITOR_COMMAND_CASES or SCENARIO_COMMANDS before this list will match again.
- */
-export const ALL_EDITOR_COMMANDS: readonly string[] = [
-  // agent / editor control
-  "build",
-  "compile",
-  "console",
-  "echo",
-  "exec",
-  "help",
-  "menu",
-  "pause",
-  "ping",
-  "play",
-  "profiler",
-  "refresh",
-  "reserialize",
-  "screenshot",
-  "state",
-  "stop",
-  "test_run",
-  "ui_click",
-  "ui_input",
-  "ui_snapshot",
-  "ui_wait",
-  // project settings
-  "layer_add",
-  "layer_list",
-  "layer_remove",
-  "tag_add",
-  "tag_list",
-  "tag_remove",
-  "tool_set",
-  // prefab assets
-  "prefab_create",
-  "prefab_create_empty",
-  "prefab_create_variant",
-  "prefab_delete",
-  "prefab_duplicate",
-  "prefab_edit",
-  "prefab_info",
-  "prefab_list",
-  "prefab_move",
-  "prefab_tree",
-  // prefab instances
-  "prefab_apply",
-  "prefab_instance_info",
-  "prefab_instantiate",
-  "prefab_overrides",
-  "prefab_replace",
-  "prefab_revert",
-  "prefab_unpack",
-  // prefab mode
-  "prefab_close",
-  "prefab_open",
-  "prefab_save",
-  "prefab_stage_info",
-  // gameobjects
-  "gameobject_activate",
-  "gameobject_create",
-  "gameobject_delete",
-  "gameobject_duplicate",
-  "gameobject_find",
-  "gameobject_info",
-  "gameobject_layer",
-  "gameobject_rename",
-  "gameobject_reparent",
-  "gameobject_tag",
-  "gameobject_transform",
-  "gameobject_tree",
-  // components
-  "component_add",
-  "component_get",
-  "component_list",
-  "component_remove",
-  "component_set",
-  // scenes
-  "scene_close",
-  "scene_edit",
-  "scene_info",
-  "scene_list",
-  "scene_new",
-  "scene_open",
-  "scene_save",
-  "scene_save_as",
-  // assets
-  "asset_create_folder",
-  "asset_delete",
-  "asset_dependencies",
-  "asset_duplicate",
-  "asset_find",
-  "asset_guid",
-  "asset_info",
-  "asset_list",
-  "asset_move",
-  // packages (add / remove in package.test.ts)
-  "package_add",
-  "package_list",
-  "package_remove",
-  // selection
-  "selection_clear",
-  "selection_get",
-  "selection_set",
-];
+interface CatalogCommand {
+  name: string;
+  aliases?: string[];
+}
 
-/** Alias names that must dispatch as well as their canonical command. */
-export const EDITOR_COMMAND_ALIASES: readonly string[] = [
-  "asset_rename",
-  "commands",
-  "prefab_rename",
-  "recompile",
-  "reload",
-];
+const editorCatalog = JSON.parse(
+  readFileSync(new URL("../__snapshots__/catalog.editor.json", import.meta.url), "utf8"),
+) as { commands: CatalogCommand[] };
+
+/** Names and aliases from the committed editor catalog. A new command updates that snapshot. */
+export const ALL_EDITOR_COMMANDS: readonly string[] = editorCatalog.commands.map((c) => c.name);
+
+export const EDITOR_COMMAND_ALIASES: readonly string[] = editorCatalog.commands.flatMap(
+  (c) => c.aliases ?? [],
+);
 
 export function gameDemoProjectPath(): string {
   return process.env.UCP_TEST_PROJECT ?? "C:/Project/GameDemo";

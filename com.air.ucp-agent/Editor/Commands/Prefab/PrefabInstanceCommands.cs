@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Prefab;
 using Air.UcpAgent.Editor.Services.Objects;
@@ -7,87 +8,93 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class PrefabInstantiateCommand : EditTargetCommand<PrefabInstantiateParams>
+    [UcpCommand]
+    public static class PrefabInstantiateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabInstantiateParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabInstantiateParams>(
             CommandNames.PrefabInstantiate,
             CommandHostScope.Editor,
             "Instantiate a prefab into a scene, or into another prefab asset as a nested prefab");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabInstantiateParams p) =>
-            PrefabInstanceService.Instantiate(scope, p);
+        public static object Execute(PrefabInstantiateParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Instantiate(ctx.Scope, p);
     }
 
-    public sealed class PrefabApplyCommand : EditTargetCommand<PrefabOverrideParams>
+    [UcpCommand]
+    public static class PrefabApplyCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabOverrideParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabOverrideParams>(
             CommandNames.PrefabApply,
             CommandHostScope.Editor,
             "Apply a prefab instance's overrides back to its asset (all, one component, or one property)");
 
-        // Writes the source prefab asset at once; a batch could not take that back.
-        public override bool Batchable => false;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverrideParams p) =>
-            PrefabInstanceService.Apply(scope, p);
+        public static object Execute(PrefabOverrideParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Apply(ctx.Scope, p);
     }
 
-    public sealed class PrefabRevertCommand : EditTargetCommand<PrefabOverrideParams>
+    [UcpCommand]
+    public static class PrefabRevertCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabOverrideParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabOverrideParams>(
             CommandNames.PrefabRevert,
             CommandHostScope.Editor,
             "Discard a prefab instance's overrides (all, one component, or one property)");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverrideParams p) =>
-            PrefabInstanceService.Revert(scope, p);
+        public static object Execute(PrefabOverrideParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Revert(ctx.Scope, p);
     }
 
-    public sealed class PrefabOverridesCommand : EditTargetCommand<PrefabOverridesParams>
+    [UcpCommand]
+    public static class PrefabOverridesCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabOverridesParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabOverridesParams>(
             CommandNames.PrefabOverrides,
             CommandHostScope.Editor,
-            "List a prefab instance's overrides: modified properties, added/removed components, added GameObjects");
+            "List a prefab instance's overrides: modified properties, added/removed components, added GameObjects")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabOverridesParams p) =>
-            PrefabInstanceService.Overrides(scope, p);
+        public static object Execute(PrefabOverridesParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Overrides(ctx.Scope, p);
     }
 
-    public sealed class PrefabUnpackCommand : EditTargetCommand<PrefabUnpackParams>
+    [UcpCommand]
+    public static class PrefabUnpackCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabUnpackParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabUnpackParams>(
             CommandNames.PrefabUnpack,
             CommandHostScope.Editor,
             "Break a prefab instance's link to its asset, leaving plain GameObjects");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabUnpackParams p) =>
-            PrefabInstanceService.Unpack(scope, p);
+        public static object Execute(PrefabUnpackParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Unpack(ctx.Scope, p);
     }
 
-    public sealed class PrefabReplaceCommand : EditTargetCommand<PrefabReplaceParams>
+    [UcpCommand]
+    public static class PrefabReplaceCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabReplaceParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabReplaceParams>(
             CommandNames.PrefabReplace,
             CommandHostScope.Editor,
             "Swap a prefab instance's source asset, keeping its place in the hierarchy (overrides are lost)");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabReplaceParams p) =>
-            PrefabInstanceService.Replace(scope, p);
+        public static object Execute(PrefabReplaceParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Replace(ctx.Scope, p);
     }
 
-    public sealed class PrefabInstanceInfoCommand : EditTargetCommand<PrefabInstanceParams>
+    [UcpCommand]
+    public static class PrefabInstanceInfoCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabInstanceParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabInstanceParams>(
             CommandNames.PrefabInstanceInfo,
             CommandHostScope.Editor,
-            "Prefab linkage of a node: source asset, instance roots, connection status, override counts");
+            "Prefab linkage of a node: source asset, instance roots, connection status, override counts")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabInstanceParams p) =>
-            PrefabInstanceService.Info(scope, p);
+        public static object Execute(PrefabInstanceParams p, EditTargetContext ctx) =>
+            PrefabInstanceService.Info(ctx.Scope, p);
     }
 }

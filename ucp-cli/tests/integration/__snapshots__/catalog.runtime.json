@@ -1,6 +1,8 @@
 {
-  "help_message": "Available runtime commands:\n  echo --message <string> text to echo — Echo from Runtime host\n  help — List available runtime commands\n  ping — Health check",
+  "help_message": "help",
   "capabilities": [
+    "?",
+    "call",
     "echo",
     "help",
     "ping"

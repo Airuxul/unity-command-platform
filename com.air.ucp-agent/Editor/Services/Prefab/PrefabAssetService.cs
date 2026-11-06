@@ -36,9 +36,10 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (connect)
             {
                 // Leaves the source node as an instance of the new prefab — inside another prefab's
-                // contents that is exactly how a nested prefab is created.
+                // contents that is exactly how a nested prefab is created. UserAction records that
+                // connection in the scope's undo group. The new asset file is not part of it.
                 asset = PrefabUtility.SaveAsPrefabAssetAndConnect(
-                    node.gameObject, path, InteractionMode.AutomatedAction, out saved);
+                    node.gameObject, path, scope.PrefabInteraction, out saved);
                 scope.MarkDirty();
             }
             else

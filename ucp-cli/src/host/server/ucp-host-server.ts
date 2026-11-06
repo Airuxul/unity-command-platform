@@ -11,6 +11,7 @@ import {
 import { submitCommandSchema } from "#shared/schema.js";
 import type { QueuedCommand } from "#shared/types.js";
 import type { CommandRunner } from "../commands/command-runner.js";
+import { HostError } from "../errors.js";
 import type { Logger } from "../logger/logger.js";
 import { type SessionDirectory, probeAllTargets } from "../sessions/session-directory.js";
 
@@ -160,7 +161,7 @@ export class UcpHostServer {
         origin: req.headers.origin,
         host: req.headers.host,
       });
-      sendJson(res, 403, { ok: false, error: "forbidden_origin" });
+      sendJson(res, 403, { ok: false, error: HostError.forbiddenOrigin });
       return;
     }
 
@@ -179,7 +180,7 @@ export class UcpHostServer {
     if (!tokenMatches(req.headers[HOST_TOKEN_HEADER], this.token)) {
       sendJson(res, 401, {
         ok: false,
-        error: "unauthorized",
+        error: HostError.unauthorized,
         message: `Missing or wrong ${HOST_TOKEN_HEADER} header.`,
         hint: "ucp-cli older than 0.3 does not send it: update every ucp-cli on this machine. Other clients read the token from ~/.ucp/host.json.",
       });
@@ -193,7 +194,7 @@ export class UcpHostServer {
       if (busy > 0) {
         sendJson(res, 409, {
           ok: false,
-          error: "busy",
+          error: HostError.busy,
           message: `${busy} command(s) still in flight.`,
         });
         return;
@@ -225,7 +226,7 @@ export class UcpHostServer {
 
       const entry = await this.runner.wait(id, waitMs, (detach) => res.on("close", detach));
       if (!entry) {
-        sendJson(res, 404, { ok: false, error: "not_found" });
+        sendJson(res, 404, { ok: false, error: HostError.notFound });
         return;
       }
       sendJson(res, 200, commandBody(entry));
@@ -236,7 +237,7 @@ export class UcpHostServer {
       if (this.#closing) {
         sendJson(res, 503, {
           ok: false,
-          error: "host_restarting",
+          error: HostError.restarting,
           message: "This ucp-host is shutting down to make way for a newer one.",
           hint: "Send the command again; ucp-cli starts the new host.",
         });
@@ -245,7 +246,11 @@ export class UcpHostServer {
       const raw = await readJsonBody(req);
       const parsed = submitCommandSchema.safeParse(raw);
       if (!parsed.success) {
-        sendJson(res, 400, { ok: false, error: "invalid_body", details: parsed.error.flatten() });
+        sendJson(res, 400, {
+          ok: false,
+          error: HostError.invalidBody,
+          details: parsed.error.flatten(),
+        });
         return;
       }
 

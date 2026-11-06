@@ -1,5 +1,21 @@
 # Agent Changelog — `unity-command-platform`
 
+## Unreleased
+
+- A deferred command points at its policy class (`CompletionPolicy = typeof(...)` on the descriptor, or `ctx.Defer(typeof(...))`). The job stores that class's full name. A job whose class is not loaded after a domain reload fails as `orphaned`.
+- Changed scripts are compiled by `compile`. `exec`, `play`, `test_run` and `build` run the scripts already loaded.
+- A command may name other commands in `Before` / `After`. ucp-host runs that chain in order and returns this command's result, or the first failure.
+- **Breaking: commands are static classes.** A command is a static class marked `[UcpCommand]` with `public static readonly InvokeDescriptor Descriptor`, `public static object Execute(TParams p, TContext ctx)` and an optional `public static void Undo(TParams p, TContext ctx)`. `CliCommand`, `CliCommand<T>`, `IUndoable`, `MutatesTarget` and the `Message(parameters)` override are gone: set `ctx.Message`, and use `ReadsTargetOnly = true` on the descriptor. A malformed class is skipped and listed under `load_errors` in `help`.
+- **Breaking: renames.** `[CliParam]` is `[UcpParam]` (`UcpParamBinder`, `UcpParamInfo`). The protocol class `UcpCommand` is `UcpRequest`; the JSON on the wire is unchanged.
+- `CommandContext` is one run's record: id, message, result, failure, deferral. A command that needs to remember something for its `Undo` takes a subclass with JSON-serializable fields. Edit-target commands take `EditTargetContext`, whose `Scope` is the open target.
+- **Breaking: `prefab_edit` / `scene_edit` are removed.** `group` replaces them: `steps: [{command, args, expect?}]` with any command, `rollback=all|failed`, `on_error=stop|continue`, `dry_run`. Consecutive steps on the same target are saved once. A group carries on across the domain reload of a `compile` or Play Mode step; its state is in `Library/ucp/undo/<id>/`. New error code `rollback_failed`.
+- Taking a command back uses its Unity undo group, plus its own `Undo` for what Unity does not record. `prefab_create`, `asset_create_folder`, `asset_move`, `asset_duplicate`, `asset_delete` and the `prefab_*` asset commands now have one; a prefab a group already saved is written back from a copy.
+- `call` runs a static method marked `[UcpFunction("name")]`, binding `args` by parameter name; without `name` it lists them.
+- Commands that still answer while the Editor is busy set `RunsWhileBusy`. The session file lists them as `runsWhileBusy`.
+- `--session-type` other than `editor` or `runtime`, and `run --args` that is not a JSON object, fail as `invalid_argument`.
+- A dispatch that never reached Unity (`unknown_session_type`, an editor session with no queue id) is a host failure, not a completed Unity result.
+- `RecordUndo`, `RegisterCreated`, `Destroy`, `SetParent` and `AddComponent` mark the edit target dirty. Saving a prefab stage goes through `EditTargetScope.SavePrefabAsset`.
+
 ## 0.5.0 — 2026-11-05 (`com.air.ucp-agent` 0.5.0, `ucp-cli` 0.3.0)
 
 The release after master's agent 0.3.0 / ucp-cli 0.2.0. It includes the content commands of 0.4.0
@@ -54,10 +70,11 @@ CLI add are:
 | `no_ready_session` | no Editor (or, with `--session-type runtime`, no Play Mode) for the project |
 | `editor_not_running` | the Editor's process has exited |
 | `session_unavailable` | the runtime went away (Play Mode ended) before the command was sent |
-| `unknown_command` | the session does not offer that command (was `failed`) |
-| `timeout` | no result before the deadline; the hint says if Unity was in the background |
+| `host_unknown_command` | the session does not offer that command (was `failed`) |
+| `host_timeout` | no result before the deadline; the hint says if Unity was in the background. Unity's own wait (for example `ui_wait`) is still `timeout` |
 | `caller_disconnected` | the caller stopped waiting; the command was dropped before it ran |
-| `command_failed` | ucp-host could not deliver the command; the message says why |
+| `host_command_failed` | ucp-host could not deliver the command; the message says why |
+| `host_unreachable` | the CLI could not reach ucp-host; it starts the host and sends again |
 | `host_lost` | ucp-host died while the CLI waited; the command may still have run (was an exception) |
 | `host_restarting` | ucp-host is making way for a newer one; the CLI sends again by itself |
 | `unauthorized` | no or wrong `X-UCP-Token`, usually a 0.2 `ucp-cli` |
@@ -103,10 +120,16 @@ Anything calling ucp-host directly (not through `ucp-cli`) must send `X-UCP-Toke
   `no_ready_session`; an Editor whose process has exited fails at once as `editor_not_running`.
 - The agent checks its inbox every editor tick instead of every 250 ms. With Unity minimized
   (about 10 ticks a second), 20 pings back to back: median 295 ms → 96 ms from handing the
-  command over to reading the result (`background.test.ts`).
+  command over to reading the result (`background.test.ts`). In front Unity ticks 70–294 times a
+  second and a ping takes about 18 ms, set by the agent's own 20 ms check interval
+  (`foreground.test.ts`, opt-in with `UCP_ALLOW_FOCUS=1` since it takes the focus).
 - `ping`, `state`, `console`, `help` and `echo` no longer wait for another command on the Editor
   to finish (`test_run`, `compile`); they used to queue behind it until their own timeout. During
   the domain reload itself they still wait, since Unity does not tick then.
+- `exec`, `play`, `test_run` and `build` import and compile a script changed since the last
+  compile before they run, and fail as `compile_error` if it does not compile. A command declares
+  this with `RequiresCompiledScripts = true` on its descriptor, so a project's own command can too. `exec` and `play`
+  used to run the old code: Unity in the background never imports a change on its own.
 - `ui_wait` and `ui_snapshot` see TextMeshPro text: the lookup skipped `TMPro.TMP_Text` because it
   is abstract, so `ui_wait until=text` never matched a TMP label.
 - A command queued behind a long one times out at its own deadline, not when the long one ends.
@@ -135,7 +158,7 @@ Anything calling ucp-host directly (not through `ucp-cli`) must send `X-UCP-Toke
   `DeferredInvokeDescriptor` or `CliCommand.Defer(kind[, args])`; a completion policy finishes it,
   also after a domain reload. Inbox files are claimed by renaming them to `.claimed`.
 - Host: `SessionDirectory` and `CommandRunner` replace seven queue / scheduler / router modules.
-  One lane per session; read-only commands skip it; deadlines count from submission;
+  One lane per session; `bypassesLane` commands skip it; deadlines count from submission;
   `GET /commands/:id?wait=` long-polls; the outbox is watched with `fs.watch`. `/health` reports a
   build id and the CLI restarts an older idle host. Editor sessions are read apart from runtime
   probes.
@@ -218,8 +241,9 @@ the only escape hatch was `exec`. Command set modelled on
 
 **Infrastructure**
 
-- `EditTargetCommand<TParams>` + `EditBatch` — node commands implement `Apply(scope, p)`; the
-  batch owns open / commit / revert.
+- `EditTargetCommand<TParams>` + `EditBatch` — node commands implemented `Apply(scope, p)`; the
+  batch owned open / commit / revert. That base class is gone: a command is a `CliCommand`, and
+  `EditBatch.Run` opens, commits, and reverts.
 
 - `EditorActionCommand<TParams>` — command shell; services return payloads and throw for errors.
 - `EditTargetScope` — the scene-or-prefab-asset abstraction that lets the content commands exist
@@ -239,6 +263,4 @@ the only escape hatch was `exec`. Command set modelled on
 - Commands: single `CliCommand` track; `state` returns `agent_state`.
 - Rewrote `docs/*`, `README*`, `CONVENTIONS.md`, `TODO*.md` for UCP.
 
-## 2026-06-04 and earlier
-
-Entries before 2026-06-16 refer to the **legacy** `unity-cmd` + `com.air.unity-connector` HTTP architecture and are kept for historical context only.
+The `unity-cmd` / `com.air.unity-connector` notes that used to sit below this heading were removed. This entry is the record of that migration.

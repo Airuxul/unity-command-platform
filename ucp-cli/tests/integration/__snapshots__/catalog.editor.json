@@ -7,10 +7,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_delete",
@@ -19,10 +20,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_dependencies",
@@ -31,11 +33,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--recursive <bool> follow dependencies transitively",
         "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_duplicate",
@@ -44,11 +47,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> existing asset to start from (required)",
         "--target <string> path to write (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_find",
@@ -57,12 +61,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--filter <string> raw AssetDatabase filter, e.g. \"t:Material glossy\" or \"l:Boss\" (required)",
         "--folders <string[]> folders to search under (default: whole project)",
         "--limit <int> max results (default: 200)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_guid",
@@ -71,11 +76,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> asset path to convert to a GUID",
         "--guid <string> GUID to convert to an asset path"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_info",
@@ -84,12 +90,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--dependencies <bool> also list direct dependencies",
         "--subAssets <bool> also list sub-assets stored in the same file",
         "--path <string> asset or folder path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_list",
@@ -98,14 +105,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--type <string> Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript",
         "--recursive <bool> include sub-folders (default: true)",
         "--folder <string> folder to search under (default: Assets)",
         "--name <string> name substring filter",
         "--limit <int> max results (default: 200)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "asset_move",
@@ -116,11 +124,12 @@
         "asset_rename"
       ],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> existing asset to start from (required)",
         "--target <string> path to write (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "build",
@@ -129,28 +138,44 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": 1800000,
-      "allow_connection_retry": true,
       "params": [
         "--output_path <string> the player to write, e.g. Builds/Win/Game.exe; relative to the project, not under Assets (required)",
         "--target <string> BuildTarget name, e.g. StandaloneWindows64 or Android (default: the active one)",
         "--scenes <string[]> JSON array of scene asset paths (default: the enabled scenes in Build Settings)",
         "--development <bool> development build"
-      ]
+      ],
+      "before": [],
+      "after": []
+    },
+    {
+      "name": "call",
+      "scope": "any",
+      "description": "Run a [UcpFunction] static method by name, with its parameters from 'args'. Without 'name', list the functions on this host.",
+      "completion": null,
+      "aliases": [],
+      "default_timeout_ms": null,
+      "params": [
+        "--name <string> function name; omit to list the functions on this host",
+        "--args <dictionary`2> the function's parameters, by parameter name"
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "compile",
       "scope": "editor",
       "description": "Import changed files, then compile scripts (deferred)",
-      "completion": "compilation",
+      "completion": "Air.UcpAgent.Completion.CompilationPolicy",
       "aliases": [
         "recompile",
         "reload"
       ],
       "default_timeout_ms": 180000,
-      "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "component_add",
@@ -159,7 +184,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--component <string> component type to add (required)",
         "--properties <jobject> properties to set on the new component, e.g. {\"mass\":5,\"useGravity\":false}",
@@ -167,7 +191,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "component_get",
@@ -176,7 +202,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--property <string> single property to read; omit to read them all",
         "--depth <int> nesting levels of structs/arrays to expand (default: 2)",
@@ -188,7 +213,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "component_list",
@@ -197,13 +224,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "component_remove",
@@ -212,7 +240,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--component <string> component type, e.g. Rigidbody, UnityEngine.BoxCollider, TMPro.TextMeshProUGUI (required)",
         "--index <int> which one when the node has several of this type (default: 0)",
@@ -220,7 +247,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "component_set",
@@ -229,9 +258,8 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
-        "--properties <jobject> properties to set; object refs accept an asset path, {\"guid\":..}, {\"builtin\":\"LegacyRuntime.ttf\"}, {\"node\":..,\"component\":..} or an instance id",
+        "--properties <jobject> properties to set; object refs accept an asset path, {\"guid\":..}, \"builtin:LegacyRuntime.ttf\", {\"node\":..,\"component\":..} or {\"instance_id\":..}",
         "--property <string> single property name, paired with 'value'",
         "--value <jtoken> value for the single property named by 'property'",
         "--component <string> component type, e.g. Rigidbody, UnityEngine.BoxCollider, TMPro.TextMeshProUGUI (required)",
@@ -240,7 +268,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "console",
@@ -249,13 +279,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--type <string> [error|warning|log] log types to fetch",
         "--lines <int> max entries, newest kept; identical entries are merged and counted",
         "--clear <bool> clear the console",
         "--stacktrace <string> [none|user|all] stacktrace verbosity"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "echo",
@@ -264,26 +295,28 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--message <string> text to echo"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "exec",
       "scope": "editor",
-      "description": "Compile and execute arbitrary C# in Editor context",
+      "description": "Execute arbitrary C# in the Editor. Compile changed scripts first; this command runs the scripts already loaded.",
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--code <string> C# snippet (return value serialised) (required)",
         "--timeout_ms <int> compilation timeout",
         "--usings <string[]> extra using directives",
         "--csc <string> path to csc compiler",
         "--dotnet <string> path to dotnet executable"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_activate",
@@ -292,14 +325,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--active <bool> active state to set; omit to toggle",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_create",
@@ -308,7 +342,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--name <string> name of the new GameObject (required)",
         "--primitive <string> [empty|cube|sphere|capsule|cylinder|plane|quad] built-in shape to create",
@@ -322,7 +355,9 @@
         "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_delete",
@@ -331,13 +366,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_duplicate",
@@ -346,7 +382,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--name <string> name for the copy (default: Unity's \"Name (1)\" numbering)",
         "--parent <string> parent for the copy (default: same parent as the source)",
@@ -354,7 +389,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_find",
@@ -363,7 +400,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--name <string> name to match (substring unless exact=true)",
         "--tag <string> tag to match",
@@ -375,7 +411,9 @@
         "--limit <int> max results (default: 200)",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_info",
@@ -384,13 +422,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_layer",
@@ -399,7 +438,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--layer <string> layer name or index (required)",
         "--recursive <bool> also apply to every descendant",
@@ -407,7 +445,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_rename",
@@ -416,14 +456,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--name <string> new name (required)",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_reparent",
@@ -432,7 +473,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--parent <string> new parent node path (empty string moves the node to the top level)",
         "--index <int> sibling index under the new parent (default: last)",
@@ -441,7 +481,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_tag",
@@ -450,7 +492,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--tag <string> tag to assign (must already exist — create it with tag_add) (required)",
         "--recursive <bool> also apply to every descendant",
@@ -458,7 +499,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_transform",
@@ -467,7 +510,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--position <jtoken> position as [x,y,z], {x,y,z}, or a single number",
         "--rotation <jtoken> euler angles as [x,y,z] (or [x,y,z,w] for a raw quaternion)",
@@ -478,7 +520,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "gameobject_tree",
@@ -487,7 +531,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--depth <int> levels of children to walk; -1 for the whole subtree (default: 3)",
         "--components <bool> list component type names on each node (default: true)",
@@ -499,7 +542,25 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
+    },
+    {
+      "name": "group",
+      "scope": "editor",
+      "description": "Run several commands in order as one. rollback=all takes every step back when one fails; rollback=failed takes back only the failed step, and on_error says whether the rest still run. Steps may include compile or play: the group carries on after the domain reload.",
+      "completion": null,
+      "aliases": [],
+      "default_timeout_ms": 600000,
+      "params": [
+        "--steps <list`1> steps run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}; a step that edits a scene or prefab may add \"expect\":{\"node\":..,\"exists\":true,\"components\":[..]}, checked just before it runs (required)",
+        "--rollback <string> [all|failed] all: one failed step takes back every step; failed: only the failed step is taken back",
+        "--on_error <string> [stop|continue] with rollback=failed, whether the steps after a failed one still run",
+        "--dry_run <bool> run every step and report the results, then take all of them back"
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "help",
@@ -507,14 +568,16 @@
       "description": "List every editor command with its description and parameters",
       "completion": null,
       "aliases": [
-        "commands"
+        "commands",
+        "?"
       ],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--command <string> one command by name or alias: its card, with an example call and the error codes",
         "--format <string> [json|md] md: the cards as markdown in data.markdown"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "layer_add",
@@ -523,10 +586,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--layer <string> layer name (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "layer_list",
@@ -535,8 +599,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "layer_remove",
@@ -545,10 +610,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--layer <string> layer name (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "menu",
@@ -557,22 +623,24 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--menu_path <string> Unity menu path, e.g. File/Save Project (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "package_add",
       "scope": "editor",
       "description": "Add a UPM package and wait until it is resolved, compiled and loaded.",
-      "completion": "packages",
+      "completion": "Air.UcpAgent.Completion.PackagePolicy",
       "aliases": [],
       "default_timeout_ms": 300000,
-      "allow_connection_retry": true,
       "params": [
         "--package <string> name, name@version, file:<path> or a git URL (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "package_list",
@@ -581,22 +649,24 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--indirect <bool> also list the packages that are only dependencies of others"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "package_remove",
       "scope": "editor",
       "description": "Remove a package the manifest lists and wait until the project has reloaded without it. Refuses ucp-agent, its dependencies, and embedded packages.",
-      "completion": "packages",
+      "completion": "Air.UcpAgent.Completion.PackagePolicy",
       "aliases": [],
       "default_timeout_ms": 300000,
-      "allow_connection_retry": true,
       "params": [
         "--package <string> package name, e.g. com.unity.timeline (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "pause",
@@ -605,10 +675,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--paused <bool> paused state to set; omit to toggle"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "ping",
@@ -617,20 +688,22 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "play",
       "scope": "editor",
       "description": "Enter Play Mode (deferred)",
-      "completion": "enter_play",
+      "completion": "Air.UcpAgent.Completion.EnterPlayModePolicy",
       "aliases": [],
       "default_timeout_ms": 120000,
-      "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout (default: 20000)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_apply",
@@ -639,7 +712,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--component <string> limit to this component's overrides",
         "--index <int> which component when the node has several of this type (default: 0)",
@@ -648,7 +720,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_close",
@@ -657,11 +731,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--save <bool> save the open prefab before leaving Prefab Mode (default: true)",
         "--force <bool> with save=false, discard unsaved changes instead of refusing"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_create",
@@ -670,7 +745,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> prefab asset path to write, e.g. Assets/Prefabs/Player.prefab (required)",
         "--connect <bool> leave the source node linked to the new prefab as an instance (default: true)",
@@ -678,7 +752,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_create_empty",
@@ -687,13 +763,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> prefab asset path to create (required)",
         "--name <string> root GameObject name (default: the file name)",
         "--primitive <string> [empty|cube|sphere|capsule|cylinder|plane|quad] built-in shape for the root",
         "--components <string[]> component type names to add to the root"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_create_variant",
@@ -702,11 +779,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> existing asset to start from (required)",
         "--target <string> path to write (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_delete",
@@ -715,10 +793,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_duplicate",
@@ -727,25 +806,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> existing asset to start from (required)",
         "--target <string> path to write (required)"
-      ]
-    },
-    {
-      "name": "prefab_edit",
-      "scope": "editor",
-      "description": "Run several node commands (gameobject_*, component_*, prefab instance) on one prefab asset, saved once",
-      "completion": null,
-      "aliases": [],
-      "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": [
-        "--prefab <string> prefab asset to edit, e.g. Assets/UI/Page.prefab (required)",
-        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with \"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; saved once if all succeed, nothing kept if one fails (required)",
-        "--dry_run <bool> run every op and report the results, then keep nothing"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_info",
@@ -754,11 +820,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--dependencies <bool> also list asset dependencies",
         "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_instance_info",
@@ -767,13 +834,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_instantiate",
@@ -782,7 +850,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--source <string> prefab asset to instantiate (required)",
         "--name <string> name for the instance (default: the prefab name)",
@@ -793,7 +860,9 @@
         "--scale <jtoken> local scale as [x,y,z] or a single number",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_list",
@@ -802,13 +871,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--includeVariants <bool> include variants and model prefabs (default: true)",
         "--folder <string> folder to search under (default: Assets)",
         "--name <string> name substring filter",
         "--limit <int> max results (default: 200)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_move",
@@ -819,11 +889,12 @@
         "prefab_rename"
       ],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> existing asset to start from (required)",
         "--target <string> path to write (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_open",
@@ -832,12 +903,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> instance to open the prefab in the context of (optional)",
         "--force <bool> discard unsaved changes in the prefab that is already open",
         "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_overrides",
@@ -846,14 +918,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--includeDefaults <bool> include Unity's default overrides (transform position, name, …)",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_replace",
@@ -862,7 +935,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--source <string> prefab asset to swap in (required)",
         "--keepTransform <bool> keep the instance's current transform values (default: true)",
@@ -870,7 +942,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_revert",
@@ -879,7 +953,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--component <string> limit to this component's overrides",
         "--index <int> which component when the node has several of this type (default: 0)",
@@ -888,7 +961,9 @@
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_save",
@@ -897,8 +972,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_stage_info",
@@ -907,8 +983,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_tree",
@@ -917,7 +994,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--depth <int> levels of children to walk; -1 for the whole tree (default: -1)",
         "--components <bool> list component type names on each node (default: true)",
@@ -926,7 +1002,9 @@
         "--format <string> [json|compact] json: nested objects; compact: one line per node, 'path [Comp,..] (inactive)'",
         "--fields <string> [name|node|active|child_count|components|nested_prefab] json only: comma-separated fields to keep on each node (default: all)",
         "--path <string> prefab asset path, e.g. Assets/Prefabs/Player.prefab (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "prefab_unpack",
@@ -935,14 +1013,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--completely <bool> also unpack nested prefab instances",
         "--node <string> hierarchy path, e.g. Root/Body/Arm; use Name[1] to pick among same-named siblings",
         "--id <int> Unity instance id, as an alternative to 'node'",
         "--prefab <string> prefab asset to edit instead of a scene, e.g. Assets/P/Player.prefab",
         "--scene <string> loaded scene name or path (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "profiler",
@@ -951,7 +1030,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--action <string> [enable|disable|status|clear|hierarchy] profiler operation (default: hierarchy)",
         "--frame <int> frame index (-1 = latest, hierarchy only)",
@@ -965,7 +1043,9 @@
         "--sort <string> [total|self|calls] sort key",
         "--depth <int> max depth",
         "--max <int> max children per node"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "refresh",
@@ -974,11 +1054,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": 180000,
-      "allow_connection_retry": true,
       "params": [
         "--compile <bool> also trigger script compilation",
         "--force <bool> allow refresh while entering play mode"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "reserialize",
@@ -987,11 +1068,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--paths <string> comma-separated asset paths",
         "--all <bool> reserialize the entire project (required when paths is empty)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_close",
@@ -1000,26 +1082,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--scene <string> loaded scene name or path (required)",
         "--remove <bool> also remove it from the hierarchy window (default: true)",
         "--force <bool> discard unsaved changes in that scene"
-      ]
-    },
-    {
-      "name": "scene_edit",
-      "scope": "editor",
-      "description": "Run several node commands (gameobject_*, component_*, prefab instance) on one loaded scene as one undo step",
-      "completion": null,
-      "aliases": [],
-      "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": [
-        "--scene <string> loaded scene name or path (default: active scene)",
-        "--ops <list`1> ops run in order, each {\"command\":\"gameobject_create\",\"args\":{..}}, optionally with \"expect\":{\"node\":..,\"exists\":true,\"components\":[..]} checked just before it runs; undone together if one fails (required)",
-        "--dry_run <bool> run every op and report the results, then keep nothing"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_info",
@@ -1028,8 +1097,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_list",
@@ -1038,12 +1108,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--folder <string> folder to search under (default: Assets)",
         "--name <string> name substring filter",
         "--limit <int> max results (default: 200)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_new",
@@ -1052,13 +1123,14 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--setup <string> [empty|default] what the new scene starts with",
         "--mode <string> [single|additive] replace the open scenes or add to them",
         "--path <string> save the new scene to this path straight away",
         "--force <bool> discard unsaved changes in the currently open scenes"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_open",
@@ -1067,12 +1139,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> scene asset path, e.g. Assets/Scenes/Main.unity (required)",
         "--mode <string> [single|additive|additive_without_loading] how to load it",
         "--force <bool> discard unsaved changes in the currently open scenes"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_save",
@@ -1081,11 +1154,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--scene <string> loaded scene name or path (default: active scene)",
         "--all <bool> save every open scene instead of just one"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "scene_save_as",
@@ -1094,11 +1168,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--path <string> path to save to, e.g. Assets/Scenes/Copy.unity (required)",
         "--scene <string> loaded scene to save (default: active scene)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "screenshot",
@@ -1107,7 +1182,6 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--view <string> [scene|game|ui] what to capture; 'ui' is the only one that shows a ScreenSpaceOverlay canvas",
         "--output_path <string> relative or absolute path",
@@ -1117,7 +1191,9 @@
         "--node <string> view=ui: node in an open scene whose canvas to render",
         "--scene <string> view=ui: loaded scene the node belongs to (default: active scene)",
         "--background <string> view=ui: background as #RRGGBB, #RRGGBBAA or 'transparent' (default)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "selection_clear",
@@ -1126,8 +1202,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "selection_get",
@@ -1136,8 +1213,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "selection_set",
@@ -1146,14 +1224,15 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--assets <string[]> asset paths to select",
         "--node <string[]> scene node paths to select, e.g. [\"Player/Body\"]",
         "--ids <int32[]> Unity instance ids to select",
         "--scene <string> loaded scene the node paths belong to (default: active scene)",
         "--additive <bool> add to the current selection instead of replacing it"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "state",
@@ -1162,20 +1241,22 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "stop",
       "scope": "editor",
       "description": "Exit Play Mode (deferred)",
-      "completion": "exit_play",
+      "completion": "Air.UcpAgent.Completion.ExitPlayModePolicy",
       "aliases": [],
       "default_timeout_ms": 120000,
-      "allow_connection_retry": true,
       "params": [
         "--timeout_ms <int> override poll timeout (default: 20000)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "tag_add",
@@ -1184,10 +1265,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--tag <string> tag name (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "tag_list",
@@ -1196,8 +1278,9 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
-      "params": []
+      "params": [],
+      "before": [],
+      "after": []
     },
     {
       "name": "tag_remove",
@@ -1206,26 +1289,28 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--tag <string> tag name (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "test_run",
       "scope": "editor",
       "description": "Run Test Runner tests and wait for the result: counts, and each failure with its message. Fails as tests_failed when any test fails. Other commands are refused as busy until the run ends.",
-      "completion": "tests",
+      "completion": "Air.UcpAgent.Completion.TestRunPolicy",
       "aliases": [],
       "default_timeout_ms": 600000,
-      "allow_connection_retry": true,
       "params": [
         "--mode <string> [edit|play] edit or play (default: edit)",
         "--tests <string[]> JSON array of full test names (Namespace.Class.Method), as data.failures prints them",
         "--filter <string> regex on full test names",
         "--categories <string[]> JSON array of NUnit categories",
         "--assemblies <string[]> JSON array of test assembly names, without .dll"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "tool_set",
@@ -1234,10 +1319,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--tool <string> [view|move|rotate|scale|rect|transform|none] transform tool to activate (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "ui_click",
@@ -1246,10 +1332,11 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> node path as ui_snapshot prints it; a child of a Button clicks the Button (required)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "ui_input",
@@ -1258,12 +1345,13 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> InputField or TMP_InputField node, as ui_snapshot prints it (required)",
         "--text <string> replaces the field's text, \"\" clears it; onValueChanged and then onEndEdit fire (required)",
         "--submit <bool> also fire onSubmit before onEndEdit, as Enter does"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "ui_snapshot",
@@ -1272,11 +1360,12 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--root <string> only canvases and rows at or under this node path, as ui_snapshot prints it",
         "--limit <int> max text / button / input rows in total; truncated says if more exist (default: 500)"
-      ]
+      ],
+      "before": [],
+      "after": []
     },
     {
       "name": "ui_wait",
@@ -1285,15 +1374,17 @@
       "completion": null,
       "aliases": [],
       "default_timeout_ms": null,
-      "allow_connection_retry": true,
       "params": [
         "--node <string> node path as ui_snapshot prints it (required)",
         "--until <string> [exists|active|text] exists, active, or text: an active Text / TextMeshPro on or under node contains text (default: text when text is given, else active)",
         "--text <string> substring to wait for, case-sensitive"
-      ]
+      ],
+      "before": [],
+      "after": []
     }
   ],
   "alias_to_command": {
+    "?": "help",
     "asset_rename": "asset_move",
     "commands": "help",
     "prefab_rename": "prefab_move",

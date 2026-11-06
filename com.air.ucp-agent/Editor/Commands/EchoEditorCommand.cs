@@ -6,21 +6,25 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class EchoEditorCommand : CliCommand<EchoParams>
+    [UcpCommand]
+    public static class EchoEditorCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<EchoParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<EchoParams>(
             CommandNames.Echo,
             CommandHostScope.Editor,
-            "Echo from Editor host");
-
-        public override void Run(EchoParams p)
+            "Echo from Editor host")
         {
-            var text = p?.Message ?? "ok";
-            CompleteSuccess(InvokeResult.Ok("echo ok", new Dictionary<string, object>
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(EchoParams p, CommandContext ctx)
+        {
+            ctx.Message = "echo ok";
+            return new Dictionary<string, object>
             {
                 ["channel"] = "editor",
-                ["message"] = text,
-            }));
+                ["message"] = p?.Message ?? "ok",
+            };
         }
     }
 }

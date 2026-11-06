@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { HostError, isRetriableHostError } from "#shared/host-error.js";
 import {
   DEFAULT_HOST_PORT,
   HOST_START_TIMEOUT_MS,
@@ -210,7 +211,7 @@ function hostLost(reason: string): Record<string, unknown> {
   return {
     ok: true,
     status: "failed",
-    error: "host_lost",
+    error: HostError.hostLost,
     message: `Lost ucp-host while waiting for the result: ${reason}`,
     hint: "The command may still have run in Unity; check with a read command before sending it again.",
   };
@@ -243,7 +244,7 @@ export async function executeCommand(
   await ensureUcpHost({ ucpRoot });
   let submit = await trySubmit(body, ucpRoot);
   // The host is giving way to a newer one: nothing was queued, so sending again is safe.
-  if (submit.error === "host_restarting" || submit.error === "host_unreachable") {
+  if (isRetriableHostError(submit.error)) {
     await ensureUcpHost({ ucpRoot });
     submit = await trySubmit(body, ucpRoot);
   }
@@ -291,7 +292,7 @@ async function trySubmit(
   } catch (err) {
     return {
       ok: false,
-      error: "host_unreachable",
+      error: HostError.unreachable,
       message: `Could not reach ucp-host: ${err instanceof Error ? err.message : String(err)}`,
     };
   }

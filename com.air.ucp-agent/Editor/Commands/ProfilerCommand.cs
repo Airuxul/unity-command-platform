@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System.Collections.Generic;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
@@ -6,15 +7,18 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class ProfilerCommand : EditorActionCommand<ProfilerParams>
+    [UcpCommand]
+    public static class ProfilerCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ProfilerParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ProfilerParams>(
             CommandNames.Profiler,
             CommandHostScope.Editor,
             "Unity Profiler: hierarchy, enable, disable, status, clear");
 
-        protected override Dictionary<string, object> Execute(ProfilerParams p) => ProfilerHierarchyService.Execute(p);
-
-        protected override string Message(ProfilerParams p) => "profiler completed";
+        public static object Execute(ProfilerParams p, CommandContext ctx)
+        {
+            ctx.Message = "profiler completed";
+            return ProfilerHierarchyService.Execute(p);
+        }
     }
 }

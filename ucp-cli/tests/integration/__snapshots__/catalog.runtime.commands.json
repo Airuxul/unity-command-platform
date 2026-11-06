@@ -1,0 +1,61 @@
+{
+  "commands": [
+    {
+      "name": "call",
+      "scope": "any",
+      "description": "Run a [UcpFunction] static method by name, with its parameters from 'args'. Without 'name', list the functions on this host.",
+      "completion": null,
+      "aliases": [],
+      "default_timeout_ms": null,
+      "params": [
+        "--name <string> function name; omit to list the functions on this host",
+        "--args <dictionary`2> the function's parameters, by parameter name"
+      ],
+      "before": [],
+      "after": []
+    },
+    {
+      "name": "echo",
+      "scope": "runtime",
+      "description": "Echo from Runtime host",
+      "completion": null,
+      "aliases": [],
+      "default_timeout_ms": null,
+      "params": [
+        "--message <string> text to echo"
+      ],
+      "before": [],
+      "after": []
+    },
+    {
+      "name": "help",
+      "scope": "runtime",
+      "description": "List every runtime command with its description and parameters",
+      "completion": null,
+      "aliases": [
+        "?"
+      ],
+      "default_timeout_ms": null,
+      "params": [
+        "--command <string> one command by name or alias: its card, with an example call and the error codes",
+        "--format <string> [json|md] md: the cards as markdown in data.markdown"
+      ],
+      "before": [],
+      "after": []
+    },
+    {
+      "name": "ping",
+      "scope": "any",
+      "description": "Health check",
+      "completion": null,
+      "aliases": [],
+      "default_timeout_ms": null,
+      "params": [],
+      "before": [],
+      "after": []
+    }
+  ],
+  "alias_to_command": {
+    "?": "help"
+  }
+}

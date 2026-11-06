@@ -1,4 +1,5 @@
 using System;
+using Air.UcpAgent.Completion;
 using System.Collections.Generic;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
@@ -9,60 +10,55 @@ using UnityEngine;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class PackageListCommand : EditorActionCommand<PackageListParams>
+    [UcpCommand]
+    public static class PackageListCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PackageListParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PackageListParams>(
             CommandNames.PackageList,
             CommandHostScope.Editor,
             "UPM packages in the project: name, version, source, and whether the manifest lists it.");
 
-        protected override Dictionary<string, object> Execute(PackageListParams p) => PackageService.List(p);
+        public static object Execute(PackageListParams p, CommandContext ctx) => PackageService.List(p);
     }
 
-    public sealed class PackageAddCommand : CliCommand<PackageAddParams>
+    [UcpCommand]
+    public static class PackageAddCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<PackageAddParams>(
+        public static readonly Type CompletionPolicy = typeof(PackagePolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<PackageAddParams>(
             CommandNames.PackageAdd,
             CommandHostScope.Editor,
             "Add a UPM package and wait until it is resolved, compiled and loaded.",
-            InvokeCompletionCatalog.CompletionPackages,
+            CompletionPolicy,
             defaultTimeoutMs: 5 * 60_000);
 
-        public override void Run(PackageAddParams p)
+        public static object Execute(PackageAddParams p, CommandContext ctx)
         {
-            try
-            {
-                var operation = PackageService.StartAdd(CommandId, p.Package);
-                Defer(InvokeCompletionCatalog.CompletionPackages, JsonUtility.ToJson(operation));
-            }
-            catch (Exception ex)
-            {
-                CompleteFail(ex);
-            }
+            var operation = PackageService.StartAdd(ctx.CommandId, p.Package);
+            ctx.Defer(CompletionPolicy, UcpJson.Serialize(operation));
+            return null;
         }
     }
 
-    public sealed class PackageRemoveCommand : CliCommand<PackageRemoveParams>
+    [UcpCommand]
+    public static class PackageRemoveCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<PackageRemoveParams>(
+        public static readonly Type CompletionPolicy = typeof(PackagePolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<PackageRemoveParams>(
             CommandNames.PackageRemove,
             CommandHostScope.Editor,
             "Remove a package the manifest lists and wait until the project has reloaded without it. " +
             "Refuses ucp-agent, its dependencies, and embedded packages.",
-            InvokeCompletionCatalog.CompletionPackages,
+            CompletionPolicy,
             defaultTimeoutMs: 5 * 60_000);
 
-        public override void Run(PackageRemoveParams p)
+        public static object Execute(PackageRemoveParams p, CommandContext ctx)
         {
-            try
-            {
-                var operation = PackageService.StartRemove(CommandId, p.Package);
-                Defer(InvokeCompletionCatalog.CompletionPackages, JsonUtility.ToJson(operation));
-            }
-            catch (Exception ex)
-            {
-                CompleteFail(ex);
-            }
+            var operation = PackageService.StartRemove(ctx.CommandId, p.Package);
+            ctx.Defer(CompletionPolicy, UcpJson.Serialize(operation));
+            return null;
         }
     }
 }

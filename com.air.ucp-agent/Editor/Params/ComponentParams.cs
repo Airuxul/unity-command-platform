@@ -5,21 +5,20 @@ namespace Air.UcpAgent.Params
     /// <summary>Identifies one component on one node. Index disambiguates repeated types.</summary>
     public abstract class ComponentTargetParams : NodeTargetParams
     {
-        [CliParam(Description = "component type, e.g. Rigidbody, UnityEngine.BoxCollider, TMPro.TextMeshProUGUI",
-            Required = true, AlternateKeys = "type,component_type")]
+        [UcpParam(Description = "component type, e.g. Rigidbody, UnityEngine.BoxCollider, TMPro.TextMeshProUGUI",
+            Required = true)]
         public string Component { get; set; }
 
-        [CliParam(Description = "which one when the node has several of this type (default: 0)")]
+        [UcpParam(Description = "which one when the node has several of this type (default: 0)")]
         public int? Index { get; set; }
     }
 
     public sealed class ComponentAddParams : NodeTargetParams
     {
-        [CliParam(Description = "component type to add", Required = true,
-            AlternateKeys = "type,component_type")]
+        [UcpParam(Description = "component type to add", Required = true)]
         public string Component { get; set; }
 
-        [CliParam(Description = "properties to set on the new component, e.g. {\"mass\":5,\"useGravity\":false}")]
+        [UcpParam(Description = "properties to set on the new component, e.g. {\"mass\":5,\"useGravity\":false}")]
         public JObject Properties { get; set; }
     }
 
@@ -33,31 +32,29 @@ namespace Air.UcpAgent.Params
 
     public sealed class ComponentGetParams : ComponentTargetParams
     {
-        [CliParam(Description = "single property to read; omit to read them all")]
+        [UcpParam(Description = "single property to read; omit to read them all")]
         public string Property { get; set; }
 
-        [CliParam(Description = "nesting levels of structs/arrays to expand (default: 2)")]
+        [UcpParam(Description = "nesting levels of structs/arrays to expand (default: 2)")]
         public int? Depth { get; set; }
 
-        [CliParam(Description = "array elements kept before the tail is summarised (default: 64)",
-            AlternateKeys = "max_array")]
+        [UcpParam(Description = "array elements kept before the tail is summarised (default: 64)")]
         public int? MaxArray { get; set; }
 
-        [CliParam(Description = "include Unity bookkeeping fields such as m_ObjectHideFlags",
-            AlternateKeys = "include_internal")]
+        [UcpParam(Description = "include Unity bookkeeping fields such as m_ObjectHideFlags")]
         public bool Internal { get; set; }
     }
 
     public sealed class ComponentSetParams : ComponentTargetParams
     {
-        [CliParam(Description = "properties to set; object refs accept an asset path, "
-            + "{\"guid\":..}, {\"builtin\":\"LegacyRuntime.ttf\"}, {\"node\":..,\"component\":..} or an instance id")]
+        [UcpParam(Description = "properties to set; object refs accept an asset path, "
+            + "{\"guid\":..}, \"builtin:LegacyRuntime.ttf\", {\"node\":..,\"component\":..} or {\"instance_id\":..}")]
         public JObject Properties { get; set; }
 
-        [CliParam(Description = "single property name, paired with 'value'")]
+        [UcpParam(Description = "single property name, paired with 'value'")]
         public string Property { get; set; }
 
-        [CliParam(Description = "value for the single property named by 'property'")]
+        [UcpParam(Description = "value for the single property named by 'property'")]
         public JToken Value { get; set; }
     }
 }

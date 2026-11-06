@@ -10,13 +10,14 @@ import { Logger } from "#host/logger/logger.js";
 import { queueLayout } from "#shared/index.js";
 
 const session = {
-  id: "proj1",
+  id: "editor-proj1",
   name: "demo",
   path: "/demo",
   type: "editor" as const,
   status: "ready" as const,
   capabilities: ["ping"],
   updatedAt: new Date().toISOString(),
+  queueId: "proj1",
 };
 
 function setup() {

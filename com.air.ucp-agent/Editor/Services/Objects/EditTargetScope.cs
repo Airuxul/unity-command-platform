@@ -33,7 +33,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
     /// <remarks>
     /// Always use with <c>using</c>. <see cref="Dispose"/> only releases what was loaded; writes are
     /// persisted by <see cref="Commit"/> and undone by <see cref="Revert"/>, which
-    /// <see cref="EditBatch.Run{T}"/> calls. Read-only callers just open and dispose.
+    /// <see cref="EditorExecutionHost"/> calls. Read-only callers just open and dispose.
     /// </remarks>
     public sealed class EditTargetScope : IDisposable
     {
@@ -43,6 +43,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
         bool _dirty;
         bool _disposed;
         int _undoGroup = -1;
+        int _steps;
         bool _stageHadUnsavedChanges;
 
         public EditTargetKind Kind { get; private set; }
@@ -81,10 +82,12 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         static EditTargetScope BeginUndoGroup(EditTargetScope scope)
         {
-            if (scope.SupportsUndo)
+            // Play Mode refuses undo registration. Everywhere else, including an off-screen
+            // prefab, this group is what Revert rolls back. PrefabUtility records into it when
+            // called with UserAction. Contents loaded via LoadPrefabContents are still not saved
+            // on Revert; the group exists so an Apply that wrote another asset can be undone.
+            if (!EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                // Everything recorded from here on belongs to this scope: Revert undoes exactly that,
-                // Commit folds it into one undo step.
                 Undo.IncrementCurrentGroup();
                 Undo.SetCurrentGroupName("ucp edit");
                 scope._undoGroup = Undo.GetCurrentGroup();
@@ -176,22 +179,40 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 ? _prefabRoot
                 : throw new InvalidOperationException("This edit target is a scene, not a prefab.");
 
+        /// <summary>
+        /// Pass this to PrefabUtility. <see cref="InteractionMode.UserAction"/> makes Unity record
+        /// its own undo into this scope's group (<c>RegisterFullObjectHierarchyUndo</c>, and
+        /// <c>RegisterFileChangeUndo</c> on the apply paths that write the asset file themselves).
+        /// Play Mode has no group, so the call is <see cref="InteractionMode.AutomatedAction"/>.
+        /// </summary>
+        public InteractionMode PrefabInteraction =>
+            _undoGroup >= 0 ? InteractionMode.UserAction : InteractionMode.AutomatedAction;
+
         /// <summary>Marks the target as changed so <see cref="Commit"/> persists it.</summary>
         public void MarkDirty() => _dirty = true;
 
-        // Undo shims: recording undo is required in a scene or stage and refused for off-screen
-        // prefab contents and in Play Mode (see SupportsUndo).
+        // Mutation entry points. Each one marks the target dirty, including off-screen prefab
+        // contents where undo is not recorded: Commit would otherwise return without saving.
+        // A PrefabUtility write that does not go through these still calls MarkDirty itself.
 
         public void RecordUndo(Object target, string label)
         {
-            if (SupportsUndo && target != null)
+            if (target == null)
+                return;
+
+            if (SupportsUndo)
                 Undo.RecordObject(target, label);
+            MarkDirty();
         }
 
         public void RegisterCreated(GameObject created, string label)
         {
-            if (SupportsUndo && created != null)
+            if (created == null)
+                return;
+
+            if (SupportsUndo)
                 Undo.RegisterCreatedObjectUndo(created, label);
+            MarkDirty();
         }
 
         /// <summary>Destroys a GameObject or component so that <see cref="Revert"/> can bring it back.</summary>
@@ -204,6 +225,62 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 Undo.DestroyObjectImmediate(target);
             else
                 Object.DestroyImmediate(target);
+            MarkDirty();
+        }
+
+        /// <summary>
+        /// Parents <paramref name="node"/>. Undo's own call always keeps the world transform, so
+        /// <paramref name="worldPositionStays"/> false restores the local values afterwards.
+        /// </summary>
+        public void SetParent(Transform node, Transform parent, bool worldPositionStays, string label)
+        {
+            if (node == null)
+                return;
+
+            if (SupportsUndo)
+            {
+                var localPosition = node.localPosition;
+                var localRotation = node.localRotation;
+                var localScale = node.localScale;
+                Undo.SetTransformParent(node, parent, label);
+                if (!worldPositionStays)
+                {
+                    node.localPosition = localPosition;
+                    node.localRotation = localRotation;
+                    node.localScale = localScale;
+                }
+            }
+            else
+            {
+                node.SetParent(parent, worldPositionStays);
+            }
+
+            MarkDirty();
+        }
+
+        /// <summary>Adds a component. Null when Unity refuses; the target is then left clean.</summary>
+        public Component AddComponent(GameObject target, Type type)
+        {
+            var component = SupportsUndo
+                ? Undo.AddComponent(target, type)
+                : target.AddComponent(type);
+            if (component != null)
+                MarkDirty();
+            return component;
+        }
+
+        /// <summary>
+        /// Saves prefab contents and, for a live Prefab Mode stage, clears its dirty flag.
+        /// Saving the asset alone leaves the stage dirty, and a dirty stage makes Unity raise a
+        /// modal the next time Prefab Mode is left.
+        /// </summary>
+        public static void SavePrefabAsset(GameObject root, string path, PrefabStage stage = null)
+        {
+            PrefabUtility.SaveAsPrefabAsset(root, path, out var saved);
+            if (!saved)
+                throw new InvalidOperationException($"Failed to save prefab '{path}'.");
+
+            stage?.ClearDirtiness();
         }
 
         /// <summary>
@@ -231,35 +308,76 @@ namespace Air.UcpAgent.Editor.Services.Objects
             if (_undoGroup >= 0)
                 Undo.CollapseUndoOperations(_undoGroup);
 
-            if (!IsPrefabContent)
+            switch (Kind)
             {
-                // MarkSceneDirty throws "This cannot be used during play mode", and play-mode
-                // changes are discarded when play stops anyway.
-                if (Scene.IsValid() && !EditorApplication.isPlayingOrWillChangePlaymode)
-                    EditorSceneManager.MarkSceneDirty(Scene);
-                return;
+                case EditTargetKind.Scene:
+                    // MarkSceneDirty throws "This cannot be used during play mode", and play-mode
+                    // changes are discarded when play stops anyway.
+                    if (Scene.IsValid() && !EditorApplication.isPlayingOrWillChangePlaymode)
+                        EditorSceneManager.MarkSceneDirty(Scene);
+                    return;
+                case EditTargetKind.PrefabAsset:
+                    SavePrefabAsset(_prefabRoot, PrefabPath);
+                    return;
+                case EditTargetKind.PrefabStage:
+                    SavePrefabAsset(_prefabRoot, PrefabPath, _stage);
+                    return;
+                default:
+                    throw new InvalidOperationException($"No save for edit target '{Kind}'.");
             }
-
-            PrefabUtility.SaveAsPrefabAsset(_prefabRoot, PrefabPath, out var saved);
-            if (!saved)
-                throw new InvalidOperationException($"Failed to save prefab '{PrefabPath}'.");
-
-            // Saving the asset does not clear the stage's own dirty flag, and a dirty stage makes
-            // Unity raise a modal prompt the next time Prefab Mode is left — which would block the
-            // Editor main thread, and with it the agent's poll loop.
-            _stage?.ClearDirtiness();
         }
 
         /// <summary>
-        /// Drops the changes. Off-screen prefab contents need nothing (they are discarded on
-        /// <see cref="Dispose"/>); scenes and the Prefab Mode stage roll back their undo group.
-        /// Play Mode records no undo, so a failed play-mode edit stays until play stops.
+        /// Drops the changes by reverting this scope's undo group. Unity recorded the PrefabUtility
+        /// edits when they were called with <see cref="PrefabInteraction"/>. Off-screen prefab
+        /// contents are also left unsaved. Play Mode records no undo, so a failed play-mode edit
+        /// stays until play stops. A new asset file Unity does not record is removed by the
+        /// command's own <c>Undo</c>.
         /// </summary>
         public void Revert()
         {
             if (_undoGroup >= 0)
                 Undo.RevertAllDownToGroup(_undoGroup);
         }
+
+        /// <summary>
+        /// The undo group the next command records into. The first command on this target uses the
+        /// group opened with it; each later one (in a group of commands) gets its own, so it can be
+        /// taken back alone. -1 in Play Mode, which records no undo.
+        /// </summary>
+        public int BeginStep()
+        {
+            if (_undoGroup < 0)
+                return -1;
+            if (_steps++ == 0)
+                return _undoGroup;
+
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName("ucp edit");
+            return Undo.GetCurrentGroup();
+        }
+
+        /// <summary>Takes back one command's undo group and everything recorded after it.</summary>
+        public void RevertStep(int undoGroup)
+        {
+            if (undoGroup >= 0)
+                Undo.RevertAllDownToGroup(undoGroup);
+        }
+
+        /// <summary>A group already copied this prefab's file before its first change.</summary>
+        public bool BackedUp { get; set; }
+
+        public const string SceneKind = "scene";
+        public const string PrefabAssetKind = "prefab_asset";
+        public const string PrefabStageKind = "prefab_stage";
+
+        public string KindName =>
+            Kind switch
+            {
+                EditTargetKind.PrefabAsset => PrefabAssetKind,
+                EditTargetKind.PrefabStage => PrefabStageKind,
+                _ => SceneKind,
+            };
 
         /// <summary>
         /// Scenes and the Prefab Mode stage have a live undo stack; contents loaded via
@@ -278,12 +396,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
         public Dictionary<string, object> Describe() =>
             new Dictionary<string, object>
             {
-                ["kind"] = Kind switch
-                {
-                    EditTargetKind.PrefabAsset => "prefab_asset",
-                    EditTargetKind.PrefabStage => "prefab_stage",
-                    _ => "scene",
-                },
+                ["kind"] = KindName,
                 ["prefab"] = PrefabPath,
                 ["scene"] = IsPrefabContent ? null : (string.IsNullOrEmpty(Scene.path) ? Scene.name : Scene.path),
             };

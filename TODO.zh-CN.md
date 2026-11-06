@@ -11,7 +11,7 @@
 - CLI 原生，不占 MCP 工具 schema 的上下文；
 - Edit Mode 下 Unity 不开端口；
 - domain reload 后命令能续跑；
-- `prefab_edit` / `scene_edit` 整批成功才保存，失败不留半成品。
+- `group` 把几条命令当一条跑，失败可以全部撤回，跨 compile、Play 也一样。
 
 不去追 unity-mcp 的工具数量。从它那里只借 UCP 缺、且对 AI 闭环有用的部分。
 
@@ -34,7 +34,7 @@ unity-mcp 的做法供参考：
 - Session 注册（`~/.ucp/sessions/{projectId}.json`，含 pid / focused / 默认超时）
 - `CommandRegistry` + `CommandExecutor`：Editor 与 runtime 共用一套发现、绑定、执行
 - 延迟命令跨 domain reload 续跑：`compile` / `refresh` / `play` / `stop` / `test_run` / `package_*` / `ui_wait`
-- 内容命令：prefab / gameobject / component / scene / asset / selection，场景和 Prefab 资产一份实现；`prefab_edit` / `scene_edit` 支持 `dry_run`、`expect`
+- 内容命令：prefab / gameobject / component / scene / asset / selection，场景和 Prefab 资产一份实现；`group` 支持 `rollback`、`on_error`、`dry_run`、`expect`
 - Play Mode UI：`ui_snapshot` / `ui_click` / `ui_input` / `ui_wait`
 - `test_run`、`build`、`package_list` / `package_add` / `package_remove`
 - 结构化错误码 + `hint`；`help` 单命令卡片和 markdown 输出
@@ -65,7 +65,7 @@ unity-mcp 的做法供参考：
 ### 现有能力
 
 - `ucp-cli` + `ucp-host` 单 npm 包（TypeScript, vitest）
-- host 按 session 分执行链，只读命令不排队；deadline 从提交时算，并随命令交给 Unity；Editor 忙时等待而非拒绝；长轮询取结果
+- host 按 session 分执行链，`runsWhileBusy` 里的命令不排队；deadline 从提交时算，并随命令交给 Unity；Editor 忙时等待而非拒绝；长轮询取结果
 - host 判定的失败也带错误码、message、hint；host 死掉时 CLI 返回 `host_lost` 而不是抛异常
 - 重启旧 host 走 `POST /shutdown`，host 有命令在跑时拒绝
 - host 本机 token（`X-UCP-Token`），拒绝带 `Origin` 或 Host 不是 127.0.0.1/localhost 的请求
@@ -102,7 +102,7 @@ unity-mcp 的做法供参考：
 | AGENT-04 | `profiler` 的 `action` 默认 `hierarchy`，`sort` 支持 `calls`，取值由 binder 校验 |
 | AGENT-05 | `test_run`：EditMode / PlayMode（域重载开关两种都测过） |
 | AGENT-06 | `package_list` / `package_add` / `package_remove` |
-| AGENT-12 | 延迟基线（`background.test.ts`，自动最小化）：后台 tick 每秒约 10 次；连发 `ping` 中位 295 ms → 96 ms；前台不测，要抢用户焦点 |
+| AGENT-12 | 延迟基线：后台（`background.test.ts`，自动最小化）tick 每秒约 10 次，连发 `ping` 中位 295 ms → 96 ms；前台（`foreground.test.ts`，需 `UCP_ALLOW_FOCUS=1`）tick 每秒 70–294 次，`ping` 中位约 18 ms |
 | AGENT-16 | 结构化错误码 + `hint`，`compile` 编译失败返回 `compile_error` |
 | AGENT-17 | 树类读命令 `limit` / `truncated` / `format=compact` / `fields`，`ui_snapshot` 有 `root` / `limit` |
 | AGENT-18 | batch op 的 `expect` 前置条件 |
@@ -118,7 +118,7 @@ unity-mcp 的做法供参考：
 ## 不做
 
 - `script_*` C# 脚本增删改查（原 AGENT-08）：AI 改脚本用文件工具 + `compile` 更顺手。
-- 通用 `batch`（原 AGENT-09）：edit 类已由 `prefab_edit` / `scene_edit` 覆盖，跨类命令走 `run-script`。
+- 通用 `batch`（原 AGENT-09）：已由 `group` 实现，任何命令都能放进去。
 - `material_*` / `shader_*` / `texture_*`（AGENT-07）：Renderer 上的材质属性已能用 `component_set` 改。
 - `prefab_replace` 保留 overrides（AGENT-10）：要么逐项搬运 override，要么按 Unity 版本切到 2022.2+ 的 API，使用频率低。
 - Play Mode 真实合成帧截图（AGENT-11）：`screenshot view=ui` 已能核对布局，后处理画面需求低。

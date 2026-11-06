@@ -9,8 +9,28 @@ namespace Air.UcpAgent.Invoke
         public string Description { get; }
         public string[] Aliases { get; }
         public int DefaultTimeoutMs { get; }
-        public bool AllowConnectionRetry { get; }
         public Type ParamType { get; }
+
+        /// <summary>
+        /// This command still runs while the Editor is busy with another command or a test run.
+        /// The host does not hold it behind the session queue.
+        /// </summary>
+        public bool RunsWhileBusy { get; set; }
+
+        /// <summary>
+        /// An edit-target command that only reads. The target is opened without an undo group and
+        /// never saved, and a group has nothing to take back for it.
+        /// </summary>
+        public bool ReadsTargetOnly { get; set; }
+
+        /// <summary>
+        /// Command names run before this one, each as its own command. The caller's arguments
+        /// stay on this command. Empty by default.
+        /// </summary>
+        public string[] Before { get; set; } = Array.Empty<string>();
+
+        /// <summary>Command names run after this one succeeds. Empty by default.</summary>
+        public string[] After { get; set; } = Array.Empty<string>();
 
         public InvokeDescriptor(
             string name,
@@ -18,8 +38,7 @@ namespace Air.UcpAgent.Invoke
             string description,
             Type paramType = null,
             string[] aliases = null,
-            int defaultTimeoutMs = 0,
-            bool allowConnectionRetry = true)
+            int defaultTimeoutMs = 0)
         {
             Name = name;
             Scope = scope;
@@ -27,7 +46,6 @@ namespace Air.UcpAgent.Invoke
             ParamType = paramType;
             Aliases = aliases ?? Array.Empty<string>();
             DefaultTimeoutMs = defaultTimeoutMs;
-            AllowConnectionRetry = allowConnectionRetry;
         }
     }
 
@@ -38,31 +56,34 @@ namespace Air.UcpAgent.Invoke
             CommandHostScope scope,
             string description,
             string[] aliases = null,
-            int defaultTimeoutMs = 0,
-            bool allowConnectionRetry = true)
-            : base(name, scope, description, typeof(TParams), aliases, defaultTimeoutMs, allowConnectionRetry)
+            int defaultTimeoutMs = 0)
+            : base(name, scope, description, typeof(TParams), aliases, defaultTimeoutMs)
         {
         }
     }
 
     public class DeferredInvokeDescriptor : InvokeDescriptor
     {
+        /// <summary>The policy class this command waits on. The job file stores its full name.</summary>
+        public Type Policy { get; }
+
         public string Completion { get; }
 
         public DeferredInvokeDescriptor(
             string name,
             CommandHostScope scope,
             string description,
-            string completion = null,
+            Type policy,
             Type paramType = null,
             string[] aliases = null,
-            int defaultTimeoutMs = 0,
-            bool allowConnectionRetry = true)
-            : base(name, scope, description, paramType, aliases, defaultTimeoutMs, allowConnectionRetry)
+            int defaultTimeoutMs = 0)
+            : base(name, scope, description, paramType, aliases, defaultTimeoutMs)
         {
-            Completion = string.IsNullOrEmpty(completion)
-                ? InvokeCompletionCatalog.CompletionDeferred
-                : completion;
+            if (policy == null)
+                throw new ArgumentException("A deferred command names its completion policy.", nameof(policy));
+
+            Policy = policy;
+            Completion = PolicyNames.Of(policy);
         }
     }
 
@@ -72,11 +93,10 @@ namespace Air.UcpAgent.Invoke
             string name,
             CommandHostScope scope,
             string description,
-            string completion = null,
+            Type policy,
             string[] aliases = null,
-            int defaultTimeoutMs = 0,
-            bool allowConnectionRetry = true)
-            : base(name, scope, description, completion, typeof(TParams), aliases, defaultTimeoutMs, allowConnectionRetry)
+            int defaultTimeoutMs = 0)
+            : base(name, scope, description, policy, typeof(TParams), aliases, defaultTimeoutMs)
         {
         }
     }

@@ -52,17 +52,44 @@ static class UcpCompileCounter
 }
 `;
 
-// A deferred command with no completion policy ("started"): only its own callbacks could finish
-// it, and the reload it asks for takes them away.
-const STARTED_COMMAND = `using Air.UcpAgent.Cli;
+// Defers to a policy in this file, then deletes the file. The reload compiles the policy
+// class away, and the job fails as orphaned because that class is no longer loaded.
+const ORPHAN_COMMAND = `using System.IO;
+using Air.UcpAgent;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Invoke;
+using Air.UcpAgent.Job;
+using UnityEditor;
+using UnityEngine;
 
-public sealed class UcpProbeStartedCommand : CliCommand
+public sealed class UcpProbeOrphanPolicy : ICompletionPolicy
 {
-    public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor(
-        "ucp_probe_started", CommandHostScope.Editor, "test probe: defers, then reloads the domain");
+    public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
+    {
+        result = null;
+        failure = null;
+        return false;
+    }
+}
 
-    public override void Run() => UnityEditor.EditorUtility.RequestScriptReload();
+[UcpCommand]
+public static class UcpProbeOrphanCommand
+{
+    public static readonly System.Type CompletionPolicy = typeof(UcpProbeOrphanPolicy);
+
+    public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor(
+        "ucp_probe_orphan", CommandHostScope.Editor, "test probe: drops its own policy class across a reload", CompletionPolicy);
+
+    public static object Execute(CommandContext ctx)
+    {
+        var file = Path.Combine(Application.dataPath, "UcpDeliveryProbe/Editor/UcpProbeOrphan.cs");
+        File.Delete(file);
+        var meta = file + ".meta";
+        if (File.Exists(meta))
+            File.Delete(meta);
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        return null;
+    }
 }
 `;
 
@@ -117,8 +144,8 @@ describe.skipIf(!runEditorTests)("command delivery (Unity required)", () => {
     fs.writeFileSync(projectFile(`${PROBE_FOLDER}/UcpProbeArray.cs`), PROBE_COMPONENT);
     fs.writeFileSync(projectFile(`${PROBE_FOLDER}/Editor/UcpCompileCounter.cs`), COMPILE_COUNTER);
     fs.writeFileSync(
-      projectFile(`${PROBE_FOLDER}/Editor/UcpProbeStartedCommand.cs`),
-      STARTED_COMMAND,
+      projectFile(`${PROBE_FOLDER}/Editor/UcpProbeOrphan.cs`),
+      ORPHAN_COMMAND,
     );
     // The counter only counts from the compile after the one that brings it in.
     await ok("refresh", { compile: true }, COMPILE_TIMEOUT);
@@ -168,10 +195,9 @@ describe.skipIf(!runEditorTests)("command delivery (Unity required)", () => {
   );
 
   it(
-    "finishes a 0.3 compile after the upgrade reload and drops what 0.3 had delivered",
+    "drops a job file it cannot read instead of running it again",
     async () => {
-      // What SessionState holds when the 0.5 agent first loads: 0.3 kept every job forever,
-      // with no deadline, and was in the middle of the compile that loads the new code.
+      // A job list this agent does not write. It is discarded on reload, not resumed.
       const now = Date.now();
       const record = (id: string, command: string, status: number, kind: string) => ({
         Id: `job-${id}`,
@@ -201,29 +227,20 @@ return 0;`,
         projectIdFromPath(gameDemoProjectPath()),
         process.env.UCP_ROOT,
       );
-      const compileResult = path.join(outbox, "cmd-0-v03-compile.json");
-      const deadline = Date.now() + COMPILE_TIMEOUT;
-      while (!fs.existsSync(compileResult) && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 200));
-      }
       await ok("ping", {}, COMPILE_TIMEOUT);
-
-      const leftovers = queueFiles();
-      const delivered = JSON.parse(fs.readFileSync(compileResult, "utf8"));
-      fs.rmSync(compileResult);
-      expect(delivered).toMatchObject({ success: true, data: { compiled: true } });
-      // The jobs 0.3 had already answered stay unanswered: nobody waits for them.
-      expect(leftovers).toEqual(["outbox/cmd-0-v03-compile.json"]);
+      expect(fs.existsSync(path.join(outbox, "cmd-0-v03-compile.json"))).toBe(false);
+      expect(fs.existsSync(path.join(outbox, "cmd-0-v03-play.json"))).toBe(false);
+      expect(fs.existsSync(path.join(outbox, "cmd-0-v03-ping.json"))).toBe(false);
       expect(queueFiles()).toEqual([]);
     },
     COMPILE_TIMEOUT * 2,
   );
 
   it(
-    "fails a job its domain reload cut off as orphaned, at once",
+    "fails as orphaned when a reload leaves the job's policy class unloaded",
     async () => {
       const started = Date.now();
-      const result = await rejected("ucp_probe_started", {}, 120_000);
+      const result = await rejected("ucp_probe_orphan", {}, 120_000);
       expect(result.error_code).toBe("orphaned");
       // Not the 120 s timeout: the job ends with the reload.
       expect(Date.now() - started).toBeLessThan(60_000);
@@ -233,12 +250,12 @@ return 0;`,
     COMPILE_TIMEOUT,
   );
 
-  it("still runs a command from a host that sends no deadline", async () => {
+  it("rejects a command that has no deadline", async () => {
     const projectId = projectIdFromPath(gameDemoProjectPath());
     const { inbox, outbox } = queueLayout(projectId, process.env.UCP_ROOT);
     const key = "ucp.test.nodeadline";
     await ok("exec", { code: `UnityEditor.SessionState.EraseInt("${key}"); return 0;` });
-    // What a 0.4 host writes: no deadline field.
+    // Missing deadline is not a command this agent runs.
     fs.writeFileSync(
       path.join(inbox, "cmd-0-nodeadline-probe.json"),
       JSON.stringify({
@@ -252,10 +269,12 @@ return 0;`,
     const after = await ok("exec", {
       code: `return UnityEditor.SessionState.GetInt("${key}", 0);`,
     });
-    expect(Number(after.result)).toBe(1);
-    const answer = path.join(outbox, "cmd-0-nodeadline-probe.json");
-    expect(fs.existsSync(answer)).toBe(true);
-    fs.rmSync(answer);
+    expect(Number(after.result)).toBe(0);
+    const answer = JSON.parse(
+      fs.readFileSync(path.join(outbox, "cmd-0-nodeadline-probe.json"), "utf8"),
+    );
+    expect(answer).toMatchObject({ success: false, error: "invalid_argument" });
+    fs.rmSync(path.join(outbox, "cmd-0-nodeadline-probe.json"));
     expect(queueFiles()).toEqual([]);
   });
 
@@ -266,7 +285,7 @@ return 0;`,
       { code: "System.Threading.Thread.Sleep(4000); return 1;" },
       2_000,
     );
-    expect(timedOut.error_code).toBe("timeout");
+    expect(timedOut.error_code).toBe("host_timeout");
 
     // Answered only once Unity is free again, so the exec has finished by then.
     await ok("ping", {}, 30_000);
@@ -415,7 +434,7 @@ return 0;`,
       node: "Probe",
       component: "UcpProbeArray",
       property: "names",
-      max_array: 100,
+      maxArray: 100,
     });
     expect((full.properties as Record<string, unknown>).names).toEqual(names);
   });

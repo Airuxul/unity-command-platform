@@ -66,10 +66,17 @@ Host modules:
 
 ## Unity (`com.air.ucp-agent`)
 
-Single command track: **`CliCommand`** under `Editor/Commands/`. Editor commands normally inherit
-`EditorActionCommand<TParams>` (thin shell) and delegate to a service. Commands that work inside a
-scene or prefab inherit `EditTargetCommand<TParams>` instead and only implement
-`Apply(scope, p)`; `EditBatch` opens the target, commits on success and reverts on failure.
+A command is a **static class marked `[UcpCommand]`** under `Editor/Commands/`, with
+`public static readonly InvokeDescriptor Descriptor`, `public static object Execute(TParams p, TContext ctx)`
+and, when it changes something Unity's undo does not record, `public static void Undo(TParams p, TContext ctx)`.
+`Execute` delegates to a service. The class keeps no state; what one run needs is on its context
+(`CommandContext` or a subclass with JSON-serializable fields). A parameter type assignable to
+`EditTargetParams` makes `EditorExecutionHost` open the target first; `Execute` takes an
+`EditTargetContext` and reads `ctx.Scope`. The host commits on success and takes the command back
+when it fails. `ReadsTargetOnly = true` on the descriptor peeks. `CommandRegistry` checks the shape
+on load and reports what it skipped as `load_errors` in `help`.
+
+A static method marked `[UcpFunction("name")]` is run by `call` without being a command.
 
 | Path | Namespace |
 |------|-----------|
@@ -82,7 +89,8 @@ scene or prefab inherit `EditTargetCommand<TParams>` instead and only implement
 | `Editor/IO/AssetPaths.cs` | `Air.UcpAgent.Editor.IO` |
 | `Editor/TestRunner/` | `Air.UcpAgent.Editor.TestRunner` (own assembly, needs the test framework) |
 | `Runtime/Cli/` | `Air.UcpAgent.Cli` (`CommandRegistry`, `CommandExecutor`, `UcpException`) |
-| `Runtime/Protocol/` | `UcpCommand`, `UcpResult`, `UcpSession` |
+| `Editor/Group/` | `Air.UcpAgent.Editor.Group` (`group`: `GroupRun`, `GroupPolicy`, `OpExpectation`) |
+| `Runtime/Protocol/` | `UcpRequest`, `UcpResult`, `UcpSession` |
 
 Deferred commands (`compile`, `play`, `stop`, `test_run`, `package_add` / `package_remove`,
 `ui_wait`) keep a job in `EditorJobStateManager` that a completion policy in `Editor/Completion/`
@@ -100,10 +108,13 @@ to copy from.
 (`prefab_move` → `prefab_rename`) rather than a second class; aliases are dispatched and advertised
 as capabilities.
 
-Batching reuses command names: `prefab_edit` / `scene_edit` take
-`ops: [{command, args}]` where `command` is any batchable `EditTargetCommand`. Do not add a second
-op vocabulary. A command that also writes outside its target (it could not be taken back if a
-later op failed) overrides `Batchable => false`.
+Several commands as one: `group` takes `steps: [{command, args, expect?}]` where `command` is any
+command name. Do not add a second step vocabulary. `rollback=all` takes every step back when one
+fails; `rollback=failed` takes back only that step. Whether a command needs a hand-written `Undo`
+is decided per command: see the table in [docs/COMMAND-DESIGN.zh-CN.md](docs/COMMAND-DESIGN.zh-CN.md).
+
+**Removed (unreleased):** `prefab_edit`, `scene_edit` (use `group`), `CliCommand`, `CliCommand<T>`,
+`IUndoable`, `MutatesTarget`, `[CliParam]` (now `[UcpParam]`).
 
 **Legacy (removed in 0.4.0):** `manage` (its actions became `pause`, `tag_add`, `tag_remove`,
 `tag_list`, `layer_add`, `layer_remove`, `layer_list`, `tool_set`).
@@ -120,4 +131,5 @@ later op failed) overrides `Batchable => false`.
 | `ucp-cli targets list\|set\|remove\|show` | `~/.ucp/targets.json` |
 | `ucp-cli host status` | Host + sessions |
 
-Command `type` strings: lowercase, constants in `CommandNames.cs`.
+Command `type` strings: lowercase, on the command descriptor. `CommandNames` is for other C# that
+mentions a name.

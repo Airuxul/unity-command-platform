@@ -30,9 +30,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     $"{type.Name} cannot be added — every GameObject already has one. Set its properties with {CommandNames.ComponentSet}.");
             }
 
-            var component = scope.SupportsUndo
-                ? Undo.AddComponent(target, type)
-                : target.AddComponent(type);
+            var component = scope.AddComponent(target, type);
 
             if (component == null)
             {
@@ -41,7 +39,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
             }
 
             var applied = SerializedValueWriter.Apply(component, p.Properties, scope);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -64,7 +61,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             var typeName = component.GetType().Name;
             scope.Destroy(component);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -143,7 +139,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             scope.RecordUndo(component, $"ucp {CommandNames.ComponentSet}");
             var applied = SerializedValueWriter.Apply(component, properties, scope);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {

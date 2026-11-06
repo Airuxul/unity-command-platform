@@ -1,5 +1,7 @@
-using System.Collections.Generic;
+using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
+using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Editor.Services.Assets;
 using Air.UcpAgent.Editor.Services.Prefab;
 using Air.UcpAgent.Editor.Services.Objects;
 using Air.UcpAgent.Invoke;
@@ -7,106 +9,136 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class PrefabCreateCommand : EditTargetCommand<PrefabCreateParams>
+    [UcpCommand]
+    public static class PrefabCreateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCreateParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabCreateParams>(
             CommandNames.PrefabCreate,
             CommandHostScope.Editor,
             "Save a node as a new prefab asset (inside another prefab this creates a nested prefab)");
 
-        // Writes a new prefab asset at once; a batch could not take that back.
-        public override bool Batchable => false;
+        public static object Execute(PrefabCreateParams p, PrefabCreateContext ctx)
+        {
+            var path = AssetPaths.RequirePrefabPath(p.Path, ParamKeys.Path);
+            return ctx.Changes.Creating(path, () => PrefabAssetService.Create(ctx.Scope, p));
+        }
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, PrefabCreateParams p) =>
-            PrefabAssetService.Create(scope, p);
+        /// <summary>
+        /// The step's undo group takes back the connection in the scene. The new .prefab file and
+        /// any folder created for it are not in it, so they are removed here.
+        /// </summary>
+        public static void Undo(PrefabCreateParams p, PrefabCreateContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabCreateEmptyCommand : EditorActionCommand<PrefabCreateEmptyParams>
+    public sealed class PrefabCreateContext : EditTargetContext
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCreateEmptyParams>(
+        public AssetChanges Changes = new AssetChanges();
+    }
+
+    [UcpCommand]
+    public static class PrefabCreateEmptyCommand
+    {
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabCreateEmptyParams>(
             CommandNames.PrefabCreateEmpty,
             CommandHostScope.Editor,
             "Create a prefab asset from scratch without touching any scene");
 
-        protected override Dictionary<string, object> Execute(PrefabCreateEmptyParams p) =>
-            PrefabAssetService.CreateEmpty(p);
+        public static object Execute(PrefabCreateEmptyParams p, AssetFileContext ctx) =>
+            ctx.Changes.Creating(AssetPaths.RequirePrefabPath(p.Path, ParamKeys.Path), () => PrefabAssetService.CreateEmpty(p));
+
+        public static void Undo(PrefabCreateEmptyParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabCreateVariantCommand : EditorActionCommand<PrefabVariantParams>
+    [UcpCommand]
+    public static class PrefabCreateVariantCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabVariantParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabVariantParams>(
             CommandNames.PrefabCreateVariant,
             CommandHostScope.Editor,
             "Create a prefab variant of a base prefab");
 
-        protected override Dictionary<string, object> Execute(PrefabVariantParams p) =>
-            PrefabAssetService.CreateVariant(p);
+        public static object Execute(PrefabVariantParams p, AssetFileContext ctx) =>
+            ctx.Changes.Creating(AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target), () => PrefabAssetService.CreateVariant(p));
+
+        public static void Undo(PrefabVariantParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabDeleteCommand : EditorActionCommand<PrefabPathParams>
+    [UcpCommand]
+    public static class PrefabDeleteCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabPathParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabPathParams>(
             CommandNames.PrefabDelete,
             CommandHostScope.Editor,
             "Delete a prefab asset");
 
-        protected override Dictionary<string, object> Execute(PrefabPathParams p) =>
-            PrefabAssetService.Delete(p);
+        public static object Execute(PrefabPathParams p, AssetFileContext ctx) =>
+            ctx.Changes.Deleting(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), ctx.Group, () => PrefabAssetService.Delete(p));
+
+        public static void Undo(PrefabPathParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabDuplicateCommand : EditorActionCommand<PrefabCopyParams>
+    [UcpCommand]
+    public static class PrefabDuplicateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCopyParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabCopyParams>(
             CommandNames.PrefabDuplicate,
             CommandHostScope.Editor,
             "Copy a prefab asset to a new path (new GUID)");
 
-        protected override Dictionary<string, object> Execute(PrefabCopyParams p) =>
-            PrefabAssetService.Duplicate(p);
+        public static object Execute(PrefabCopyParams p, AssetFileContext ctx) =>
+            ctx.Changes.Creating(AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target), () => PrefabAssetService.Duplicate(p));
+
+        public static void Undo(PrefabCopyParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabMoveCommand : EditorActionCommand<PrefabCopyParams>
+    [UcpCommand]
+    public static class PrefabMoveCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCopyParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabCopyParams>(
             CommandNames.PrefabMove,
             CommandHostScope.Editor,
             "Move or rename a prefab asset, keeping its GUID and references",
             aliases: new[] { "prefab_rename" });
 
-        protected override Dictionary<string, object> Execute(PrefabCopyParams p) =>
-            PrefabAssetService.Move(p);
+        public static object Execute(PrefabCopyParams p, AssetFileContext ctx) =>
+            ctx.Changes.Moving(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), AssetPaths.RequirePrefabPath(p.Target, ParamKeys.Target), () => PrefabAssetService.Move(p));
+
+        public static void Undo(PrefabCopyParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class PrefabListCommand : EditorActionCommand<PrefabListParams>
+    [UcpCommand]
+    public static class PrefabListCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabListParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabListParams>(
             CommandNames.PrefabList,
             CommandHostScope.Editor,
             "List prefab assets under a folder");
 
-        protected override Dictionary<string, object> Execute(PrefabListParams p) =>
+        public static object Execute(PrefabListParams p, CommandContext ctx) =>
             PrefabAssetService.List(p);
     }
 
-    public sealed class PrefabInfoCommand : EditorActionCommand<PrefabInfoParams>
+    [UcpCommand]
+    public static class PrefabInfoCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabInfoParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabInfoParams>(
             CommandNames.PrefabInfo,
             CommandHostScope.Editor,
             "Prefab asset metadata: guid, type, base prefab, nested prefabs, root components");
 
-        protected override Dictionary<string, object> Execute(PrefabInfoParams p) =>
+        public static object Execute(PrefabInfoParams p, CommandContext ctx) =>
             PrefabAssetService.Info(p);
     }
 
-    public sealed class PrefabTreeCommand : EditorActionCommand<PrefabTreeParams>
+    [UcpCommand]
+    public static class PrefabTreeCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabTreeParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabTreeParams>(
             CommandNames.PrefabTree,
             CommandHostScope.Editor,
             "Full hierarchy inside a prefab asset, with components and nested-prefab markers");
 
-        protected override Dictionary<string, object> Execute(PrefabTreeParams p) =>
+        public static object Execute(PrefabTreeParams p, CommandContext ctx) =>
             PrefabAssetService.Tree(p);
     }
 }

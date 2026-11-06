@@ -157,7 +157,7 @@ describe("UcpHostServer", () => {
   it("returns the message of a failure it decided itself", async () => {
     const submit = await request("POST", "/commands", authed, JSON.stringify({ type: "exec" }));
     const res = await request("GET", `/commands/${submit.body.id}?wait=5000`, authed);
-    expect(res.body).toMatchObject({ status: "failed", error: "unknown_command" });
+    expect(res.body).toMatchObject({ status: "failed", error: "host_unknown_command" });
     expect(String(res.body.message)).toContain("exec");
   });
 
@@ -173,7 +173,7 @@ describe("UcpHostServer", () => {
     const submit = await request("POST", "/commands", authed, JSON.stringify({ type: "ping" }));
     const busy = await request("POST", "/shutdown", authed);
     expect(busy.status).toBe(409);
-    expect(busy.body.error).toBe("busy");
+    expect(busy.body.error).toBe("host_busy");
     expect(shutdowns).toBe(0);
 
     await runner.wait(String(submit.body.id), 5_000);

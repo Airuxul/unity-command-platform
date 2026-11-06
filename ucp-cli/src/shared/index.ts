@@ -1,4 +1,5 @@
 export * from "./protocol.js";
+export * from "./host-error.js";
 export * from "./paths.js";
 export * from "./types.js";
 export * from "./schema.js";

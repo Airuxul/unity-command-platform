@@ -27,13 +27,28 @@ export async function run(argv: string[]): Promise<void> {
     timeout?: number;
   };
 
-  function globalOpts(): GlobalOpts {
+  function globalOpts(): GlobalOpts | undefined {
     const opts = program.opts<GlobalOpts & { sessionType?: string }>();
-    const sessionType =
-      opts.sessionType === "editor" || opts.sessionType === "runtime"
-        ? opts.sessionType
-        : undefined;
-    return { ...opts, sessionType };
+    if (
+      opts.sessionType !== undefined &&
+      opts.sessionType !== "editor" &&
+      opts.sessionType !== "runtime"
+    ) {
+      printResult({
+        ok: false,
+        error_code: "invalid_argument",
+        message: `--session-type must be "editor" or "runtime", got '${opts.sessionType}'.`,
+      });
+      exitFromResult({ ok: false });
+      return undefined;
+    }
+    return {
+      project: opts.project,
+      session: opts.session,
+      target: opts.target,
+      sessionType: opts.sessionType,
+      timeout: opts.timeout,
+    };
   }
 
   program
@@ -41,6 +56,7 @@ export async function run(argv: string[]): Promise<void> {
     .description("Ping Unity Editor via UCP")
     .action(async () => {
       const opts = globalOpts();
+      if (!opts) return;
       const result = await executeCommand("ping", {
         project: opts.project,
         session: opts.session,
@@ -68,6 +84,7 @@ export async function run(argv: string[]): Promise<void> {
         opts: { platform?: string; scene?: string[]; development?: boolean },
       ) => {
         const g = globalOpts();
+        if (!g) return;
         const args: Record<string, unknown> = { output_path: outputPath };
         if (opts.platform) args.target = opts.platform;
         if (opts.scene) args.scenes = opts.scene;
@@ -92,6 +109,7 @@ export async function run(argv: string[]): Promise<void> {
     )
     .action(async (file: string) => {
       const g = globalOpts();
+      if (!g) return;
       let steps: ScriptStep[];
       try {
         steps = loadScript(file);
@@ -141,6 +159,7 @@ export async function run(argv: string[]): Promise<void> {
     .option("--md", "print the cards as markdown")
     .action(async (command: string | undefined, opts: { md?: boolean }) => {
       const g = globalOpts();
+      if (!g) return;
       const args: Record<string, unknown> = {};
       if (command) args.command = command;
       if (opts.md) args.format = "md";
@@ -164,9 +183,24 @@ export async function run(argv: string[]): Promise<void> {
     .option("--args <json>", "JSON object of command args", "{}")
     .action(async (type: string, opts: { args?: string }) => {
       const g = globalOpts();
+      if (!g) return;
       let args: Record<string, unknown> = {};
       if (opts.args) {
-        args = JSON.parse(opts.args) as Record<string, unknown>;
+        try {
+          const parsed: unknown = JSON.parse(opts.args);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("--args must be a JSON object");
+          }
+          args = parsed as Record<string, unknown>;
+        } catch (error) {
+          printResult({
+            ok: false,
+            error_code: "invalid_argument",
+            message: error instanceof Error ? error.message : String(error),
+          });
+          exitFromResult({ ok: false });
+          return;
+        }
       }
       const result = await executeCommand(type, {
         project: g.project,

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Job;
 using UnityEditor;
-using UnityEngine;
 
 namespace Air.UcpAgent
 {
@@ -19,29 +19,13 @@ namespace Air.UcpAgent
     {
         const string SessionKey = "Air.UcpAgent.Jobs";
 
-        /// <summary>Records from before 0.5 carry no deadline; they keep the old no-progress rule.</summary>
-        const int LegacyNoProgressTimeoutMs = 20000;
-
-        /// <summary>
-        /// A finished job older than this has no caller left (ucp-host drops results after 10 min).
-        /// Versions before 0.5 never removed jobs, so the first reload after an upgrade finds them all.
-        /// </summary>
+        /// <summary>A finished job older than this has no caller left (ucp-host drops results after 10 min).</summary>
         const long FinishedRetentionMs = 10 * 60_000;
 
-        const string TimeoutError = "Command timed out before it finished.";
-        const string LegacyTimeoutError = "Command timed out without progress (20s).";
         const string ReloadOrphanError =
-            "Command lost after domain reload (no completion policy to resume).";
+            "The completion policy class is not loaded, so this command cannot resume.";
 
-        static readonly Dictionary<string, ICompletionPolicy> Policies = new()
-        {
-            { InvokeCompletionCatalog.CompletionCompilation, new Completion.CompilationPolicy() },
-            { InvokeCompletionCatalog.CompletionEnterPlay, new Completion.EnterPlayModePolicy() },
-            { InvokeCompletionCatalog.CompletionExitPlay, new Completion.ExitPlayModePolicy() },
-            { InvokeCompletionCatalog.CompletionUiWait, new Completion.UiWaitPolicy() },
-            { InvokeCompletionCatalog.CompletionTests, new Completion.TestRunPolicy() },
-            { InvokeCompletionCatalog.CompletionPackages, new Completion.PackagePolicy() },
-        };
+        static readonly Dictionary<string, ICompletionPolicy> Policies = DiscoverPolicies();
 
         static Dictionary<string, InvokeJobRecord> _commands = new();
 
@@ -50,6 +34,7 @@ namespace Air.UcpAgent
 
         static EditorJobStateManager()
         {
+            ValidateCompletions();
             Reload();
             EditorApplication.update += Tick;
         }
@@ -99,30 +84,14 @@ namespace Air.UcpAgent
             Finish(job, InvokeJobStatus.Succeeded, null, result);
         }
 
-        /// <summary>The live job created for a file-queue command, if one exists.</summary>
-        public static InvokeJobRecord FindByRequestId(string requestId)
-        {
-            if (string.IsNullOrEmpty(requestId))
-                return null;
-
-            if (_commands.TryGetValue(requestId, out var byId))
-                return byId;
-
-            // Jobs created before 0.5 have a generated id; only RequestId matches the queue file.
-            foreach (var job in _commands.Values)
-            {
-                if (string.Equals(job.RequestId, requestId, StringComparison.Ordinal))
-                    return job;
-            }
-
-            return null;
-        }
-
-        /// <summary>Finished jobs whose result has not been delivered yet. Polled every frame.</summary>
+        /// <summary>
+        /// Finished jobs whose result has not been delivered yet. Polled every frame. A group's step
+        /// is not among them: its group reads it.
+        /// </summary>
         public static IReadOnlyList<InvokeJobRecord> FinishedJobs() =>
             _commands.Count == 0
                 ? Array.Empty<InvokeJobRecord>()
-                : _commands.Values.Where(IsFinished).ToList();
+                : _commands.Values.Where(job => IsFinished(job) && string.IsNullOrEmpty(job.ParentId)).ToList();
 
         /// <summary>Forgets a job once its result is delivered.</summary>
         public static void Remove(string id)
@@ -134,16 +103,19 @@ namespace Air.UcpAgent
             SaveSession();
         }
 
-        static void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs)
+        static void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs, string parentId)
         {
             if (string.IsNullOrEmpty(id))
                 throw new ArgumentException("A deferred command needs an id.", nameof(id));
 
-            var kind = string.IsNullOrEmpty(completionKind)
-                ? InvokeCompletionCatalog.CompletionDeferred
-                : completionKind;
-            if (kind != InvokeCompletionCatalog.CompletionDeferred && !Policies.ContainsKey(kind))
-                throw new InvalidOperationException($"No completion policy for '{kind}'.");
+            if (string.IsNullOrEmpty(completionKind))
+                throw new InvalidOperationException("A deferred command must name its completion policy.");
+            if (timeoutMs <= 0)
+                throw new InvalidOperationException($"'{command}' needs a deadline.");
+
+            var kind = completionKind;
+            if (!Policies.ContainsKey(kind))
+                throw new InvalidOperationException($"No completion policy '{kind}'.");
 
             var now = UtcNowMs();
             if (!_commands.TryGetValue(id, out var job))
@@ -151,7 +123,6 @@ namespace Air.UcpAgent
                 job = new InvokeJobRecord
                 {
                     Id = id,
-                    RequestId = id,
                     Command = command,
                     Status = InvokeJobStatus.Pending,
                     CreatedAtUtcMs = now,
@@ -160,11 +131,12 @@ namespace Air.UcpAgent
             }
 
             job.CompletionKind = kind;
+            if (parentId != null)
+                job.ParentId = parentId;
             if (completionArgs != null)
                 job.CompletionArgs = completionArgs;
             job.UpdatedAtUtcMs = now;
-            if (timeoutMs > 0)
-                job.DeadlineUtcMs = now + timeoutMs;
+            job.DeadlineUtcMs = now + timeoutMs;
 
             // Synchronously: the domain may reload as soon as the command returns.
             Save();
@@ -191,19 +163,22 @@ namespace Air.UcpAgent
                 if (!IsFinished(job))
                     continue;
 
-                // Before 0.5 (no deadline) a job was delivered as it finished and then kept, so a
-                // finished record from then has been delivered already; sending it again only
-                // leaves an outbox file nobody reads.
-                var writtenBefore05 = job.DeadlineUtcMs == 0;
-                if (writtenBefore05 || job.UpdatedAtUtcMs < cutoff)
+                if (job.UpdatedAtUtcMs < cutoff)
                     _commands.Remove(job.Id);
             }
         }
 
         /// <summary>
-        /// A job without a completion policy was completed by callbacks that died with the old
-        /// domain, so it can never finish now.
+        /// The policy class named on the job is not loaded in this domain, so nothing can resume it.
         /// </summary>
+        static void Orphan(InvokeJobRecord job)
+        {
+            if (IsFinished(job))
+                return;
+
+            Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Orphaned, ReloadOrphanError), null);
+        }
+
         static void OrphanJobsAfterDomainReload()
         {
             foreach (var job in _commands.Values.ToList())
@@ -211,7 +186,7 @@ namespace Air.UcpAgent
                 if (IsFinished(job) || Policies.ContainsKey(job.CompletionKind ?? ""))
                     continue;
 
-                Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Orphaned, ReloadOrphanError), null);
+                Orphan(job);
             }
         }
 
@@ -227,25 +202,31 @@ namespace Air.UcpAgent
                 if (IsFinished(job))
                     continue;
 
-                if (TimedOut(job, now, out var timeoutError))
+                if (job.DeadlineUtcMs > 0 && now > job.DeadlineUtcMs)
                 {
-                    if (job.DeadlineUtcMs > 0)
+                    // ucp-host counts the same timeout from before Unity received the command,
+                    // so it has already answered; a result now would only litter the outbox.
+                    UcpLog.LogWarning(
+                        $"[ucp-agent] '{job.Command}' ({job.Id}, completion {job.CompletionKind ?? "none"}) passed its deadline; the caller was told it timed out.");
+                    if (Policies.TryGetValue(job.CompletionKind ?? "", out var expiring) && expiring is IExpiringPolicy onExpired)
                     {
-                        // ucp-host counts the same timeout from before Unity received the command,
-                        // so it has already answered; a result now would only litter the outbox.
-                        UcpLog.LogWarning($"[ucp-agent] '{job.Command}' passed its deadline; the caller was told it timed out.");
-                        Remove(job.Id);
-                        continue;
+                        try
+                        {
+                            onExpired.Expired(job);
+                        }
+                        catch (Exception ex)
+                        {
+                            UcpLog.LogWarning($"[ucp-agent] '{job.Command}' ({job.Id}) could not clean up after its deadline: {ex.Message}");
+                        }
                     }
 
-                    Finish(job, InvokeJobStatus.Orphaned, new CommandFailure(UcpErrorCodes.Timeout, timeoutError), null);
+                    Remove(job.Id);
                     continue;
                 }
 
                 if (!Policies.TryGetValue(job.CompletionKind ?? "", out var policy))
                 {
-                    // CompletionDeferred: the command completes it from a callback.
-                    MarkPendingAsRunning(job, now);
+                    Orphan(job);
                     continue;
                 }
 
@@ -254,25 +235,13 @@ namespace Air.UcpAgent
                     if (failure == null)
                         Finish(job, InvokeJobStatus.Succeeded, null, result);
                     else
-                        Finish(job, InvokeJobStatus.Failed, failure, null);
+                        Finish(job, InvokeJobStatus.Failed, failure, result);
                 }
                 else
                 {
                     MarkPendingAsRunning(job, now);
                 }
             }
-        }
-
-        static bool TimedOut(InvokeJobRecord job, long now, out string error)
-        {
-            if (job.DeadlineUtcMs > 0)
-            {
-                error = TimeoutError;
-                return now > job.DeadlineUtcMs;
-            }
-
-            error = LegacyTimeoutError;
-            return now - job.UpdatedAtUtcMs > LegacyNoProgressTimeoutMs;
         }
 
         static void MarkPendingAsRunning(InvokeJobRecord job, long now)
@@ -288,6 +257,12 @@ namespace Air.UcpAgent
         /// <param name="result">The success payload; a failure carries its data in <paramref name="failure"/>.</param>
         static void Finish(InvokeJobRecord job, InvokeJobStatus status, CommandFailure failure, object result)
         {
+            if (result is PolicyOutcome outcome)
+            {
+                job.Message = outcome.Message ?? "";
+                result = outcome.Data;
+            }
+
             if (failure != null)
                 result = failure.Data;
 
@@ -302,7 +277,7 @@ namespace Air.UcpAgent
             Save();
         }
 
-        static bool IsFinished(InvokeJobRecord job) =>
+        public static bool IsFinished(InvokeJobRecord job) =>
             job.Status is InvokeJobStatus.Succeeded or InvokeJobStatus.Failed or InvokeJobStatus.Orphaned;
 
         static long UtcNowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -316,11 +291,14 @@ namespace Air.UcpAgent
 
             try
             {
-                var wrapper = JsonUtility.FromJson<InvokeJobListWrapper>(json);
-                foreach (var item in wrapper?.Items ?? new List<InvokeJobRecord>())
+                var items = UcpJson.Deserialize<List<InvokeJobRecord>>(json);
+                foreach (var item in items ?? new List<InvokeJobRecord>())
                 {
-                    if (!string.IsNullOrEmpty(item?.Id))
-                        _commands[item.Id] = item;
+                    if (string.IsNullOrEmpty(item?.Id))
+                        continue;
+
+                    RestoreResult(item);
+                    _commands[item.Id] = item;
                 }
             }
             catch
@@ -345,14 +323,78 @@ namespace Air.UcpAgent
 
         static void SaveSession()
         {
-            var wrapper = new InvokeJobListWrapper { Items = _commands.Values.ToList() };
-            SessionState.SetString(SessionKey, JsonUtility.ToJson(wrapper));
+            SessionState.SetString(SessionKey, EditorJobLedger.SerializeAll(_commands.Values));
+        }
+
+        static void RestoreResult(InvokeJobRecord job)
+        {
+            if (job.Result != null || string.IsNullOrEmpty(job.ResultJson))
+                return;
+
+            try
+            {
+                job.Result = UcpJson.Deserialize(job.ResultJson);
+            }
+            catch
+            {
+                // The payload is gone; delivery still reports the status.
+            }
+        }
+
+        static Dictionary<string, ICompletionPolicy> DiscoverPolicies()
+        {
+            var map = new Dictionary<string, ICompletionPolicy>(StringComparer.Ordinal);
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try
+                {
+                    types = assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.Where(t => t != null).ToArray();
+                }
+
+                foreach (var type in types)
+                {
+                    if (type == null || !type.IsClass || type.IsAbstract || type.ContainsGenericParameters
+                        || !typeof(ICompletionPolicy).IsAssignableFrom(type))
+                    {
+                        continue;
+                    }
+
+                    var policy = (ICompletionPolicy)Activator.CreateInstance(type);
+                    var name = type.FullName;
+                    if (map.ContainsKey(name))
+                        throw new InvalidOperationException($"Duplicate completion policy '{name}'.");
+
+                    map[name] = policy;
+                }
+            }
+
+            return map;
+        }
+
+        static void ValidateCompletions()
+        {
+            foreach (var entry in CommandRegistry.Entries)
+            {
+                var kind = entry.Completion;
+                if (string.IsNullOrEmpty(kind))
+                    continue;
+                if (!Policies.ContainsKey(kind))
+                {
+                    throw new InvalidOperationException(
+                        $"Command '{entry.Name}' completes as '{kind}', which has no policy.");
+                }
+            }
         }
 
         sealed class JobStore : IDeferredJobs
         {
-            public void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs = null) =>
-                EditorJobStateManager.Begin(id, command, completionKind, timeoutMs, completionArgs);
+            public void Begin(string id, string command, string completionKind, int timeoutMs, string completionArgs = null, string parentId = null) =>
+                EditorJobStateManager.Begin(id, command, completionKind, timeoutMs, completionArgs, parentId);
 
             public bool Has(string id) => !string.IsNullOrEmpty(id) && _commands.ContainsKey(id);
             public void Remove(string id) => EditorJobStateManager.Remove(id);

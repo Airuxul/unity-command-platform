@@ -83,7 +83,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
             throw new UcpException(
                 UcpErrorCodes.TypeNotFound,
                 $"Unknown {kind} type '{name}'.",
-                suggestions.Length > 0 ? $"Did you mean: {string.Join(", ", suggestions)}?" : null);
+                (suggestions.Length > 0 ? $"Did you mean: {string.Join(", ", suggestions)}? " : "")
+                + "A class written since the last compile needs compile first.");
         }
 
         static bool TryLookup(

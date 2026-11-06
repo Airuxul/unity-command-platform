@@ -4,6 +4,8 @@
 
 | Document | Description |
 |----------|-------------|
+| [GUIDE.zh-CN.md](GUIDE.zh-CN.md) | Walkthrough: install, first commands, sessions, adding a command (Chinese) |
+| [COMMAND-DESIGN.zh-CN.md](COMMAND-DESIGN.zh-CN.md) | How to design a command that waits, batches, or bypasses the lane (Chinese) |
 | [../README.md](../README.md) | UCP overview (English) |
 | [../README.zh-CN.md](../README.zh-CN.md) | UCP overview (Chinese) |
 | [../CONVENTIONS.md](../CONVENTIONS.md) | Naming and layout |

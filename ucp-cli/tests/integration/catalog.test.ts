@@ -5,7 +5,7 @@ import { ok } from "./helpers/content-scenario.js";
 import { gameDemoProjectPath, hasReadyEditorSession } from "./helpers/editor-commands.js";
 
 /**
- * Locks the agent's external surface: every command name, alias, scope, completion kind,
+ * Locks the agent's external surface: every command name, alias, scope, completion policy,
  * timeout and parameter line, as `help` reports them and as the session file advertises them.
  *
  * A refactor must leave these files unchanged. An intended change to the surface updates the

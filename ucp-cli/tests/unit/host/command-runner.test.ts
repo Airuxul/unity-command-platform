@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CommandRunner, type Dispatch } from "#host/commands/command-runner.js";
+import { HostDispatchError, HostError } from "#host/errors.js";
 import { Logger } from "#host/logger/logger.js";
 import { SessionDirectory } from "#host/sessions/session-directory.js";
 import { writeJsonAtomic } from "#shared/index.js";
@@ -68,6 +69,20 @@ afterEach(() => {
 });
 
 describe("CommandRunner", () => {
+  it("records a dispatch that never reached Unity as failed", async () => {
+    const { runner } = setup(async () => {
+      throw new HostDispatchError(
+        HostError.unknownSessionType,
+        "No transport for session type 'device'.",
+      );
+    });
+    const entry = await submit(runner, { type: "ping" });
+    const done = await finished(runner, entry);
+    expect(done.status).toBe("failed");
+    expect(done.error).toBe(HostError.unknownSessionType);
+    expect(done.result).toBeUndefined();
+  });
+
   it("runs one command at a time per session and sessions side by side", async () => {
     const log: string[] = [];
     const dispatch: Dispatch = async (s, command) => {
@@ -274,7 +289,7 @@ describe("CommandRunner", () => {
   it("fails a command type the session does not advertise as unknown_command", async () => {
     const { runner } = setup(pong);
     const done = await finished(runner, await submit(runner, { type: "build" }));
-    expect(done).toMatchObject({ status: "failed", error: "unknown_command" });
+    expect(done).toMatchObject({ status: "failed", error: "host_unknown_command" });
     expect(done.message).toContain("build");
     expect(done.hint).toContain("help");
   });
@@ -299,8 +314,8 @@ describe("CommandRunner", () => {
     failures.push(await finished(gone, waiting));
 
     expect(failures.map((f) => f.error)).toEqual([
-      "timeout",
-      "command_failed",
+      "host_timeout",
+      "host_command_failed",
       "editor_not_running",
     ]);
     for (const failure of failures) expect(failure.message, failure.error).toBeTruthy();
@@ -318,7 +333,7 @@ describe("CommandRunner", () => {
 
     const started = Date.now();
     const done = await finished(runner, behind);
-    expect(done).toMatchObject({ status: "timeout", error: "timeout" });
+    expect(done).toMatchObject({ status: "timeout", error: "host_timeout" });
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(done.message).toBeTruthy();
   });
@@ -335,7 +350,7 @@ describe("CommandRunner", () => {
         order.push(command.type);
         return { id: command.id, success: true, duration: 1 };
       },
-      [session({ capabilities: ["test_run", "state", "ping"], readOnlyCommands: ["state"] })],
+      [session({ capabilities: ["test_run", "state", "ping"], runsWhileBusy: ["state"] })],
     );
 
     const long = await submit(runner, { type: "test_run", timeout: 10_000 });
@@ -373,5 +388,73 @@ describe("CommandRunner", () => {
     const entry = await submit(runner, { type: "ping", timeout: 5_000 });
     await finished(runner, entry);
     expect(seen).toEqual([entry.deadline]);
+  });
+
+  it("runs before and after commands around the one that was submitted", async () => {
+    const seen: { type: string; args: unknown; id: string }[] = [];
+    const { runner } = setup(
+      async (_, command) => {
+        seen.push({ type: command.type, args: command.args, id: command.id });
+        return { id: command.id, success: true, duration: 1, message: command.type };
+      },
+      [
+        session({
+          capabilities: ["play", "compile", "echo"],
+          commandChains: { play: { before: ["compile"], after: ["echo"] } },
+        }),
+      ],
+    );
+    const entry = await submit(runner, {
+      type: "play",
+      timeout: 5_000,
+      args: { scene: "Assets/Main.unity" },
+    });
+    const done = await finished(runner, entry);
+    expect(seen.map((s) => s.type)).toEqual(["compile", "play", "echo"]);
+    expect(seen[0]?.args).toEqual({});
+    expect(seen[1]?.args).toEqual({ scene: "Assets/Main.unity" });
+    expect(seen[1]?.id).toBe(entry.command.id);
+    expect(done.result?.success).toBe(true);
+    expect(done.result?.message).toBe("play");
+    expect(done.result?.id).toBe(entry.command.id);
+  });
+
+  it("stops the chain when a before command fails", async () => {
+    const seen: string[] = [];
+    const { runner } = setup(
+      async (_, command) => {
+        seen.push(command.type);
+        return {
+          id: command.id,
+          success: command.type !== "compile",
+          duration: 1,
+          error: command.type === "compile" ? "compile_error" : undefined,
+          message: command.type === "compile" ? "scripts do not compile" : "ok",
+        };
+      },
+      [
+        session({
+          capabilities: ["play", "compile"],
+          commandChains: { play: { before: ["compile"] } },
+        }),
+      ],
+    );
+    const done = await finished(runner, await submit(runner, { type: "play", timeout: 5_000 }));
+    expect(seen).toEqual(["compile"]);
+    expect(done.result?.success).toBe(false);
+    expect(done.result?.error).toBe("compile_error");
+    expect(done.result?.message).toBe("compile: scripts do not compile");
+  });
+
+  it("fails a chain that calls itself", async () => {
+    const { runner } = setup(async (_, command) => ({ id: command.id, success: true, duration: 1 }), [
+      session({
+        capabilities: ["compile"],
+        commandChains: { compile: { before: ["compile"] } },
+      }),
+    ]);
+    const done = await finished(runner, await submit(runner, { type: "compile", timeout: 5_000 }));
+    expect(done.status).toBe("failed");
+    expect(done.message).toContain("cycles");
   });
 });

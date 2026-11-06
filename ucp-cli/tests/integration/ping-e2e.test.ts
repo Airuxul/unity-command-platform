@@ -174,7 +174,7 @@ describe("ping e2e", () => {
       const agent = startFakeAgent(projectId, ucpRoot);
       try {
         const result = await executeCommand("prefab_create", { session });
-        expect(result).toMatchObject({ ok: false, error_code: "unknown_command" });
+        expect(result).toMatchObject({ ok: false, error_code: "host_unknown_command" });
         expect(result.message).toContain("prefab_create");
         expect(result.hint).toBeTruthy();
       } finally {

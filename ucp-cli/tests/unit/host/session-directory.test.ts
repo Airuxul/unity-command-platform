@@ -137,8 +137,9 @@ describe("readEditorSession", () => {
     expect(read({ pid: deadPid }).status).toBe("offline");
   });
 
-  it("is offline when late and written by an agent that records no pid", () => {
+  it("is offline when the session file has no pid", () => {
     expect(read({ updatedAt: stale }).status).toBe("offline");
+    expect(read({}).status).toBe("offline");
   });
 
   it("is offline when Unity said so on quit", () => {

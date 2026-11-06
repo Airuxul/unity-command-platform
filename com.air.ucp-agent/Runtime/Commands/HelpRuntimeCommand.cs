@@ -1,21 +1,31 @@
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Invoke;
-using Air.UcpAgent.Runtime.Shell;
+using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Runtime.Commands
 {
-    public class HelpRuntimeCommand : CliCommand
+    [UcpCommand]
+    public static class HelpRuntimeCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<HelpParams>(
             CommandNames.Help,
             CommandHostScope.Runtime,
-            "List available runtime commands",
-            aliases: new[] { "?" });
-
-        public override void Run()
+            "List every runtime command with its description and parameters",
+            aliases: new[] { "?" })
         {
-            CompleteSuccess(InvokeResult.Ok(string.Join("\n", ShellHintService.BuildHelpLines())));
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(HelpParams p, CommandContext ctx)
+        {
+            var host = CommandRegistry.RuntimeHost;
+            if (string.Equals(p.Format, HelpParams.Markdown, System.StringComparison.OrdinalIgnoreCase))
+                return InvokeCatalog.BuildMarkdown(host, p.Command);
+
+            return string.IsNullOrWhiteSpace(p.Command)
+                ? InvokeCatalog.BuildResponse(host)
+                : InvokeCatalog.BuildCard(host, p.Command);
         }
     }
 }

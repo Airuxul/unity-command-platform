@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import { DEFAULT_HOST_PORT, readBuildId, ucpLayout } from "#shared/index.js";
-import type { LogLevel, UcpCommand, UcpSession } from "#shared/types.js";
+import type { LogLevel, UcpCommand, UcpResult, UcpSession } from "#shared/types.js";
 import { EditorFileQueueAdapter } from "./adapter/editor-file-queue/editor-file-queue-adapter.js";
 import { RuntimeHttpAdapter } from "./adapter/runtime-http/runtime-http-adapter.js";
 import { CommandRunner, type Dispatch } from "./commands/command-runner.js";
+import { HostDispatchError, HostError } from "./errors.js";
 import { Logger } from "./logger/logger.js";
 import { UcpHostServer } from "./server/ucp-host-server.js";
 import { SessionDirectory } from "./sessions/session-directory.js";
@@ -29,10 +30,25 @@ export interface UcpHost {
 export function createDispatch(logger: Logger, ucpRoot?: string): Dispatch {
   const editor = new EditorFileQueueAdapter(logger, ucpRoot);
   const runtime = new RuntimeHttpAdapter(logger);
-  return (session: UcpSession, command: UcpCommand) =>
-    session.type === "editor"
-      ? editor.dispatch(session, command)
-      : runtime.dispatch(session, command);
+  const transports = new Map<
+    string,
+    (session: UcpSession, command: UcpCommand) => Promise<UcpResult>
+  >([
+    ["editor", (session, command) => editor.dispatch(session, command)],
+    ["runtime", (session, command) => runtime.dispatch(session, command)],
+  ]);
+  return (session, command) => {
+    const transport = transports.get(session.type);
+    if (!transport) {
+      return Promise.reject(
+        new HostDispatchError(
+          HostError.unknownSessionType,
+          `No transport for session type '${session.type}'.`,
+        ),
+      );
+    }
+    return transport(session, command);
+  };
 }
 
 export async function createUcpHost(options: UcpHostOptions = {}): Promise<UcpHost> {

@@ -11,12 +11,12 @@ import { ucpSessionSchema } from "#shared/schema.js";
 import type {
   EditorTarget,
   RuntimeTarget,
-  SessionType,
   UcpSession,
   UcpTarget,
   UcpTargetStatus,
 } from "#shared/types.js";
 import type { Logger } from "../logger/logger.js";
+import { type SessionCriteria, resolveSession } from "./session-resolver.js";
 
 /** The agent writes its session file every 2 s; past this the Editor is not ticking. */
 export const STALE_MS = 30_000;
@@ -35,11 +35,7 @@ export interface RuntimeHealthResponse {
   product?: string;
 }
 
-export interface SessionCriteria {
-  sessionId?: string;
-  projectPath?: string;
-  sessionType?: SessionType;
-}
+export type { SessionCriteria };
 
 /** Whether a process exists. EPERM means it does, owned by someone else. */
 export function isPidAlive(pid: number): boolean {
@@ -100,8 +96,7 @@ export function listConfiguredAndDiscoveredTargets(ucpRoot?: string): UcpTarget[
 
 /**
  * An editor whose heartbeat is late is `busy` while its process lives (importing, compiling, a
- * modal dialog), and `offline` once it is gone. Agents before 0.5 write no pid, so a late one of
- * theirs can only be called offline.
+ * modal dialog), and `offline` once it is gone. A session file with no pid is not a live editor.
  */
 export function readEditorSession(target: EditorTarget, ucpRoot?: string): UcpSession {
   return tryReadEditorSession(target, ucpRoot) ?? { ...editorBase(target), status: "offline" };
@@ -131,7 +126,7 @@ function tryReadEditorSession(target: EditorTarget, ucpRoot?: string): UcpSessio
   const file = parsed.data;
   const updatedAt = Date.parse(file.updatedAt || "");
   const fresh = Number.isFinite(updatedAt) && Date.now() - updatedAt <= STALE_MS;
-  const alive = file.pid ? isPidAlive(file.pid) : fresh;
+  const alive = typeof file.pid === "number" && isPidAlive(file.pid);
   const status =
     file.status === "offline" || !alive
       ? "offline"
@@ -149,7 +144,8 @@ function tryReadEditorSession(target: EditorTarget, ucpRoot?: string): UcpSessio
     pid: file.pid ?? undefined,
     focused: file.focused ?? undefined,
     defaultTimeouts: file.defaultTimeouts ?? undefined,
-    readOnlyCommands: file.readOnlyCommands ?? undefined,
+    runsWhileBusy: file.runsWhileBusy ?? undefined,
+    commandChains: file.commandChains ?? undefined,
   };
 }
 
@@ -216,10 +212,6 @@ async function readSession(target: UcpTarget, ucpRoot?: string): Promise<UcpSess
     host: target.host,
     runtimePort: target.port,
   };
-}
-
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, "/").toLowerCase();
 }
 
 /**
@@ -425,29 +417,6 @@ export class SessionDirectory {
    * no session type the editor wins; otherwise the choice must be unambiguous.
    */
   resolve(criteria: SessionCriteria, accept: (s: UcpSession) => boolean): UcpSession | null {
-    if (criteria.sessionId) {
-      const found = this.get(criteria.sessionId);
-      return found && accept(found) ? found : null;
-    }
-
-    const candidates = this.list().filter(accept);
-
-    if (criteria.projectPath) {
-      const normalized = normalizePath(criteria.projectPath);
-      const matches = candidates.filter((s) => normalizePath(s.path) === normalized);
-      if (criteria.sessionType) {
-        return matches.find((s) => s.type === criteria.sessionType) ?? null;
-      }
-      const editor = matches.find((s) => s.type === "editor");
-      if (editor) return editor;
-      return matches.length === 1 ? matches[0] : null;
-    }
-
-    if (criteria.sessionType) {
-      const typed = candidates.filter((s) => s.type === criteria.sessionType);
-      return typed.length === 1 ? typed[0] : null;
-    }
-
-    return candidates.length === 1 ? candidates[0] : null;
+    return resolveSession(this.list(), criteria, (id) => this.get(id), accept);
   }
 }

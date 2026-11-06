@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System.Collections.Generic;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Prefab;
@@ -6,45 +7,49 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class PrefabOpenCommand : EditorActionCommand<PrefabStageOpenParams>
+    [UcpCommand]
+    public static class PrefabOpenCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabStageOpenParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabStageOpenParams>(
             CommandNames.PrefabOpen,
             CommandHostScope.Editor,
             "Open a prefab in Prefab Mode (not required to edit it — pass '" + ParamKeys.Prefab + "' to the content commands instead)");
 
-        protected override Dictionary<string, object> Execute(PrefabStageOpenParams p) =>
+        public static object Execute(PrefabStageOpenParams p, CommandContext ctx) =>
             PrefabStageService.Open(p);
     }
 
-    public sealed class PrefabSaveCommand : EditorActionCommand
+    [UcpCommand]
+    public static class PrefabSaveCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor(
             CommandNames.PrefabSave,
             CommandHostScope.Editor,
             "Save the prefab currently open in Prefab Mode");
 
-        protected override Dictionary<string, object> Execute() => PrefabStageService.Save();
+        public static object Execute(CommandContext ctx) => PrefabStageService.Save();
     }
 
-    public sealed class PrefabCloseCommand : EditorActionCommand<PrefabCloseParams>
+    [UcpCommand]
+    public static class PrefabCloseCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<PrefabCloseParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<PrefabCloseParams>(
             CommandNames.PrefabClose,
             CommandHostScope.Editor,
             "Leave Prefab Mode, saving first unless save=false");
 
-        protected override Dictionary<string, object> Execute(PrefabCloseParams p) =>
+        public static object Execute(PrefabCloseParams p, CommandContext ctx) =>
             PrefabStageService.Close(p);
     }
 
-    public sealed class PrefabStageInfoCommand : EditorActionCommand
+    [UcpCommand]
+    public static class PrefabStageInfoCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor(
             CommandNames.PrefabStageInfo,
             CommandHostScope.Editor,
             "Which prefab is open in Prefab Mode, and whether it has unsaved changes");
 
-        protected override Dictionary<string, object> Execute() => PrefabStageService.Info();
+        public static object Execute(CommandContext ctx) => PrefabStageService.Info();
     }
 }

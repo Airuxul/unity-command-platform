@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System.Collections.Generic;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Objects;
@@ -6,58 +7,65 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class ComponentAddCommand : EditTargetCommand<ComponentAddParams>
+    [UcpCommand]
+    public static class ComponentAddCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentAddParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ComponentAddParams>(
             CommandNames.ComponentAdd,
             CommandHostScope.Editor,
             "Add a component to a node, optionally setting properties in the same call");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentAddParams p) => ComponentService.Add(scope, p);
+        public static object Execute(ComponentAddParams p, EditTargetContext ctx) => ComponentService.Add(ctx.Scope, p);
     }
 
-    public sealed class ComponentRemoveCommand : EditTargetCommand<ComponentRemoveParams>
+    [UcpCommand]
+    public static class ComponentRemoveCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentRemoveParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ComponentRemoveParams>(
             CommandNames.ComponentRemove,
             CommandHostScope.Editor,
             "Remove a component from a node");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentRemoveParams p) =>
-            ComponentService.Remove(scope, p);
+        public static object Execute(ComponentRemoveParams p, EditTargetContext ctx) =>
+            ComponentService.Remove(ctx.Scope, p);
     }
 
-    public sealed class ComponentListCommand : EditTargetCommand<ComponentListParams>
+    [UcpCommand]
+    public static class ComponentListCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentListParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ComponentListParams>(
             CommandNames.ComponentList,
             CommandHostScope.Editor,
-            "List a node's components with their types, indices and enabled state");
+            "List a node's components with their types, indices and enabled state")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentListParams p) => ComponentService.List(scope, p);
+        public static object Execute(ComponentListParams p, EditTargetContext ctx) => ComponentService.List(ctx.Scope, p);
     }
 
-    public sealed class ComponentGetCommand : EditTargetCommand<ComponentGetParams>
+    [UcpCommand]
+    public static class ComponentGetCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentGetParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ComponentGetParams>(
             CommandNames.ComponentGet,
             CommandHostScope.Editor,
-            $"Read a component's serialized properties, in the shape {CommandNames.ComponentSet} accepts back");
+            $"Read a component's serialized properties, in the shape {CommandNames.ComponentSet} accepts back")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentGetParams p) => ComponentService.Get(scope, p);
+        public static object Execute(ComponentGetParams p, EditTargetContext ctx) => ComponentService.Get(ctx.Scope, p);
     }
 
-    public sealed class ComponentSetCommand : EditTargetCommand<ComponentSetParams>
+    [UcpCommand]
+    public static class ComponentSetCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ComponentSetParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ComponentSetParams>(
             CommandNames.ComponentSet,
             CommandHostScope.Editor,
             "Set component properties; object references accept an asset path, guid, node path or instance id");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, ComponentSetParams p) => ComponentService.Set(scope, p);
+        public static object Execute(ComponentSetParams p, EditTargetContext ctx) => ComponentService.Set(ctx.Scope, p);
     }
 }

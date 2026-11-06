@@ -18,5 +18,6 @@ export default defineConfig({
     testTimeout: 180_000,
     hookTimeout: 120_000,
     fileParallelism: false,
+    setupFiles: ["./tests/integration/helpers/background-editor.ts"],
   },
 });

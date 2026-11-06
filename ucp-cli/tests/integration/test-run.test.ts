@@ -221,7 +221,7 @@ describe.skipIf(!runEditorTests)("test_run (Unity required)", () => {
 
   it("refuses other commands while a run outlives its caller, and leaves no result behind", async () => {
     const timedOut = await rejected("test_run", { categories: ["Slow"] }, 1_500);
-    expect(timedOut.error_code).toBe("timeout");
+    expect(timedOut.error_code).toBe("host_timeout");
     expect(await testsRunning()).toBe(true);
 
     const busy = await rejected("gameobject_find", { name: "Main", limit: 1 });

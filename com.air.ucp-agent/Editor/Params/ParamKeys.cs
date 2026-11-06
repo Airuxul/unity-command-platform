@@ -1,7 +1,7 @@
 namespace Air.UcpAgent.Params
 {
     /// <summary>
-    /// Parameter names shared by many commands, so the <see cref="CliParamAttribute"/> that declares
+    /// Parameter names shared by many commands, so the <see cref="UcpParamAttribute"/> that declares
     /// one and the error that names it cannot drift apart. Each name has one meaning everywhere.
     /// </summary>
     public static class ParamKeys

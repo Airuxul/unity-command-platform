@@ -1,3 +1,5 @@
+using System;
+using Air.UcpAgent.Completion;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
 using Air.UcpAgent.Params;
@@ -7,17 +9,20 @@ using UnityEditor;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class CompileCommand : CliCommand<CompileParams>
+    [UcpCommand]
+    public static class CompileCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<CompileParams>(
+        public static readonly Type CompletionPolicy = typeof(CompilationPolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<CompileParams>(
             CommandNames.Compile,
             CommandHostScope.Editor,
             "Import changed files, then compile scripts (deferred)",
-            InvokeCompletionCatalog.CompletionCompilation,
+            CompletionPolicy,
             aliases: new[] { "recompile", "reload" },
             defaultTimeoutMs: 180_000);
 
-        public override void Run(CompileParams p)
+        public static object Execute(CompileParams p, CommandContext ctx)
         {
             // Unity only imports changed files on focus (or with Auto Refresh on). Without this, a
             // compile requested while the editor is in the background rebuilds the old scripts and
@@ -25,7 +30,8 @@ namespace Air.UcpAgent.Editor.Commands
             if (!EditorApplication.isPlayingOrWillChangePlaymode)
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
-            ScriptCompilationService.RequestWithCompletion(CommandId);
+            ScriptCompilationService.RequestWithCompletion(ctx.CommandId);
+            return null;
         }
     }
 }

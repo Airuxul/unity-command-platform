@@ -35,8 +35,11 @@ namespace Air.UcpAgent.Cli
         /// <summary>Tests are running, and the command could disturb them.</summary>
         public const string Busy = "busy";
 
-        /// <summary>A batch op's <c>expect</c> did not hold, so the batch was rolled back.</summary>
+        /// <summary>A group step's <c>expect</c> did not hold, so the step did not run.</summary>
         public const string ExpectationFailed = "expectation_failed";
+
+        /// <summary>A group step failed, and taking the steps back failed too; data.rollback.errors lists which.</summary>
+        public const string RollbackFailed = "rollback_failed";
 
         /// <summary>A deferred command passed its deadline.</summary>
         public const string Timeout = "timeout";
@@ -58,8 +61,9 @@ namespace Air.UcpAgent.Cli
             (CompileError, "scripts do not compile; data.errors lists the compiler errors"),
             (BuildFailed, "the player build failed or was cancelled; data.messages has its errors"),
             (TestsFailed, "tests ran and some failed; data.failures lists them"),
-            (Busy, "tests are running; only ping, state, console, help and echo run until they finish"),
-            (ExpectationFailed, "a batch op's expect did not hold; nothing in the batch was kept"),
+            (Busy, "tests are running; only commands marked RunsWhileBusy (ping, state, console, help, echo) run until they finish"),
+            (ExpectationFailed, "a group step's expect did not hold, so the step did not run"),
+            (RollbackFailed, "a group step failed and some steps could not be taken back; data.rollback.errors lists them"),
             (Timeout, "the command passed its deadline before it finished"),
             (Orphaned, "a domain reload lost the command before it finished"),
             (CommandFailed, "any other failure; message says why"),

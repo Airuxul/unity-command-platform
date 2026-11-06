@@ -32,12 +32,17 @@
     "total_matches": "number",
     "truncated": "boolean"
   },
+  "call": {
+    "count": "number",
+    "functions": []
+  },
   "echo": {
     "channel": "string",
     "message": "string"
   },
   "help": {
     "alias_to_command": {
+      "?": "string",
       "asset_rename": "string",
       "commands": "string",
       "prefab_rename": "string",
@@ -47,10 +52,11 @@
     "catalog_version": "string",
     "commands": [
       {
+        "after": [],
         "aliases": [
           "string"
         ],
-        "allow_connection_retry": "boolean",
+        "before": [],
         "completion": {
           "$union": [
             "null",
@@ -71,6 +77,7 @@
         "scope": "string"
       }
     ],
+    "load_errors": [],
     "ok": "boolean"
   },
   "layer_list": {

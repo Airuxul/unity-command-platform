@@ -9,8 +9,10 @@ import type {
   UcpSession,
 } from "#shared/types.js";
 import { TERMINAL_STATUSES } from "#shared/types.js";
+import { HostDispatchError, HostError } from "../errors.js";
 import type { Logger } from "../logger/logger.js";
 import type { SessionCriteria, SessionDirectory } from "../sessions/session-directory.js";
+import { CommandChainError, expandCommandChain } from "./command-chain.js";
 
 /** How long a finished command stays readable by GET /commands/:id. */
 export const FINISHED_RETENTION_MS = 10 * 60_000;
@@ -106,8 +108,8 @@ export class CommandRunner {
     this.#entries.set(entry.command.id, entry);
 
     const lane = this.#lanes.get(session.id);
-    if (isReadOnly(session, body.type)) {
-      // Changes nothing, so it cannot disturb what the lane is running, nor be disturbed by it.
+    if (runsWhileBusy(session, body.type)) {
+      // Listed in the session file: it may run while another command holds the lane.
       void this.#run(entry);
     } else if (lane) {
       lane.push(entry);
@@ -166,14 +168,14 @@ export class CommandRunner {
     if (editor?.pid && sessionType !== "runtime") {
       return {
         ok: false,
-        error: "editor_not_running",
+        error: HostError.editorNotRunning,
         message: `Unity (pid ${editor.pid}) for ${editor.path} has exited.`,
         hint: "Start it and wait for the agent to compile.",
       };
     }
     return {
       ok: false,
-      error: "no_ready_session",
+      error: HostError.noReadySession,
       message: sessionType
         ? `No ready ${sessionType} session for this project.`
         : "No Unity Editor with com.air.ucp-agent is open.",
@@ -203,7 +205,7 @@ export class CommandRunner {
 
     if (!supports(session, entry.command.type)) {
       this.#finish(entry, "failed", {
-        error: "unknown_command",
+        error: HostError.unknownCommand,
         message: `'${entry.command.type}' is not a command of ${session.name} (${session.type}).`,
         hint: "Run ucp-cli help for its commands. A command added since the last compile appears after ucp-cli run compile.",
       });
@@ -213,43 +215,106 @@ export class CommandRunner {
     const startedAt = Date.now();
     entry.status = "running";
     entry.startedAt = startedAt;
-    // Unity is handed what is left of the caller's timeout and the deadline itself, so it neither
-    // starts nor answers a command the host has already given up on.
-    const command = {
-      ...entry.command,
-      timeout: Math.max(1, entry.deadline - startedAt),
-      deadline: entry.deadline,
-    };
 
+    let steps;
     try {
-      // The adapters time out on their own (and withdraw the inbox file); this only guarantees a
-      // lane is never stuck behind a dispatch that does not.
-      const result = await withTimeout(command.timeout, this.dispatch(session, command));
-      this.#finish(entry, "completed", { result });
-      this.logger.info("command completed", {
-        id: command.id,
-        type: command.type,
-        ...timing(entry),
-      });
+      steps = expandCommandChain(entry.command.type, session.commandChains);
     } catch (err) {
-      // Never re-dispatched: a timed-out command may still be running in Unity, and a second
-      // dispatch would run a non-idempotent command (gameobject_create, asset_delete, exec) twice.
-      const message = err instanceof Error ? err.message : String(err);
-      if (message === "timeout") {
+      if (err instanceof CommandChainError) {
+        this.#finish(entry, "failed", {
+          error: HostError.commandFailed,
+          message: err.message,
+          hint: "Before and after name other commands. A command cannot appear again inside its own chain.",
+        });
+        return;
+      }
+      throw err;
+    }
+
+    let main: UcpResult | undefined;
+    for (const step of steps) {
+      const now = Date.now();
+      if (now >= entry.deadline) {
         this.#finish(entry, "timeout", {
-          error: "timeout",
+          error: HostError.timeout,
           message: `No result within ${Math.round(entry.command.timeout / 1000)} s.`,
           hint: timeoutHint(session),
         });
-      } else {
-        this.#finish(entry, "failed", {
-          error: "command_failed",
-          message,
-          hint: `ucp-host could not deliver the command to ${session.name} (${session.type}).`,
-        });
+        return;
       }
-      this.logger.error("command failed", { id: command.id, error: message });
+
+      const current = this.sessions.get(entry.sessionId) ?? session;
+      if (!supports(current, step.type)) {
+        this.#finish(entry, "failed", {
+          error: HostError.unknownCommand,
+          message: `'${step.type}' is not a command of ${current.name} (${current.type}).`,
+          hint: "Run ucp-cli help for its commands. A command added since the last compile appears after ucp-cli run compile.",
+        });
+        return;
+      }
+
+      const remaining = Math.max(1, entry.deadline - now);
+      const command: UcpCommand = {
+        id: step.role === "main" ? entry.command.id : createCommandId(),
+        type: step.type,
+        args: step.role === "main" ? entry.command.args : {},
+        timeout: remaining,
+        deadline: entry.deadline,
+      };
+
+      try {
+        const result = await withTimeout(remaining, this.dispatch(current, command));
+        const reported = { ...result, id: entry.command.id };
+        if (!result.success) {
+          this.#finish(entry, "completed", {
+            result:
+              step.role === "main"
+                ? reported
+                : {
+                    ...reported,
+                    message: result.message
+                      ? `${step.type}: ${result.message}`
+                      : `${step.type} failed`,
+                  },
+          });
+          return;
+        }
+        if (step.role === "main") main = reported;
+      } catch (err) {
+        if (err instanceof HostDispatchError) {
+          this.#finish(entry, "failed", {
+            error: err.code,
+            message: err.message,
+            hint: err.hint,
+          });
+          this.logger.error("command failed", { id: command.id, error: err.message });
+          return;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === "timeout") {
+          this.#finish(entry, "timeout", {
+            error: HostError.timeout,
+            message: `No result within ${Math.round(entry.command.timeout / 1000)} s.`,
+            hint: timeoutHint(session),
+          });
+        } else {
+          this.#finish(entry, "failed", {
+            error: HostError.commandFailed,
+            message,
+            hint: `ucp-host could not deliver the command to ${session.name} (${session.type}).`,
+          });
+        }
+        this.logger.error("command failed", { id: command.id, error: message });
+        return;
+      }
     }
+
+    this.#finish(entry, "completed", { result: main });
+    this.logger.info("command completed", {
+      id: entry.command.id,
+      type: entry.command.type,
+      ...timing(entry),
+    });
   }
 
   /** The session once it is ready; null after finishing the entry if it never will be in time. */
@@ -266,7 +331,7 @@ export class CommandRunner {
       if (!session || session.status === "offline") {
         const editor = session?.type === "editor";
         this.#finish(entry, "failed", {
-          error: editor ? "editor_not_running" : "session_unavailable",
+          error: editor ? HostError.editorNotRunning : HostError.sessionUnavailable,
           message: `${entry.sessionId} went offline before the command was sent.`,
           hint: editor
             ? "Unity quit or crashed; start it and wait for the agent."
@@ -295,7 +360,7 @@ export class CommandRunner {
   /** A command whose deadline passed before it could be sent; it never reaches Unity. */
   #expire(entry: Entry): void {
     this.#finish(entry, "timeout", {
-      error: "timeout",
+      error: HostError.timeout,
       message: `Timed out after ${Math.round(entry.command.timeout / 1000)} s before reaching Unity.`,
       hint: entry.waitedForSession
         ? "The editor stayed busy (importing, compiling or a modal dialog). Pass a longer --timeout."
@@ -331,7 +396,7 @@ export class CommandRunner {
         this.#expire(entry);
       } else if (entry.attached === 0 && now - entry.lastSeen > this.detachedCancelMs) {
         this.#finish(entry, "cancelled", {
-          error: "caller_disconnected",
+          error: HostError.callerDisconnected,
           message: "Nobody was waiting for the result any more.",
           hint: "Dropped before it reached Unity; nothing ran.",
         });
@@ -370,9 +435,10 @@ function mayMeanRuntime(criteria: SessionCriteria, sessions: SessionDirectory): 
   return false;
 }
 
-function isReadOnly(session: UcpSession, commandType: string): boolean {
+/** True when the session file lists this command in `runsWhileBusy`. It does not mean the command is read-only. */
+function runsWhileBusy(session: UcpSession, commandType: string): boolean {
   const type = commandType.toLowerCase();
-  return (session.readOnlyCommands ?? []).some((c) => c.toLowerCase() === type);
+  return (session.runsWhileBusy ?? []).some((c) => c.toLowerCase() === type);
 }
 
 /** The descriptor's own default (compile, play, ...) when the caller did not pass --timeout. */

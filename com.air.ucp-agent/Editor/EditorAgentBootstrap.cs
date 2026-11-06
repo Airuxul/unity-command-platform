@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Air.UcpAgent.Cli;
-using Air.UcpAgent.Commands;
+using Air.UcpAgent.Editor.Dispatch;
 using Air.UcpAgent.Editor.Services;
+using Air.UcpAgent.Editor.Services.Objects;
+using Air.UcpAgent.Params;
 using Air.UcpAgent.IO;
+using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Protocol;
 using Newtonsoft.Json;
 using UnityEditor;
@@ -32,6 +35,8 @@ namespace Air.UcpAgent.Editor
 
         static EditorAgentBootstrap()
         {
+            ExecutionHost.Current = new EditorExecutionHost();
+            Group.GroupRun.ReportLeftovers(id => EditorJobStateManager.Get(id) != null);
             _projectId = ProjectId.FromPath(GetProjectPath());
             UcpPaths.EnsureDirectory(UcpPaths.InboxDir(_projectId));
             UcpPaths.EnsureDirectory(UcpPaths.OutboxDir(_projectId));
@@ -85,7 +90,8 @@ namespace Air.UcpAgent.Editor
                 pid = Pid,
                 focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive,
                 defaultTimeouts = DefaultTimeouts,
-                readOnlyCommands = new List<string>(CommandNames.ReadOnly),
+                runsWhileBusy = RunsWhileBusyCommands(),
+                commandChains = CommandChains.Publish(CommandRegistry.EditorHost),
             };
             UcpPaths.WriteJsonAtomic(
                 UcpPaths.SessionFile(_projectId),
@@ -128,10 +134,10 @@ namespace Air.UcpAgent.Editor
                     continue;
                 }
 
-                UcpCommand command;
+                UcpRequest command;
                 try
                 {
-                    command = JsonConvert.DeserializeObject<UcpCommand>(File.ReadAllText(claimed));
+                    command = JsonConvert.DeserializeObject<UcpRequest>(File.ReadAllText(claimed));
                 }
                 catch (Exception ex) when (ex is JsonException || ex is IOException)
                 {
@@ -149,18 +155,24 @@ namespace Air.UcpAgent.Editor
                 // An inbox file is only ever executed once. Before this, a deferred command's file
                 // stayed in the inbox, and the first poll after a domain reload ran it again.
                 var outbox = UcpPaths.OutboxFile(_projectId, command.id);
-                if (command.IsPastDeadline(UtcNowMs()))
+                UcpResult reply = null;
+                if (command.deadline <= 0)
+                {
+                    reply = UcpResults.Failure(command.id, new CommandFailure(
+                        UcpErrorCodes.InvalidArgument,
+                        "A command needs a deadline."));
+                }
+                else if (command.IsPastDeadline(UtcNowMs()))
                 {
                     // Left by a host that died, or seen only after its caller gave up.
                     Debug.LogWarning($"[ucp-agent] skipped '{command.type}' ({command.id}): its caller had already given up.");
                 }
-                else if (!File.Exists(outbox) && EditorJobStateManager.FindByRequestId(command.id) == null)
+                else if (!File.Exists(outbox) && EditorJobStateManager.Get(command.id) == null)
                 {
-                    var result = TestRunState.BlocksCommand(command.type)
-                        ? UcpResults.Failure(command.id, new CommandFailure(
-                            UcpErrorCodes.Busy,
-                            $"Tests are running; '{command.type}' waits until they finish.",
-                            "Retry once state reports tests_running=false; ping, state, console, help and echo run meanwhile."))
+                    var entry = CommandRegistry.Find(CommandRegistry.EditorHost, command.type);
+                    var gate = InboundPipeline.Evaluate(entry, command.type);
+                    var result = gate.Kind == GateDecisionKind.Fail
+                        ? UcpResults.Failure(command.id, gate.Failure)
                         : CommandExecutor.Execute(CommandRegistry.EditorHost, command, EditorJobStateManager.Jobs);
                     // Null: the command continues as a job, delivered by DeliverFinishedJobs.
                     if (result != null && command.IsPastDeadline(UtcNowMs()))
@@ -169,13 +181,17 @@ namespace Air.UcpAgent.Editor
                         // already answered timeout and would never read this.
                         Debug.LogWarning($"[ucp-agent] '{command.type}' ({command.id}) finished after its caller gave up; result dropped.");
                     }
-                    else if (result != null)
+                    else
                     {
-                        WriteOutbox(command.id, result);
+                        reply = result;
                     }
                 }
 
+                // Before the result: ucp-host answers as soon as the outbox file appears, and the
+                // claim must be gone by then. The command already left the inbox when it was claimed.
                 TryDelete(claimed);
+                if (reply != null)
+                    WriteOutbox(command.id, reply);
             }
         }
 
@@ -198,6 +214,18 @@ namespace Air.UcpAgent.Editor
             {
                 // The host's stale-file sweep removes them later.
             }
+        }
+
+        static List<string> RunsWhileBusyCommands()
+        {
+            var names = new List<string>();
+            foreach (var entry in CommandRegistry.ForHost(CommandRegistry.EditorHost))
+            {
+                if (entry.Descriptor.RunsWhileBusy)
+                    names.Add(entry.Name);
+            }
+
+            return names;
         }
 
         static Dictionary<string, int> BuildDefaultTimeouts()
@@ -225,8 +253,8 @@ namespace Air.UcpAgent.Editor
             {
                 try
                 {
-                    if (!string.IsNullOrEmpty(job.RequestId))
-                        WriteOutbox(job.RequestId, UcpResults.FromJob(job.RequestId, job));
+                    if (!string.IsNullOrEmpty(job.Id))
+                        WriteOutbox(job.Id, UcpResults.FromJob(job.Id, job));
                 }
                 catch (Exception ex)
                 {

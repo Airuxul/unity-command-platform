@@ -6,21 +6,25 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Runtime.Commands
 {
-    public class EchoRuntimeCommand : CliCommand<EchoParams>
+    [UcpCommand]
+    public static class EchoRuntimeCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<EchoParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<EchoParams>(
             CommandNames.Echo,
             CommandHostScope.Runtime,
-            "Echo from Runtime host");
-
-        public override void Run(EchoParams p)
+            "Echo from Runtime host")
         {
-            var text = p?.Message ?? "ok";
-            CompleteSuccess(InvokeResult.Ok("echo ok", new Dictionary<string, object>
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(EchoParams p, CommandContext ctx)
+        {
+            ctx.Message = "echo ok";
+            return new Dictionary<string, object>
             {
                 ["channel"] = "runtime",
-                ["message"] = text,
-            }));
+                ["message"] = p?.Message ?? "ok",
+            };
         }
     }
 }

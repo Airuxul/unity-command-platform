@@ -35,9 +35,9 @@ Edit Mode 下 Editor **不开** HTTP 端口，通信全走 FileQueue（`inbox` /
 - 命令带着 host 的 deadline（Unix 毫秒）。Agent 认领时已过 deadline 的命令不执行；同步命令执行完时已过 deadline（例如 `exec` 阻塞主线程超过超时），结果不写 outbox。这两种结果都不会有人来读。
 - 超过一小时的 inbox / outbox 文件由 host 定期清理，作为兜底（例如 0.3 的 agent 迟到写出的结果）。
 
-**超时：** deadline 从提交时开始算，排队时间也计入。排在长命令后面的命令到了自己的 deadline 就以 `timeout` 结束，不等前面的命令完成，也不会再派发给 Unity。没传 `--timeout` 时用命令自己声明的默认值（`build` 30 分钟、`test_run` 10 分钟、`package_*` 5 分钟、`compile` / `refresh` 180 秒、`play` / `stop` 120 秒，其余 30 秒）。
+**超时：** deadline 从提交时开始算，排队时间也计入。排在长命令后面的命令到了自己的 deadline 就以 `host_timeout` 结束，不等前面的命令完成，也不会再派发给 Unity。没传 `--timeout` 时用该命令描述符上的 `default_timeout_ms`（`ucp-cli help` 能看到）；空则 30 秒。Editor 文件队列里 `deadline <= 0` 的命令不执行，outbox 写 `invalid_argument`。Unity 自己的等待（例如 `ui_wait`）超时仍是 `timeout`。
 
-**排队：** 同一个 Editor 的命令按提交顺序逐条执行，Editor 和它的 Play Mode runtime 之间并行。只读命令（`ping`、`state`、`console`、`help`、`echo`，由 agent 在 session 文件的 `readOnlyCommands` 里列出）不排队：`test_run` 期间、`compile` 编译期间都能答复，不必等前面的命令结束。域重载本身是例外：Unity 重载时不 tick，期间发来的命令要等重载结束（实测一次 compile 的重载让 `state` 等了约 6 秒）。
+**排队：** 同一个 Editor 的命令按提交顺序逐条执行，Editor 和它的 Play Mode runtime 之间并行。`ping`、`state`、`console`、`help`、`echo` 不排队：agent 把这些命令名写在 session 文件的 `runsWhileBusy` 里。空列表表示都要排队。`test_run` 期间、`compile` 编译期间它们都能答复，不必等前面的命令结束。域重载本身是例外：Unity 重载时不 tick，期间发来的命令要等重载结束（实测一次 compile 的重载让 `state` 等了约 6 秒）。
 
 **Editor 忙：** 导入资源时 Editor 不 tick，心跳会超过 30 秒。只要 session 文件里的 pid 还活着，host 就等它就绪，直到调用方超时；pid 已退出才立即失败。
 
@@ -54,25 +54,33 @@ Edit Mode 下 Editor **不开** HTTP 端口，通信全走 FileQueue（`inbox` /
 1. 延迟命令（`compile`、`refresh compile=true`、`play`、`stop`、`test_run`、`package_add`、`package_remove`、`ui_wait`）运行前先建 job，同步写入 `SessionState` 和 `~/.ucp/jobs/{projectId}/{cmdId}.json`。
 2. 重载后 `EditorJobStateManager` 在第一次轮询 inbox 之前读回 job。已有 job 的命令不会被再次执行。
 3. 每个 editor tick 由 completion policy 判断 job 是否完成，完成后写 outbox、删除 job。
-4. 没有 policy 的 job（`started`，由回调完成）在重载后立即以 `orphaned` 失败，因为它的回调已随旧 domain 消失。
-5. 超过 deadline 的 job 直接删除、不写结果：host 按同一个 deadline 计时，已经回了 `timeout`。
+4. 重载之后，job 上的类名对不上任何已加载的 policy，这条命令立即以 `orphaned` 失败。能活过重载的结果要由 policy 从 job 里读出来；回调只在这次域里把结果写进 job。
+5. 超过 deadline 的 job 直接删除、不写结果：host 按同一个 deadline 计时，已经回了 `host_timeout`。日志里带上命令 id、名字和 policy 类名。
 
-**从 0.3 升级：** 加载新代码的那次 `compile` 是旧 agent 建的 job，由新 agent 接着完成并返回一次结果。0.3 留在 `SessionState` 里的已完成 job 在第一次重载时全部丢弃，不会重复投递。用例 `delivery.test.ts` "finishes a 0.3 compile after the upgrade reload…" 把 0.3 格式的 job 记录写进 `SessionState` 再触发重载，断言 outbox 里只有那次 compile 的结果；去掉修复后它会多出 0.3 已答复过的 `play` 结果而失败。
+**读不了的 job：** SessionState 和 `jobs/` 里不是本 agent 写出的记录直接丢掉，不恢复、不重放。`delivery.test.ts` 把旧的 `{Items}` 列表写进 SessionState 再触发重载，断言 outbox 里没有那些 id。
 
 ---
 
 ## 4. 延迟实测
 
-由 `tests/integration/background.test.ts` 自动测得：测试自己把 Unity 最小化，跑完再还原窗口。Unity 在后台时 editor tick 每秒 10.3–10.7 次，即约每 100 ms 一次。`ping` 从交给 Unity 到读到结果（`unity_ms`）：
+两个用例都会自己摆好 Unity 窗口，跑完再还原。`ping` 一列是从交给 Unity 到读到结果（`unity_ms`）：
 
-| inbox 检查方式 | 连发 20 条：中位 / 最大 | 随机间隔 30 条：中位 / 最大 |
-|----------------|-------------------------|-----------------------------|
-| 每 250 ms 一次（0.3） | 295 / 321 ms | 约 200 / 318 ms |
-| 每个 editor tick 一次（0.5） | 96 / 127 ms | 约 75 / 140 ms |
+| Unity 窗口 | 用例 | editor tick | 连发 20 条 ping：中位 / 最大 | 随机间隔 30 条：中位 / 最大 |
+|------------|------|-------------|------------------------------|-----------------------------|
+| 最小化（后台） | `background.test.ts` | 每秒 9.7–10.7 次 | 96–106 / 107–132 ms | 73–78 / 138–162 ms |
+| 在前台、有焦点 | `foreground.test.ts` | 每秒 70–294 次 | 17–18 / 22–39 ms | 24–32 / 37–47 ms |
+| 最小化，旧的每 250 ms 检查一次 inbox（0.3） | `background.test.ts` | — | 295 / 321 ms | 约 200 / 318 ms |
 
-连发时每条都刚好错过一个 tick，要等满一个；随机到达平均等半个。用例的断言是：tick 每秒 5–20 次，连发中位 < 200 ms，随机间隔中位 < 120 ms。把检查间隔改回 250 ms 后两条延迟断言都失败，所以它们守住了这项优化。
+- **后台**：每条命令要等到下一个 tick 才被看到。连发时每条都刚好错过一个 tick，要等满约 100 ms；随机到达平均等半个。
+- **前台**：Unity 的 tick 远快于 agent 自己设的检查间隔（最多每 20 ms 一次），延迟由这 20 ms 决定，所以 tick 数在 70 和 294 之间变化时，ping 都稳定在约 18 ms。tick 数本身变化很大，5 次实测里 4 次在 280–294，1 次为 70。
 
-前台没有测：要让 Unity 获得焦点只能抢用户的焦点。命令超时时，`hint` 会根据 session 的 `focused` 字段说明 Unity 当时是否在后台。
+断言：后台 tick 每秒 5–20 次、连发中位 < 200 ms、随机间隔中位 < 120 ms；前台 tick 每秒 > 20 次、两种 ping 中位都 < 60 ms。把检查间隔改回 250 ms 后，后台两条延迟断言都会失败，所以它们守住了这项优化。
+
+命令稳定性以最小化的 Editor 为准。集成测试在每个文件开始时把 Unity 最小化，结束时恢复原来的窗口。前台 tick 更快，能在后台跑完的命令在前台也能跑完。前台用例只测量有焦点时的延迟，要抢走焦点，因此只在 `UCP_ALLOW_FOCUS=1` 时运行；默认的全量测试不抢焦点。
+
+命令超时时，`hint` 会根据 session 的 `focused` 字段说明 Unity 当时是否在后台。
+
+**改了脚本没编译：** Unity 在后台不会自己导入改过的脚本（Auto Refresh 开着也一样）。编译是单独的一条命令。调用方先写文件，再跑 `compile`；编译不过时 `compile` 以 `compile_error` 结束。`exec`、`play`、`test_run`、`build`、`component_add` 用的是已经加载的程序集。没编译就加一个刚写的组件类，得到 `type_not_found`，提示先 `compile`。用例：`tests/integration/stale-scripts.test.ts`。
 
 ---
 
@@ -87,7 +95,7 @@ Edit Mode 下 Editor **不开** HTTP 端口，通信全走 FileQueue（`inbox` /
 | `no_ready_session` | Unity 未打开、Agent 未编译，或 runtime session 不在 Play Mode |
 | `editor_not_running` | session 文件里的 Unity 进程已退出 |
 
-host 自己判定的失败（上面几种、`timeout`、`unknown_command`、`command_failed`）同样带 `message` 和 `hint`。完整错误码表见 [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md#upgrading-from-03)。
+host 自己判定的失败（上面几种、`host_timeout`、`host_unknown_command`、`host_command_failed`）同样带 `message` 和 `hint`。完整错误码表见 [CHANGELOG_AGENT.md](CHANGELOG_AGENT.md#upgrading-from-03)。
 
 ---
 
@@ -108,11 +116,13 @@ npm run check; npm test; npm run test:integration
 | 只执行一次、不留文件 | `tests/integration/delivery.test.ts`（自动把 Unity 最小化后跑） |
 | 过 deadline 不执行、不写结果；不带 deadline 的旧 host 命令照常执行 | `delivery.test.ts` "does not run a command whose deadline passed…"、"a command that outruns its timeout…"、"still runs a command from a host that sends no deadline" |
 | 从 0.3 升级 | `delivery.test.ts` "finishes a 0.3 compile after the upgrade reload…" |
-| `started` job 被重载打断时立即 orphaned | `delivery.test.ts` "fails a job its domain reload cut off as orphaned, at once" |
+| 重载后 job 上的 policy 类不在了，立即 `orphaned` | `delivery.test.ts` "fails as orphaned when a reload leaves the job's policy class unloaded" |
 | 只读命令不排队；域重载期间要等 | `test-run.test.ts` "answers state and ping from another caller…"、`delivery.test.ts` "answers state while a compile runs…"、`tests/unit/host/command-runner.test.ts` |
 | 排队命令按自己的 deadline 超时、host 层失败带 message | `tests/unit/host/command-runner.test.ts` |
 | 替换中的 session 文件、无响应的 runtime 设备、runtime 补探 | `tests/unit/host/session-directory.test.ts`、`command-runner.test.ts` |
 | `/shutdown`、对旧 host 结束进程、`host_lost`、`host_restarting` / `host_unreachable` 自动重发、401 提示 | `tests/unit/host/host-server-origin.test.ts`、`tests/integration/ping-e2e.test.ts`、`tests/unit/cli/ensure-host.test.ts` |
 | 后台 tick 频率与 `ping` 延迟、后台 compile 导入新脚本 | `tests/integration/background.test.ts` |
+| 改了脚本后，要先 `compile`，别的命令不会自己编译 | `tests/integration/stale-scripts.test.ts` |
+| 前台 tick 频率与 `ping` 延迟 | `tests/integration/foreground.test.ts`（需 `UCP_ALLOW_FOCUS=1`，会抢焦点，默认跳过） |
 
 没有自动化测试的只有一项："0.2 的 CLI 不带 token"是 master 代码的事实（它的请求里没有 `X-UCP-Token`）。用例 `host-server-origin.test.ts` 确认的是：不带 token 的请求一律 401，并提示升级 ucp-cli。

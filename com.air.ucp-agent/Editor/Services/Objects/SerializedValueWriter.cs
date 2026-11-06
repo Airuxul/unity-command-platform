@@ -316,9 +316,9 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             if (value is JObject form)
             {
-                var assetPath = JsonValues.Text(form, "asset", "asset_path", ParamKeys.Path);
+                var assetPath = JsonValues.Text(form, "asset_path");
                 if (!string.IsNullOrWhiteSpace(assetPath))
-                    return LoadFromPath(assetPath, JsonValues.Text(form, "sub_asset", "sub"), expectedType);
+                    return LoadFromPath(assetPath, JsonValues.Text(form, "sub_asset"), expectedType);
 
                 var guid = JsonValues.Text(form, "guid");
                 if (!string.IsNullOrWhiteSpace(guid))
@@ -327,23 +327,20 @@ namespace Air.UcpAgent.Editor.Services.Objects
                     if (string.IsNullOrEmpty(path))
                         throw new ArgumentException($"No asset for guid '{guid}'.");
 
-                    return LoadFromPath(path, JsonValues.Text(form, "sub_asset", "sub"), expectedType);
+                    return LoadFromPath(path, JsonValues.Text(form, "sub_asset"), expectedType);
                 }
 
-                var builtin = JsonValues.Text(form, "builtin", "builtin_resource");
-                if (!string.IsNullOrWhiteSpace(builtin))
-                    return LoadBuiltin(builtin, expectedType);
-
-                var node = JsonValues.Text(form, "node", "gameobject", "go");
+                var node = JsonValues.Text(form, "node");
                 if (!string.IsNullOrWhiteSpace(node))
-                    return ResolveNodeReference(node, JsonValues.Text(form, "component", "type"), expectedType, scope);
+                    return ResolveNodeReference(node, JsonValues.Text(form, "component"), expectedType, scope);
 
-                var id = JsonValues.Pick(form, "id", "instance_id");
+                var id = JsonValues.Pick(form, "instance_id");
                 if (!JsonValues.IsAbsent(id))
                     return FromInstanceId(id.ToObject<int>(), expectedType);
 
                 throw new ArgumentException(
-                    "Object reference must carry one of: asset, guid, builtin, node, id. Got: " +
+                    "Object reference must carry one of: asset_path, guid, instance_id, node. " +
+                    "Built-in assets use a string starting with 'builtin:'. Got: " +
                     string.Join(", ", form.Properties().Select(p => p.Name)));
             }
 
@@ -374,7 +371,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
         /// <summary>
         /// Unity's own default assets have no path under Assets/ and no GUID a caller can discover,
-        /// so they need their own addressing form: <c>{"builtin": "LegacyRuntime.ttf"}</c> or
+        /// so they need a string starting with <c>builtin:</c>, for example
         /// <c>"builtin:UI/Skin/UISprite.psd"</c>. Without this a UI built from scratch has no font
         /// and renders nothing, which is the first wall anyone hits.
         /// </summary>

@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System.Collections.Generic;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Objects;
@@ -9,139 +10,154 @@ namespace Air.UcpAgent.Editor.Commands
     // Every command here takes an optional `prefab` argument. With it they edit that prefab asset
     // in place; without it they edit the open scene. One implementation, both scopes.
 
-    public sealed class GameObjectCreateCommand : EditTargetCommand<GameObjectCreateParams>
+    [UcpCommand]
+    public static class GameObjectCreateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectCreateParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectCreateParams>(
             CommandNames.GameObjectCreate,
             CommandHostScope.Editor,
             "Create a GameObject in a scene or inside a prefab asset");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectCreateParams p) =>
-            GameObjectService.Create(scope, p);
+        public static object Execute(GameObjectCreateParams p, EditTargetContext ctx) =>
+            GameObjectService.Create(ctx.Scope, p);
     }
 
-    public sealed class GameObjectDeleteCommand : EditTargetCommand<NodeParams>
+    [UcpCommand]
+    public static class GameObjectDeleteCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<NodeParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<NodeParams>(
             CommandNames.GameObjectDelete,
             CommandHostScope.Editor,
             "Delete a GameObject and its children");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, NodeParams p) => GameObjectService.Delete(scope, p);
+        public static object Execute(NodeParams p, EditTargetContext ctx) => GameObjectService.Delete(ctx.Scope, p);
     }
 
-    public sealed class GameObjectDuplicateCommand : EditTargetCommand<GameObjectDuplicateParams>
+    [UcpCommand]
+    public static class GameObjectDuplicateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectDuplicateParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectDuplicateParams>(
             CommandNames.GameObjectDuplicate,
             CommandHostScope.Editor,
             "Duplicate a GameObject, optionally under a different parent");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectDuplicateParams p) =>
-            GameObjectService.Duplicate(scope, p);
+        public static object Execute(GameObjectDuplicateParams p, EditTargetContext ctx) =>
+            GameObjectService.Duplicate(ctx.Scope, p);
     }
 
-    public sealed class GameObjectRenameCommand : EditTargetCommand<GameObjectRenameParams>
+    [UcpCommand]
+    public static class GameObjectRenameCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectRenameParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectRenameParams>(
             CommandNames.GameObjectRename,
             CommandHostScope.Editor,
             "Rename a GameObject");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectRenameParams p) =>
-            GameObjectService.Rename(scope, p);
+        public static object Execute(GameObjectRenameParams p, EditTargetContext ctx) =>
+            GameObjectService.Rename(ctx.Scope, p);
     }
 
-    public sealed class GameObjectReparentCommand : EditTargetCommand<GameObjectReparentParams>
+    [UcpCommand]
+    public static class GameObjectReparentCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectReparentParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectReparentParams>(
             CommandNames.GameObjectReparent,
             CommandHostScope.Editor,
             "Move a GameObject under a new parent and/or sibling index");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectReparentParams p) =>
-            GameObjectService.Reparent(scope, p);
+        public static object Execute(GameObjectReparentParams p, EditTargetContext ctx) =>
+            GameObjectService.Reparent(ctx.Scope, p);
     }
 
-    public sealed class GameObjectTransformCommand : EditTargetCommand<GameObjectTransformParams>
+    [UcpCommand]
+    public static class GameObjectTransformCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectTransformParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectTransformParams>(
             CommandNames.GameObjectTransform,
             CommandHostScope.Editor,
             "Set position, rotation and/or scale, in local or world space, absolute or relative");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectTransformParams p) =>
-            GameObjectService.SetTransform(scope, p);
+        public static object Execute(GameObjectTransformParams p, EditTargetContext ctx) =>
+            GameObjectService.SetTransform(ctx.Scope, p);
     }
 
-    public sealed class GameObjectActivateCommand : EditTargetCommand<GameObjectActivateParams>
+    [UcpCommand]
+    public static class GameObjectActivateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectActivateParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectActivateParams>(
             CommandNames.GameObjectActivate,
             CommandHostScope.Editor,
             "Enable or disable a GameObject (omit 'active' to toggle)");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectActivateParams p) =>
-            GameObjectService.Activate(scope, p);
+        public static object Execute(GameObjectActivateParams p, EditTargetContext ctx) =>
+            GameObjectService.Activate(ctx.Scope, p);
     }
 
-    public sealed class GameObjectTagCommand : EditTargetCommand<GameObjectTagParams>
+    [UcpCommand]
+    public static class GameObjectTagCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectTagParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectTagParams>(
             CommandNames.GameObjectTag,
             CommandHostScope.Editor,
             "Assign a tag to a GameObject, optionally to its whole subtree");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectTagParams p) =>
-            GameObjectService.SetTag(scope, p);
+        public static object Execute(GameObjectTagParams p, EditTargetContext ctx) =>
+            GameObjectService.SetTag(ctx.Scope, p);
     }
 
-    public sealed class GameObjectLayerCommand : EditTargetCommand<GameObjectLayerParams>
+    [UcpCommand]
+    public static class GameObjectLayerCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectLayerParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectLayerParams>(
             CommandNames.GameObjectLayer,
             CommandHostScope.Editor,
             "Assign a layer to a GameObject, optionally to its whole subtree");
 
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectLayerParams p) =>
-            GameObjectService.SetLayer(scope, p);
+        public static object Execute(GameObjectLayerParams p, EditTargetContext ctx) =>
+            GameObjectService.SetLayer(ctx.Scope, p);
     }
 
-    public sealed class GameObjectInfoCommand : EditTargetCommand<NodeParams>
+    [UcpCommand]
+    public static class GameObjectInfoCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<NodeParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<NodeParams>(
             CommandNames.GameObjectInfo,
             CommandHostScope.Editor,
-            "Everything about one GameObject: transform, tag, layer, components, children, prefab linkage");
+            "Everything about one GameObject: transform, tag, layer, components, children, prefab linkage")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, NodeParams p) => GameObjectService.Info(scope, p);
+        public static object Execute(NodeParams p, EditTargetContext ctx) => GameObjectService.Info(ctx.Scope, p);
     }
 
-    public sealed class GameObjectTreeCommand : EditTargetCommand<GameObjectTreeParams>
+    [UcpCommand]
+    public static class GameObjectTreeCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectTreeParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectTreeParams>(
             CommandNames.GameObjectTree,
             CommandHostScope.Editor,
-            "Hierarchy dump from a node or from the scene roots");
+            "Hierarchy dump from a node or from the scene roots")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectTreeParams p) =>
-            GameObjectService.Tree(scope, p);
+        public static object Execute(GameObjectTreeParams p, EditTargetContext ctx) =>
+            GameObjectService.Tree(ctx.Scope, p);
     }
 
-    public sealed class GameObjectFindCommand : EditTargetCommand<GameObjectFindParams>
+    [UcpCommand]
+    public static class GameObjectFindCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<GameObjectFindParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<GameObjectFindParams>(
             CommandNames.GameObjectFind,
             CommandHostScope.Editor,
-            "Search GameObjects by name, tag, layer, component or path");
+            "Search GameObjects by name, tag, layer, component or path")
+        {
+            ReadsTargetOnly = true,
+        };
 
-        protected override bool ReadOnly => true;
-
-        protected override Dictionary<string, object> Apply(EditTargetScope scope, GameObjectFindParams p) =>
-            GameObjectService.Find(scope, p);
+        public static object Execute(GameObjectFindParams p, EditTargetContext ctx) =>
+            GameObjectService.Find(ctx.Scope, p);
     }
 }

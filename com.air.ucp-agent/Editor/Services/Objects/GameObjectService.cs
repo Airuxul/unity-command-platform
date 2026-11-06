@@ -52,7 +52,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 created.SetActive(p.Active.Value);
 
             var added = Primitives.AddComponents(created, p.Components);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -80,7 +79,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
             var path = GameObjectPath.Of(node);
             var name = node.name;
             scope.Destroy(node.gameObject);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -106,7 +104,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(clone, scope.Scene);
 
             scope.RegisterCreated(clone, $"ucp {CommandNames.GameObjectDuplicate}");
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -127,7 +124,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             scope.RecordUndo(node.gameObject, $"ucp {CommandNames.GameObjectRename}");
             node.name = p.Name.Trim();
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -153,31 +149,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             var keepWorld = p.KeepWorld ?? true;
             var previous = GameObjectPath.Of(node);
-            var localPosition = node.localPosition;
-            var localRotation = node.localRotation;
-            var localScale = node.localScale;
-
-            if (scope.SupportsUndo)
-            {
-                // Undo.SetTransformParent always keeps the world transform, so restore the local
-                // values afterwards rather than silently ignoring keepWorld=false.
-                Undo.SetTransformParent(node, parent, $"ucp {CommandNames.GameObjectReparent}");
-                if (!keepWorld)
-                {
-                    node.localPosition = localPosition;
-                    node.localRotation = localRotation;
-                    node.localScale = localScale;
-                }
-            }
-            else
-            {
-                node.SetParent(parent, keepWorld);
-            }
+            scope.SetParent(node, parent, keepWorld, $"ucp {CommandNames.GameObjectReparent}");
 
             if (p.Index.HasValue)
                 node.SetSiblingIndex(Mathf.Max(0, p.Index.Value));
-
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -193,6 +168,8 @@ namespace Air.UcpAgent.Editor.Services.Objects
         {
             var node = GameObjectPath.Require(scope, p);
             var world = string.Equals(p.Space, "world", StringComparison.OrdinalIgnoreCase);
+            if (JsonValues.IsAbsent(p.Position) && JsonValues.IsAbsent(p.Rotation) && JsonValues.IsAbsent(p.Scale))
+                throw new ArgumentException("Pass at least one of 'position', 'rotation' or 'scale'.");
 
             scope.RecordUndo(node, $"ucp {CommandNames.GameObjectTransform}");
 
@@ -230,11 +207,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 changed.Add("scale");
             }
 
-            if (changed.Count == 0)
-                throw new ArgumentException("Pass at least one of 'position', 'rotation' or 'scale'.");
-
-            scope.MarkDirty();
-
             var payload = new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
@@ -253,7 +225,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
 
             scope.RecordUndo(node.gameObject, $"ucp {CommandNames.GameObjectActivate}");
             node.gameObject.SetActive(target);
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {
@@ -275,8 +246,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 target.gameObject.tag = tag;
             }
 
-            scope.MarkDirty();
-
             return new Dictionary<string, object>
             {
                 ["node"] = GameObjectPath.Of(node),
@@ -296,8 +265,6 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 scope.RecordUndo(target.gameObject, $"ucp {CommandNames.GameObjectLayer}");
                 target.gameObject.layer = layer;
             }
-
-            scope.MarkDirty();
 
             return new Dictionary<string, object>
             {

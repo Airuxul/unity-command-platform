@@ -7,7 +7,7 @@ namespace Air.UcpAgent.Runtime
 {
     public static class RuntimeCommandService
     {
-        public static UcpResult Execute(UcpCommand command)
+        public static UcpResult Execute(UcpRequest command)
         {
             if (command == null || string.IsNullOrEmpty(command.id))
             {
@@ -25,8 +25,7 @@ namespace Air.UcpAgent.Runtime
             return CommandExecutor.Execute(CommandRegistry.RuntimeHost, command, jobs: null);
         }
 
-        /// <summary>Names only: the runtime agent has never advertised aliases.</summary>
         public static List<string> BuildCapabilities() =>
-            CommandRegistry.Capabilities(CommandRegistry.RuntimeHost, includeAliases: false);
+            CommandRegistry.Capabilities(CommandRegistry.RuntimeHost, includeAliases: true);
     }
 }

@@ -25,6 +25,10 @@ namespace Air.UcpAgent.Editor.IO
             return normalized;
         }
 
+        /// <summary>The file or folder on disk for a project-relative asset path.</summary>
+        public static string ToFullPath(string assetPath) =>
+            Path.GetFullPath(Path.Combine(Path.Combine(Application.dataPath, ".."), Normalize(assetPath) ?? ""));
+
         /// <summary>Normalises and requires a project-relative path under Assets/ or Packages/.</summary>
         public static string RequireProjectPath(string path, string paramName)
         {

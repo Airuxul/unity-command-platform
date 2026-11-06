@@ -4,17 +4,21 @@ using Air.UcpAgent.Invoke;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class StateCommand : CliCommand
+    [UcpCommand]
+    public static class StateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor(
             CommandNames.State,
             CommandHostScope.Editor,
-            "Editor and agent state snapshot");
-
-        public override void Run()
+            "Editor and agent state snapshot")
         {
-            var data = EditorStateProvider.ToManifestObject();
-            CompleteSuccess(InvokeResult.Ok("state snapshot", data));
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(CommandContext ctx)
+        {
+            ctx.Message = "state snapshot";
+            return EditorStateProvider.ToManifestObject();
         }
     }
 }

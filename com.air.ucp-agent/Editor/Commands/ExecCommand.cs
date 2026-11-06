@@ -6,24 +6,18 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class ExecCommand : CliCommand<ExecParams>
+    [UcpCommand]
+    public static class ExecCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ExecParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ExecParams>(
             CommandNames.Exec,
             CommandHostScope.Editor,
-            "Compile and execute arbitrary C# in Editor context");
+            "Execute arbitrary C# in the Editor. Compile changed scripts first; this command runs the scripts already loaded.");
 
-        public override void Run(ExecParams p)
+        public static object Execute(ExecParams p, CommandContext ctx)
         {
-            try
-            {
-                var data = CsharpExecutor.Execute(p);
-                CompleteSuccess(InvokeResult.Ok("exec completed", data));
-            }
-            catch (System.Exception ex)
-            {
-                CompleteFail(ex);
-            }
+            ctx.Message = "exec completed";
+            return CsharpExecutor.Execute(p);
         }
     }
 }

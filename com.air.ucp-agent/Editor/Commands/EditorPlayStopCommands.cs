@@ -1,3 +1,5 @@
+using System;
+using Air.UcpAgent.Completion;
 using Air.UcpAgent.Invoke;
 using UnityEditor;
 using Air.UcpAgent.Params;
@@ -6,33 +8,41 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class EditorPlayCommand : CliCommand<PlayParams>
+    [UcpCommand]
+    public static class EditorPlayCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<PlayParams>(
+        public static readonly Type CompletionPolicy = typeof(EnterPlayModePolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<PlayParams>(
             CommandNames.Play,
             CommandHostScope.Editor,
             "Enter Play Mode (deferred)",
-            InvokeCompletionCatalog.CompletionEnterPlay,
+            CompletionPolicy,
             defaultTimeoutMs: 120_000);
 
-        public override void Run(PlayParams p)
+        public static object Execute(PlayParams p, CommandContext ctx)
         {
             EditorApplication.EnterPlaymode();
+            return null;
         }
     }
 
-    public class EditorStopCommand : CliCommand<StopParams>
+    [UcpCommand]
+    public static class EditorStopCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<StopParams>(
+        public static readonly Type CompletionPolicy = typeof(ExitPlayModePolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<StopParams>(
             CommandNames.Stop,
             CommandHostScope.Editor,
             "Exit Play Mode (deferred)",
-            InvokeCompletionCatalog.CompletionExitPlay,
+            CompletionPolicy,
             defaultTimeoutMs: 120_000);
 
-        public override void Run(StopParams p)
+        public static object Execute(StopParams p, CommandContext ctx)
         {
             EditorApplication.ExitPlaymode();
+            return null;
         }
     }
 }

@@ -227,7 +227,7 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 if (property.arraySize > kept)
                     elements.Add(Truncated(
                         $"{property.arrayElementType}[{property.arraySize}]",
-                        $"{property.arraySize - kept} more; raise 'max_array' to read them all"));
+                        $"{property.arraySize - kept} more; raise 'maxArray' to read them all"));
 
                 return elements;
             }

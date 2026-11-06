@@ -1,40 +1,18 @@
 # com.air.ucp-agent
 
-Unity Command Platform agent — Editor FileQueue polling and native command dispatch (**no HTTP** in
-Edit Mode), plus a loopback HTTP agent while in Play Mode.
+Unity agent for the Unity Command Platform. Edit Mode polls a file queue and does not listen on HTTP. Play Mode starts a loopback HTTP agent.
 
 ## Install
 
-`Packages/manifest.json`, from a local clone or from git:
+In `Packages/manifest.json`, from a local clone or from git:
 
 ```json
 "com.air.ucp-agent": "file:C:/path/to/unity-command-platform/com.air.ucp-agent"
 "com.air.ucp-agent": "https://github.com/Airuxul/unity-command-platform.git?path=/com.air.ucp-agent"
 ```
 
-Open the Unity project — the agent registers at `~/.ucp/sessions/{projectId}.json`. `test_run`
-appears only when `com.unity.test-framework` is installed.
+Open the project and wait for compile. The agent writes `~/.ucp/sessions/{projectId}.json`. `test_run` exists only when `com.unity.test-framework` is installed.
 
-## Architecture
+How to call it: [../docs/GUIDE.zh-CN.md](../docs/GUIDE.zh-CN.md). Add a command: [../docs/MAINTENANCE.md](../docs/MAINTENANCE.md#add-an-editor-command). Naming: [../CONVENTIONS.md](../CONVENTIONS.md).
 
-```text
-ucp-cli → ucp-host → FileQueue → EditorAgentBootstrap
-                                 → CommandExecutor → CommandRegistry
-                                 → CliCommand.Run (deferred: job + completion policy)
-```
-
-## CLI
-
-```bash
-ucp-cli ping
-ucp-cli help
-ucp-cli run echo --args '{"message":"hello"}'
-ucp-cli run state --project C:/Project/GameDemo
-```
-
-Node package: [../ucp-cli](../ucp-cli/) · [CONVENTIONS.md](../CONVENTIONS.md)
-
-## Extending
-
-Add a `CliCommand` under `Editor/Commands/` — `CommandRegistry` finds it on the next compile. See
-[../docs/MAINTENANCE.md](../docs/MAINTENANCE.md#add-an-editor-command).
+A new command is a static class marked `[UcpCommand]`. `CommandRegistry` finds it on the next compile and reports a malformed one under `load_errors` in `help`. There is no hand-written registration list. A static method marked `[UcpFunction("name")]` runs through `call`.

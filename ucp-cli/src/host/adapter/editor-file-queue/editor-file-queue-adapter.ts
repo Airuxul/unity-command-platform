@@ -8,6 +8,7 @@ import {
   writeJsonAtomic,
 } from "#shared/index.js";
 import type { UcpCommand, UcpResult, UcpSession } from "#shared/types.js";
+import { HostDispatchError, HostError } from "../../errors.js";
 import type { Logger } from "../../logger/logger.js";
 
 /** Queue files older than this belong to a caller that has given up (or a host that crashed). */
@@ -24,7 +25,10 @@ export class EditorFileQueueAdapter {
 
   /** Rejects with Error("timeout") after `command.timeout` ms. */
   async dispatch(session: UcpSession, command: UcpCommand): Promise<UcpResult> {
-    const queueId = session.queueId ?? session.id;
+    if (!session.queueId) {
+      throw new HostDispatchError(HostError.commandFailed, "Editor session has no queueId.");
+    }
+    const queueId = session.queueId;
     const layout = queueLayout(queueId, this.ucpRoot);
     fs.mkdirSync(layout.inbox, { recursive: true });
     fs.mkdirSync(layout.outbox, { recursive: true });

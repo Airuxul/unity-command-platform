@@ -5,9 +5,14 @@ namespace Air.UcpAgent
 {
     public interface ICompletionPolicy
     {
-        string Kind { get; }
         /// <returns>True once the job is done: with <paramref name="result"/>, or with <paramref name="failure"/> set.</returns>
         bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure);
+    }
+
+    /// <summary>A policy that has to clean up when its job passes the deadline, before the job is dropped.</summary>
+    public interface IExpiringPolicy
+    {
+        void Expired(InvokeJobRecord job);
     }
 
     public sealed class EditorStateSnapshot

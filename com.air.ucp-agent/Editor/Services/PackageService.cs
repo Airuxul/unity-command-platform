@@ -177,7 +177,7 @@ namespace Air.UcpAgent.Editor.Services
             {
                 var manifest = Path.Combine(Path.GetFullPath(Path.Combine(EditorProjectPaths.GetProjectPath(), "Packages",
                     identifier.Substring("file:".Length))), "package.json");
-                return File.Exists(manifest) ? JsonUtility.FromJson<PackageName>(File.ReadAllText(manifest))?.name : null;
+                return File.Exists(manifest) ? UcpJson.Deserialize<PackageName>(File.ReadAllText(manifest))?.name : null;
             }
 
             if (identifier.Contains("://") || identifier.EndsWith(".git", StringComparison.OrdinalIgnoreCase))

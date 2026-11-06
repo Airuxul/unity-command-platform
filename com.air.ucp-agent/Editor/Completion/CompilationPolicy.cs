@@ -1,6 +1,5 @@
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Job;
-using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
 
 namespace Air.UcpAgent.Completion
@@ -12,8 +11,6 @@ namespace Air.UcpAgent.Completion
     /// </summary>
     public sealed class CompilationPolicy : ICompletionPolicy
     {
-        public string Kind => InvokeCompletionCatalog.CompletionCompilation;
-
         public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
         {
             result = null;

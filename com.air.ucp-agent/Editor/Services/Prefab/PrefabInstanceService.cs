@@ -50,8 +50,6 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (p.Index.HasValue)
                 transform.SetSiblingIndex(Mathf.Max(0, p.Index.Value));
 
-            scope.MarkDirty();
-
             return new Dictionary<string, object>
             {
                 ["source"] = sourcePath,
@@ -68,23 +66,24 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         {
             var node = GameObjectPath.Require(scope, p);
             var (root, assetPath) = RequireInstance(node.gameObject);
+            var mode = scope.PrefabInteraction;
 
             var scopeLabel = "instance";
             if (!string.IsNullOrWhiteSpace(p.Property))
             {
                 var property = RequireProperty(node.gameObject, p, out var component);
-                PrefabUtility.ApplyPropertyOverride(property, assetPath, InteractionMode.AutomatedAction);
+                PrefabUtility.ApplyPropertyOverride(property, assetPath, mode);
                 scopeLabel = $"{component.GetType().Name}.{property.propertyPath}";
             }
             else if (!string.IsNullOrWhiteSpace(p.Component))
             {
                 var component = ComponentService.Require(node.gameObject, p.Component, p.Index);
-                PrefabUtility.ApplyObjectOverride(component, assetPath, InteractionMode.AutomatedAction);
+                PrefabUtility.ApplyObjectOverride(component, assetPath, mode);
                 scopeLabel = component.GetType().Name;
             }
             else
             {
-                PrefabUtility.ApplyPrefabInstance(root, InteractionMode.AutomatedAction);
+                PrefabUtility.ApplyPrefabInstance(root, mode);
             }
 
             scope.MarkDirty();
@@ -108,18 +107,18 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             if (!string.IsNullOrWhiteSpace(p.Property))
             {
                 var property = RequireProperty(node.gameObject, p, out var component);
-                PrefabUtility.RevertPropertyOverride(property, InteractionMode.AutomatedAction);
+                PrefabUtility.RevertPropertyOverride(property, scope.PrefabInteraction);
                 scopeLabel = $"{component.GetType().Name}.{property.propertyPath}";
             }
             else if (!string.IsNullOrWhiteSpace(p.Component))
             {
                 var component = ComponentService.Require(node.gameObject, p.Component, p.Index);
-                PrefabUtility.RevertObjectOverride(component, InteractionMode.AutomatedAction);
+                PrefabUtility.RevertObjectOverride(component, scope.PrefabInteraction);
                 scopeLabel = component.GetType().Name;
             }
             else
             {
-                PrefabUtility.RevertPrefabInstance(root, InteractionMode.AutomatedAction);
+                PrefabUtility.RevertPrefabInstance(root, scope.PrefabInteraction);
             }
 
             scope.MarkDirty();
@@ -220,7 +219,7 @@ namespace Air.UcpAgent.Editor.Services.Prefab
             var (root, assetPath) = RequireInstance(node.gameObject);
 
             var mode = p.Completely ? PrefabUnpackMode.Completely : PrefabUnpackMode.OutermostRoot;
-            PrefabUtility.UnpackPrefabInstance(root, mode, InteractionMode.AutomatedAction);
+            PrefabUtility.UnpackPrefabInstance(root, mode, scope.PrefabInteraction);
             scope.MarkDirty();
 
             // OutermostRoot removes one level of linkage. Unpacking a *variant* instance therefore

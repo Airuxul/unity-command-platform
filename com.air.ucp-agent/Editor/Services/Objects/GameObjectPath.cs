@@ -64,10 +64,10 @@ namespace Air.UcpAgent.Editor.Services.Objects
                 return Require(scope, p?.Node);
 
             var byId = RequireById(p.Id.Value);
-            if (scope.Kind == EditTargetKind.PrefabAsset && byId.scene != scope.Scene)
+            if (byId.scene != scope.Scene)
             {
                 throw new ArgumentException(
-                    $"Instance ids address objects already in memory. To address a node inside a prefab asset, use '{ParamKeys.Node}'.");
+                    $"Instance id {p.Id.Value} is not in the opened target. Use '{ParamKeys.Node}' for a path inside it.");
             }
 
             return byId.transform;

@@ -47,16 +47,21 @@ export interface UcpSession {
   host?: string;
   runtimePort?: number;
   queueId?: string;
-  /** Editor process id; agents before 0.5 do not write it. */
+  /** Editor process id. A session file without one is not a live editor. */
   pid?: number;
   focused?: boolean;
   /** Commands whose descriptor declares a default timeout, by name and alias. */
   defaultTimeouts?: Record<string, number>;
   /**
-   * Commands that change nothing (ping, state, console, ...). They do not wait behind a command
-   * still running on the same editor. Agents before 0.5 send none, so everything waits.
+   * Commands whose descriptor sets RunsWhileBusy. They still run while another command or a test
+   * run holds this editor. An empty list waits for everything.
    */
-  readOnlyCommands?: string[];
+  runsWhileBusy?: string[];
+  /**
+   * Commands that run other commands before or after themselves. Keyed by command name and
+   * alias. Absent when none do.
+   */
+  commandChains?: CommandChains;
 }
 
 export interface EditorTarget {
@@ -78,6 +83,13 @@ export interface RuntimeTarget {
 
 export type UcpTarget = EditorTarget | RuntimeTarget;
 
+export interface CommandLink {
+  before?: string[];
+  after?: string[];
+}
+
+export type CommandChains = Record<string, CommandLink>;
+
 export interface UcpTargetStatus {
   target: UcpTarget;
   status: SessionStatus;
@@ -92,7 +104,7 @@ export interface QueuedCommand {
   status: CommandStatus;
   sessionId: string;
   result?: UcpResult;
-  /** Host-level failure code (timeout, unknown_command, ...); the agent's own goes in result. */
+  /** Host-level failure code (host_timeout, host_unknown_command, ...); the agent's own goes in result. */
   error?: string;
   /** What went wrong, when the host failed the command itself. */
   message?: string;

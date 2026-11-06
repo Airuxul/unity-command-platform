@@ -16,6 +16,7 @@ export interface RunUcpCommandOptions {
   args?: Record<string, unknown>;
   timeout?: number;
   project?: string;
+  target?: string;
 }
 
 export async function runUcpCommand(
@@ -25,6 +26,7 @@ export async function runUcpCommand(
   return executeCommand(type, {
     project: options.project ?? gameDemoProjectPath(),
     sessionType: options.sessionType,
+    target: options.target,
     timeout: options.timeout ?? 30_000,
     args: options.args ?? {},
   });

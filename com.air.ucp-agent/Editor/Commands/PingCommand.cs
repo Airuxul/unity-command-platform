@@ -1,20 +1,24 @@
 using Air.UcpAgent.Invoke;
-using Air.UcpAgent.Params;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class PingCommand : CliCommand
+    [UcpCommand]
+    public static class PingCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor(
             CommandNames.Ping,
             CommandHostScope.Any,
-            "Health check");
-
-        public override void Run()
+            "Health check")
         {
-            CompleteSuccess(InvokeResult.Ok("pong"));
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(CommandContext ctx)
+        {
+            ctx.Message = "pong";
+            return null;
         }
     }
 }

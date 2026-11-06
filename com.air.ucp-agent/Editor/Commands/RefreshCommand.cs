@@ -1,3 +1,4 @@
+using Air.UcpAgent.Completion;
 using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Editor.Services;
 using Air.UcpAgent.Params;
@@ -7,33 +8,28 @@ using Air.UcpAgent.Commands;
 namespace Air.UcpAgent.Editor.Commands
 {
     /// <summary>Immediate refresh by default; compile=true upgrades job completion to compilation.</summary>
-    public class RefreshCommand : CliCommand<RefreshParams>
+    [UcpCommand]
+    public static class RefreshCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<RefreshParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<RefreshParams>(
             CommandNames.Refresh,
             CommandHostScope.Editor,
             "Refresh AssetDatabase; use compile=true to request script compilation",
             defaultTimeoutMs: 180_000);
 
-        public override void Run(RefreshParams p)
+        public static object Execute(RefreshParams p, CommandContext ctx)
         {
-            try
+            var data = AssetRefreshService.Refresh(p);
+            if (!p.Compile)
             {
-                var data = AssetRefreshService.Refresh(p);
-                if (!p.Compile)
-                {
-                    CompleteSuccess(InvokeResult.Ok("refresh completed", data));
-                    return;
-                }
+                ctx.Message = "refresh completed";
+                return data;
+            }
 
-                // From here the job completes like `compile`, with the compile result.
-                Defer(InvokeCompletionCatalog.CompletionCompilation);
-                ScriptCompilationService.RequestWithCompletion(CommandId);
-            }
-            catch (System.Exception ex)
-            {
-                CompleteFail(ex);
-            }
+            // From here the job completes like `compile`, with the compile result.
+            ctx.Defer(typeof(CompilationPolicy));
+            ScriptCompilationService.RequestWithCompletion(ctx.CommandId);
+            return null;
         }
     }
 }

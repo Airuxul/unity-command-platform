@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System;
 using System.Collections.Generic;
 using Air.UcpAgent.Invoke;
@@ -7,9 +8,10 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class MenuCommand : EditorActionCommand<MenuParams>
+    [UcpCommand]
+    public static class MenuCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<MenuParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<MenuParams>(
             CommandNames.Menu,
             CommandHostScope.Editor,
             "Execute a Unity menu item by path");
@@ -19,7 +21,7 @@ namespace Air.UcpAgent.Editor.Commands
             "File/Quit",
         };
 
-        protected override Dictionary<string, object> Execute(MenuParams p)
+        public static object Execute(MenuParams p, CommandContext ctx)
         {
             var menuPath = p.MenuPath;
             if (string.IsNullOrWhiteSpace(menuPath))
@@ -31,9 +33,8 @@ namespace Air.UcpAgent.Editor.Commands
             if (!EditorApplication.ExecuteMenuItem(menuPath))
                 throw new InvalidOperationException($"Failed to execute menu item '{menuPath}'.");
 
+            ctx.Message = $"menu executed: {menuPath}";
             return null;
         }
-
-        protected override string Message(MenuParams p) => $"menu executed: {p.MenuPath}";
     }
 }

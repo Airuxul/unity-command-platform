@@ -124,15 +124,11 @@ namespace Air.UcpAgent.Editor.Services.Prefab
         /// <see cref="PrefabStage"/> has no public <c>Save()</c>, and saving the asset alone leaves
         /// the stage marked dirty — which is what would later trigger the modal.
         /// </summary>
-        public static void SaveStage(PrefabStage stage)
-        {
-            var path = AssetPaths.Normalize(stage.assetPath);
-            PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, path, out var saved);
-            if (!saved)
-                throw new InvalidOperationException($"Unity could not save '{path}'.");
-
-            stage.ClearDirtiness();
-        }
+        public static void SaveStage(PrefabStage stage) =>
+            EditTargetScope.SavePrefabAsset(
+                stage.prefabContentsRoot,
+                AssetPaths.Normalize(stage.assetPath),
+                stage);
 
         /// <summary>
         /// Refuses to delete or move an asset that is open in Prefab Mode. Pulling the asset out

@@ -1,3 +1,5 @@
+using Air.UcpAgent.Editor.IO;
+using Air.UcpAgent.Cli;
 using System.Collections.Generic;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services.Assets;
@@ -6,96 +8,116 @@ using Air.UcpAgent.Params;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public sealed class AssetListCommand : EditorActionCommand<AssetListParams>
+    [UcpCommand]
+    public static class AssetListCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetListParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetListParams>(
             CommandNames.AssetList,
             CommandHostScope.Editor,
             "List assets under a folder, optionally filtered by type and name");
 
-        protected override Dictionary<string, object> Execute(AssetListParams p) => AssetService.List(p);
+        public static object Execute(AssetListParams p, CommandContext ctx) => AssetService.List(p);
     }
 
-    public sealed class AssetFindCommand : EditorActionCommand<AssetFindParams>
+    [UcpCommand]
+    public static class AssetFindCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetFindParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetFindParams>(
             CommandNames.AssetFind,
             CommandHostScope.Editor,
             "Search assets with a raw AssetDatabase filter string");
 
-        protected override Dictionary<string, object> Execute(AssetFindParams p) => AssetService.Find(p);
+        public static object Execute(AssetFindParams p, CommandContext ctx) => AssetService.Find(p);
     }
 
-    public sealed class AssetInfoCommand : EditorActionCommand<AssetInfoParams>
+    [UcpCommand]
+    public static class AssetInfoCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetInfoParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetInfoParams>(
             CommandNames.AssetInfo,
             CommandHostScope.Editor,
             "Asset metadata: guid, type, importer, labels, sub-assets, dependencies");
 
-        protected override Dictionary<string, object> Execute(AssetInfoParams p) => AssetService.Info(p);
+        public static object Execute(AssetInfoParams p, CommandContext ctx) => AssetService.Info(p);
     }
 
-    public sealed class AssetCreateFolderCommand : EditorActionCommand<AssetCreateFolderParams>
+    [UcpCommand]
+    public static class AssetCreateFolderCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetCreateFolderParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetCreateFolderParams>(
             CommandNames.AssetCreateFolder,
             CommandHostScope.Editor,
             "Create a folder, including any missing parents");
 
-        protected override Dictionary<string, object> Execute(AssetCreateFolderParams p) =>
-            AssetService.CreateFolder(p);
+        public static object Execute(AssetCreateFolderParams p, AssetFileContext ctx) =>
+            ctx.Changes.Creating(AssetPaths.RequireProjectPath(p.Path, ParamKeys.Path), () => AssetService.CreateFolder(p), isFolder: true);
+
+        public static void Undo(AssetCreateFolderParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class AssetDeleteCommand : EditorActionCommand<AssetDeleteParams>
+    [UcpCommand]
+    public static class AssetDeleteCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetDeleteParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetDeleteParams>(
             CommandNames.AssetDelete,
             CommandHostScope.Editor,
             "Delete an asset or a whole folder");
 
-        protected override Dictionary<string, object> Execute(AssetDeleteParams p) => AssetService.Delete(p);
+        public static object Execute(AssetDeleteParams p, AssetFileContext ctx) =>
+            ctx.Changes.Deleting(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), ctx.Group, () => AssetService.Delete(p));
+
+        public static void Undo(AssetDeleteParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class AssetMoveCommand : EditorActionCommand<AssetMoveParams>
+    [UcpCommand]
+    public static class AssetMoveCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetMoveParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetMoveParams>(
             CommandNames.AssetMove,
             CommandHostScope.Editor,
             "Move or rename an asset, keeping its GUID and references",
             aliases: new[] { "asset_rename" });
 
-        protected override Dictionary<string, object> Execute(AssetMoveParams p) => AssetService.Move(p);
+        public static object Execute(AssetMoveParams p, AssetFileContext ctx) =>
+            ctx.Changes.Moving(AssetPaths.RequireExisting(p.Path, ParamKeys.Path), AssetPaths.RequireProjectPath(p.Target, ParamKeys.Target), () => AssetService.Move(p));
+
+        public static void Undo(AssetMoveParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class AssetDuplicateCommand : EditorActionCommand<AssetMoveParams>
+    [UcpCommand]
+    public static class AssetDuplicateCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetMoveParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetMoveParams>(
             CommandNames.AssetDuplicate,
             CommandHostScope.Editor,
             "Copy an asset to a new path (new GUID)");
 
-        protected override Dictionary<string, object> Execute(AssetMoveParams p) => AssetService.Duplicate(p);
+        public static object Execute(AssetMoveParams p, AssetFileContext ctx) =>
+            ctx.Changes.Creating(AssetPaths.RequireProjectPath(p.Target, ParamKeys.Target), () => AssetService.Duplicate(p));
+
+        public static void Undo(AssetMoveParams p, AssetFileContext ctx) => ctx.Changes.Undo();
     }
 
-    public sealed class AssetDependenciesCommand : EditorActionCommand<AssetDependenciesParams>
+    [UcpCommand]
+    public static class AssetDependenciesCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetDependenciesParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetDependenciesParams>(
             CommandNames.AssetDependencies,
             CommandHostScope.Editor,
             "List what an asset depends on, direct or transitive");
 
-        protected override Dictionary<string, object> Execute(AssetDependenciesParams p) =>
+        public static object Execute(AssetDependenciesParams p, CommandContext ctx) =>
             AssetService.Dependencies(p);
     }
 
-    public sealed class AssetGuidCommand : EditorActionCommand<AssetGuidParams>
+    [UcpCommand]
+    public static class AssetGuidCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<AssetGuidParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<AssetGuidParams>(
             CommandNames.AssetGuid,
             CommandHostScope.Editor,
             "Convert an asset path to its GUID, or a GUID back to its path");
 
-        protected override Dictionary<string, object> Execute(AssetGuidParams p) => AssetService.Guid(p);
+        public static object Execute(AssetGuidParams p, CommandContext ctx) => AssetService.Guid(p);
     }
 }

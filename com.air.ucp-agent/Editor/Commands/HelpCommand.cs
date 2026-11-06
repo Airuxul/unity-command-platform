@@ -16,15 +16,19 @@ namespace Air.UcpAgent.Editor.Commands
     /// Shares the <c>help</c> name with the Runtime-scope command; the host kind picks which one
     /// runs (<see cref="CommandRegistry.Find"/> is per host).
     /// </remarks>
-    public sealed class HelpEditorCommand : EditorActionCommand<HelpParams>
+    [UcpCommand]
+    public static class HelpEditorCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<HelpParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<HelpParams>(
             CommandNames.Help,
             CommandHostScope.Editor,
             "List every editor command with its description and parameters",
-            aliases: new[] { "commands" });
+            aliases: new[] { "commands", "?" })
+        {
+            RunsWhileBusy = true,
+        };
 
-        protected override Dictionary<string, object> Execute(HelpParams p)
+        public static object Execute(HelpParams p, CommandContext ctx)
         {
             var host = CommandRegistry.EditorHost;
             if (string.Equals(p.Format, HelpParams.Markdown, StringComparison.OrdinalIgnoreCase))

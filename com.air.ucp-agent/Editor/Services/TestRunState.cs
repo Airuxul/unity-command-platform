@@ -1,7 +1,6 @@
 using System;
-using Air.UcpAgent.Commands;
+using Air.UcpAgent.Cli;
 using UnityEditor;
-using UnityEngine;
 
 namespace Air.UcpAgent.Editor.Services
 {
@@ -15,7 +14,6 @@ namespace Air.UcpAgent.Editor.Services
     {
         const string SessionKey = "Air.UcpAgent.TestRun";
 
-        [Serializable]
         sealed class Record
         {
             /// <summary>Empty for a run started from the Test Runner window.</summary>
@@ -32,9 +30,15 @@ namespace Air.UcpAgent.Editor.Services
         /// <summary>Any test run, started by test_run or from the Test Runner window.</summary>
         public static bool IsRunActive() => Load()?.Running == true;
 
-        /// <summary>Everything but <see cref="CommandNames.ReadOnly"/> waits for the run to end.</summary>
-        public static bool BlocksCommand(string command) =>
-            Array.IndexOf(CommandNames.ReadOnly, command) < 0 && IsRunActive();
+        /// <summary>Commands that do not set <see cref="InvokeDescriptor.RunsWhileBusy"/> wait for the run to end.</summary>
+        public static bool BlocksCommand(string command)
+        {
+            if (!IsRunActive())
+                return false;
+
+            var entry = CommandRegistry.Find(CommandRegistry.EditorHost, command);
+            return entry?.Descriptor.RunsWhileBusy != true;
+        }
 
         /// <summary>Called by test_run before it starts the run, so the result finds its job.</summary>
         public static void Begin(string jobId, string mode) =>
@@ -90,9 +94,19 @@ namespace Air.UcpAgent.Editor.Services
         static Record Load()
         {
             var json = SessionState.GetString(SessionKey, "");
-            return string.IsNullOrEmpty(json) ? null : JsonUtility.FromJson<Record>(json);
+            if (string.IsNullOrEmpty(json))
+                return null;
+
+            try
+            {
+                return UcpJson.Deserialize<Record>(json);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
-        static void Save(Record record) => SessionState.SetString(SessionKey, JsonUtility.ToJson(record));
+        static void Save(Record record) => SessionState.SetString(SessionKey, UcpJson.Serialize(record));
     }
 }

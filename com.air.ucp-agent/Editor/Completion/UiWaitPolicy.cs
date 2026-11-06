@@ -2,9 +2,7 @@ using System;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Commands;
 using Air.UcpAgent.Editor.Services;
-using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Job;
-using UnityEngine;
 
 namespace Air.UcpAgent.Completion
 {
@@ -17,8 +15,6 @@ namespace Air.UcpAgent.Completion
         /// </summary>
         const long AnswerMarginMs = 1500;
 
-        public string Kind => InvokeCompletionCatalog.CompletionUiWait;
-
         public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
         {
             result = null;
@@ -26,7 +22,7 @@ namespace Air.UcpAgent.Completion
 
             var condition = string.IsNullOrEmpty(command.CompletionArgs)
                 ? null
-                : JsonUtility.FromJson<UiInteractionService.WaitCondition>(command.CompletionArgs);
+                : UcpJson.Deserialize<UiInteractionService.WaitCondition>(command.CompletionArgs);
             if (condition == null)
             {
                 failure = new CommandFailure(UcpErrorCodes.CommandFailed, $"{CommandNames.UiWait} job has no condition.");
@@ -45,7 +41,7 @@ namespace Air.UcpAgent.Completion
             var payload = UiInteractionService.Check(condition, elapsed, out var seen);
             if (payload != null)
             {
-                result = InvokeResult.Ok(CommandNames.UiWait, payload);
+                result = new PolicyOutcome { Message = CommandNames.UiWait, Data = payload };
                 return true;
             }
 

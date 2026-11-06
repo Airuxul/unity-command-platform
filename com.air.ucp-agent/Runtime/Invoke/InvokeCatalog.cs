@@ -25,7 +25,7 @@ namespace Air.UcpAgent.Invoke
                 commands.Add(Describe(entry));
 
                 versionParts.Add(
-                    $"{entry.Name}|{entry.Completion}|{string.Join(",", entry.Aliases)}|{entry.DefaultTimeoutMs}|{string.Join("|", paramDescs)}");
+                    $"{entry.Name}|{entry.Completion}|{string.Join(",", entry.Aliases)}|{entry.DefaultTimeoutMs}|{string.Join("|", paramDescs)}|{string.Join(",", entry.Descriptor.Before ?? Array.Empty<string>())}|{string.Join(",", entry.Descriptor.After ?? Array.Empty<string>())}");
 
                 foreach (var alias in entry.Aliases)
                 {
@@ -40,6 +40,8 @@ namespace Air.UcpAgent.Invoke
                 ["catalog_version"] = ComputeVersion(versionParts),
                 ["commands"] = commands,
                 ["alias_to_command"] = aliasToCommand,
+                // Command classes that did not load, with why. Empty when every one is well-formed.
+                ["load_errors"] = CommandRegistry.LoadErrors.Concat(FunctionRegistry.LoadErrors).ToList(),
             };
         }
 
@@ -89,8 +91,9 @@ namespace Air.UcpAgent.Invoke
                 ["completion"] = entry.Completion,
                 ["aliases"] = entry.Aliases,
                 ["default_timeout_ms"] = entry.DefaultTimeoutMs > 0 ? entry.DefaultTimeoutMs : (object)null,
-                ["allow_connection_retry"] = entry.AllowConnectionRetry,
                 ["params"] = entry.ParamDescriptions ?? Array.Empty<string>(),
+                ["before"] = entry.Descriptor.Before ?? Array.Empty<string>(),
+                ["after"] = entry.Descriptor.After ?? Array.Empty<string>(),
             };
 
         static CommandEntry Require(string host, string nameOrAlias)
@@ -131,6 +134,10 @@ namespace Air.UcpAgent.Invoke
                 facts.Add($"deferred until `{entry.Completion}`");
             if (entry.DefaultTimeoutMs > 0)
                 facts.Add($"default timeout {entry.DefaultTimeoutMs} ms");
+            if (entry.Descriptor.Before is { Length: > 0 })
+                facts.Add("before: " + string.Join(", ", entry.Descriptor.Before.Select(name => $"`{name}`")));
+            if (entry.Descriptor.After is { Length: > 0 })
+                facts.Add("after: " + string.Join(", ", entry.Descriptor.After.Select(name => $"`{name}`")));
             if (facts.Count > 0)
             {
                 Line(md, string.Join(" · ", facts));
@@ -159,14 +166,14 @@ namespace Air.UcpAgent.Invoke
         static string Example(CommandEntry entry)
         {
             var args = new Dictionary<string, object>();
-            foreach (var param in CliParamBinder.Inspect(entry.ParamType).Where(p => p.Required))
+            foreach (var param in UcpParamBinder.Inspect(entry.ParamType).Where(p => p.Required))
                 args[param.Key] = Placeholder(param);
 
             var call = $"ucp-cli run {entry.Name}";
             return args.Count == 0 ? call : $"{call} --args '{JsonConvert.SerializeObject(args)}'";
         }
 
-        static object Placeholder(CliParamInfo param)
+        static object Placeholder(UcpParamInfo param)
         {
             if (!string.IsNullOrEmpty(param.AllowedValues))
                 return param.AllowedValues.Split('|')[0];

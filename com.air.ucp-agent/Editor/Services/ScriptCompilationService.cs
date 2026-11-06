@@ -144,13 +144,15 @@ namespace Air.UcpAgent.Editor.Services
                     return;
                 }
 
-                EditorJobStateManager.Succeed(commandId, InvokeResult.Ok(
-                    "compile completed",
-                    new Dictionary<string, object>
+                EditorJobStateManager.Succeed(commandId, new PolicyOutcome
+                {
+                    Message = "compile completed",
+                    Data = new Dictionary<string, object>
                     {
                         ["compiled"] = true,
                         ["note"] = "compilation_finished",
-                    }));
+                    },
+                });
             }
             catch (Exception ex)
             {

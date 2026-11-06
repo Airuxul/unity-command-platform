@@ -1,36 +1,34 @@
 namespace Air.UcpAgent.Job
 {
     /// <summary>
-    /// A deferred command's job, persisted in SessionState and ~/.ucp/jobs across domain reloads.
+    /// A deferred command's job, persisted with <see cref="UcpJson"/> in SessionState and ~/.ucp/jobs.
+    /// <see cref="Result"/> is live only. What survives a domain reload is <see cref="ResultJson"/>.
     /// </summary>
-    /// <remarks>
-    /// Serialised with JsonUtility, and the record written by the previous package version is
-    /// read back after the reload that loads a new one. Keep field names, add new fields only at
-    /// the end, and treat their zero value as "written by an older version".
-    /// </remarks>
-    [System.Serializable]
     public sealed class InvokeJobRecord
     {
         public string Id;
         public string Command;
-        public string RequestId;
         public InvokeJobStatus Status = InvokeJobStatus.Pending;
+        /// <summary>Full name of the policy class that resumes this job after a domain reload.</summary>
         public string CompletionKind;
         public string ResultJson;
         public string Error;
         public long CreatedAtUtcMs;
         public long UpdatedAtUtcMs;
+
+        /// <summary>Not written to disk. Restored from <see cref="ResultJson"/> after a reload.</summary>
         public object Result;
 
-        /// <summary>When the job gives up. 0 on records from versions before 0.5.</summary>
         public long DeadlineUtcMs;
-
-        /// <summary>The failure's code from <see cref="Cli.UcpErrorCodes"/>. Empty before 0.5.</summary>
         public string ErrorCode;
-
         public string Hint;
-
-        /// <summary>What the completion policy needs to finish this job, e.g. the condition ui_wait waits for. Empty before 0.5.</summary>
         public string CompletionArgs;
+        public string Message;
+
+        /// <summary>
+        /// The group this job is a step of. Its result goes to the group, not to the outbox; the
+        /// group removes the job once it has read it.
+        /// </summary>
+        public string ParentId;
     }
 }

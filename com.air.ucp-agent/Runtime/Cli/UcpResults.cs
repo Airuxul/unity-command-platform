@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Job;
 using Air.UcpAgent.Protocol;
 using Newtonsoft.Json.Linq;
@@ -9,19 +8,21 @@ namespace Air.UcpAgent.Cli
     /// <summary>How a finished command becomes the <see cref="UcpResult"/> the caller reads.</summary>
     public static class UcpResults
     {
-        public static UcpResult From(string commandId, CommandInvocation invocation)
-        {
-            if (invocation.Failure != null)
-                return Failure(commandId, invocation.Failure);
-
-            var (data, _, message) = Unwrap(invocation.Result);
-            return new UcpResult
+        public static UcpResult Success(string commandId, string message, object data) =>
+            new UcpResult
             {
                 id = commandId,
                 success = true,
-                message = message,
+                message = string.IsNullOrWhiteSpace(message) ? "ok" : message,
                 data = ToDictionary(data),
             };
+
+        public static UcpResult From(string commandId, CommandContext ctx, string message)
+        {
+            if (ctx.Failure != null)
+                return Failure(commandId, ctx.Failure);
+
+            return Success(commandId, message, ctx.Result);
         }
 
         public static UcpResult FromJob(string commandId, InvokeJobRecord job)
@@ -31,22 +32,17 @@ namespace Air.UcpAgent.Cli
 
             if (job.Status == InvokeJobStatus.Succeeded)
             {
-                var (data, code, message) = Unwrap(job.Result ?? FromJson(job.ResultJson));
-                return new UcpResult
-                {
-                    id = commandId,
-                    success = true,
-                    message = message ?? code ?? "ok",
-                    data = ToDictionary(data),
-                };
+                return Success(commandId, job.Message, job.Result ?? FromJson(job.ResultJson));
             }
 
-            // Records from before 0.5 carry no code; their status is the closest thing to one.
-            var fallbackCode = job.Status == InvokeJobStatus.Orphaned
+            var code = job.Status == InvokeJobStatus.Orphaned
                 ? UcpErrorCodes.Orphaned
                 : UcpErrorCodes.CommandFailed;
+            if (!string.IsNullOrEmpty(job.ErrorCode))
+                code = job.ErrorCode;
+
             return Failure(commandId, new CommandFailure(
-                string.IsNullOrEmpty(job.ErrorCode) ? fallbackCode : job.ErrorCode,
+                code,
                 job.Error,
                 string.IsNullOrEmpty(job.Hint) ? null : job.Hint,
                 job.Result ?? FromJson(job.ResultJson)));
@@ -64,32 +60,12 @@ namespace Air.UcpAgent.Cli
                 data = ToDictionary(failure.Data),
             };
 
-        static (object data, string code, string message) Unwrap(object result) =>
-            result is InvokeResult invoke ? (invoke.Payload, invoke.Code, invoke.Message) : (result, null, null);
-
-        /// <summary>
-        /// A job that finished just before a domain reload comes back with only ResultJson. An
-        /// InvokeResult serialised there is turned back into one so its payload is not nested.
-        /// </summary>
         static object FromJson(string json)
         {
             if (string.IsNullOrEmpty(json))
                 return null;
 
-            var token = JToken.Parse(json);
-            if (token is JObject obj && obj.ContainsKey(nameof(InvokeResult.Payload)))
-            {
-                return new InvokeResult
-                {
-                    Code = (string)obj[nameof(InvokeResult.Code)],
-                    Message = (string)obj[nameof(InvokeResult.Message)],
-                    Payload = obj[nameof(InvokeResult.Payload)] is { Type: not JTokenType.Null } payload
-                        ? payload
-                        : null,
-                };
-            }
-
-            return token;
+            return JToken.Parse(json);
         }
 
         static Dictionary<string, object> ToDictionary(object value) =>

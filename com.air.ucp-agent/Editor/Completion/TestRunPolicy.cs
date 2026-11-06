@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Editor.Services;
-using Air.UcpAgent.Invoke;
 using Air.UcpAgent.Job;
 using Newtonsoft.Json.Linq;
 
@@ -11,8 +10,6 @@ namespace Air.UcpAgent.Completion
     /// <summary>Finishes test_run once the framework's callbacks have left its outcome in <see cref="TestRunState"/>.</summary>
     public sealed class TestRunPolicy : ICompletionPolicy
     {
-        public string Kind => InvokeCompletionCatalog.CompletionTests;
-
         public bool TryComplete(InvokeJobRecord command, EditorStateSnapshot state, out object result, out CommandFailure failure)
         {
             result = null;
@@ -49,7 +46,7 @@ namespace Air.UcpAgent.Completion
                 return true;
             }
 
-            result = InvokeResult.Ok($"{total} tests ran, none failed", summary);
+            result = new PolicyOutcome { Message = $"{total} tests ran, none failed", Data = summary };
             return true;
         }
     }

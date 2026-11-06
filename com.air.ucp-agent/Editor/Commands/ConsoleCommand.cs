@@ -1,3 +1,4 @@
+using Air.UcpAgent.Cli;
 using System;
 using System.Collections.Generic;
 using Air.UcpAgent.Invoke;
@@ -7,15 +8,20 @@ using Air.UcpAgent.Commands;
 
 namespace Air.UcpAgent.Editor.Commands
 {
-    public class ConsoleCommand : EditorActionCommand<ConsoleParams>
+    [UcpCommand]
+    public static class ConsoleCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new InvokeDescriptor<ConsoleParams>(
+        public static readonly InvokeDescriptor Descriptor = new InvokeDescriptor<ConsoleParams>(
             CommandNames.Console,
             CommandHostScope.Editor,
-            "Read or clear Unity Editor console logs");
-
-        protected override Dictionary<string, object> Execute(ConsoleParams p)
+            "Read or clear Unity Editor console logs")
         {
+            RunsWhileBusy = true,
+        };
+
+        public static object Execute(ConsoleParams p, CommandContext ctx)
+        {
+            ctx.Message = p.Clear ? "console cleared" : "console entries";
             if (!UnityConsoleReader.IsReady)
                 throw new InvalidOperationException($"Console reader unavailable: {UnityConsoleReader.InitError}");
 
@@ -43,7 +49,5 @@ namespace Air.UcpAgent.Editor.Commands
                 ["stacktrace"] = stacktrace,
             };
         }
-
-        protected override string Message(ConsoleParams p) => p.Clear ? "console cleared" : "console entries";
     }
 }

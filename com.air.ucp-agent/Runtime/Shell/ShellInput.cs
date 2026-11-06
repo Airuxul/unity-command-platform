@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using Air.UcpAgent.Cli;
 using Air.UcpAgent.Params;
 
@@ -97,14 +96,8 @@ namespace Air.UcpAgent.Runtime.Shell
 
             var result = new ShellParseResult
             {
-                CommandName = ResolveRuntimeCommand(tokens[0].Value),
+                CommandName = tokens[0].Value,
             };
-
-            if (string.IsNullOrEmpty(result.CommandName))
-            {
-                result.Error = "unknown_command";
-                return result;
-            }
 
             for (var i = 1; i < tokens.Count; i++)
             {
@@ -150,22 +143,17 @@ namespace Air.UcpAgent.Runtime.Shell
 
     public static class ShellCompletionService
     {
-        static readonly Regex ParamNameRegex = new(@"^--([A-Za-z0-9_]+)", RegexOptions.Compiled);
-
         public static List<ShellCompletionCandidate> GetCandidates(string input, int caretIndex)
         {
             var text = input ?? "";
-            var (tokenStart, tokenEnd, tokenValue) = GetTokenAtCaret(text, caretIndex);
+            var (tokenStart, _, tokenValue) = GetTokenAtCaret(text, caretIndex);
             var tokenIndex = CountTokensBefore(text, tokenStart);
 
             if (tokenIndex <= 0)
                 return CompleteCommandNames(tokenValue);
 
-            var commandName = ShellLineParser.ResolveRuntimeCommand(ShellTokenizer.Tokenize(text).FirstOrDefault().Value);
-            if (string.IsNullOrEmpty(commandName))
-                return CompleteCommandNames(tokenValue);
-
-            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, commandName);
+            var first = ShellTokenizer.Tokenize(text).FirstOrDefault().Value;
+            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, first);
             if (handler == null)
                 return new List<ShellCompletionCandidate>();
 
@@ -229,13 +217,9 @@ namespace Air.UcpAgent.Runtime.Shell
                 : tokenValue;
             var matches = new List<ShellCompletionCandidate>();
 
-            foreach (var desc in handler.ParamDescriptions ?? Array.Empty<string>())
+            foreach (var param in UcpParamBinder.Inspect(handler.ParamType))
             {
-                var match = ParamNameRegex.Match(desc);
-                if (!match.Success)
-                    continue;
-
-                var key = match.Groups[1].Value;
+                var key = param.Key;
                 if (used.Contains(key))
                     continue;
 
@@ -267,17 +251,12 @@ namespace Air.UcpAgent.Runtime.Shell
                 return new List<ShellCompletionCandidate>();
 
             var key = previous.Substring(2);
-            var desc = (handler.ParamDescriptions ?? Array.Empty<string>())
-                .FirstOrDefault(line => line.StartsWith("--" + key, StringComparison.OrdinalIgnoreCase));
-
-            if (string.IsNullOrEmpty(desc))
+            var param = UcpParamBinder.Inspect(handler.ParamType)
+                .FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (param == null || string.IsNullOrEmpty(param.AllowedValues))
                 return new List<ShellCompletionCandidate>();
 
-            var bracket = Regex.Match(desc, @"\[([^\]]+)\]");
-            if (!bracket.Success)
-                return new List<ShellCompletionCandidate>();
-
-            return bracket.Groups[1].Value
+            return param.AllowedValues
                 .Split('|', StringSplitOptions.RemoveEmptyEntries)
                 .Select(v => v.Trim())
                 .Where(v => StartsWithIgnoreCase(v, tokenValue))
@@ -350,16 +329,15 @@ namespace Air.UcpAgent.Runtime.Shell
 
         public static (int start, int end, string value) GetTokenAtCaret(string text, int caret)
         {
+            text ??= "";
             caret = Math.Max(0, Math.Min(caret, text.Length));
-            var start = caret;
-            while (start > 0 && !char.IsWhiteSpace(text[start - 1]))
-                start--;
+            foreach (var token in ShellTokenizer.Tokenize(text))
+            {
+                if (caret >= token.Start && caret <= token.End)
+                    return (token.Start, token.End, token.Value);
+            }
 
-            var end = caret;
-            while (end < text.Length && !char.IsWhiteSpace(text[end]))
-                end++;
-
-            return (start, end, text.Substring(start, end - start));
+            return (caret, caret, "");
         }
 
         public static int GetCaretAfterApply(string input, int caretIndex, ShellCompletionCandidate candidate)
@@ -429,11 +407,6 @@ namespace Air.UcpAgent.Runtime.Shell
                 FormatHandlerHint(handler),
             };
 
-            var validationError = ShellValidationService.ValidateBeforeExecute(
-                ShellLineParser.Parse(trimmed));
-            if (!string.IsNullOrEmpty(validationError))
-                lines.Add("[!] " + validationError);
-
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var token in tokens.Skip(1))
             {
@@ -447,19 +420,18 @@ namespace Air.UcpAgent.Runtime.Shell
             }
 
             var paramPrefix = GetActiveParamPrefix(trimmed, tokens);
-            foreach (var desc in handler.ParamDescriptions ?? Array.Empty<string>())
+            foreach (var param in UcpParamBinder.Inspect(handler.ParamType))
             {
-                var key = ExtractParamKey(desc);
-                if (string.IsNullOrEmpty(key) || used.Contains(key))
+                if (used.Contains(param.Key))
                     continue;
 
                 if (!string.IsNullOrEmpty(paramPrefix) &&
-                    !StartsWithIgnoreCase(key, paramPrefix))
+                    !StartsWithIgnoreCase(param.Key, paramPrefix))
                 {
                     continue;
                 }
 
-                lines.Add("  " + desc);
+                lines.Add("  " + Describe(param));
             }
 
             return lines;
@@ -542,32 +514,11 @@ namespace Air.UcpAgent.Runtime.Shell
             return handler.Name + paramText + description;
         }
 
-        static string ExtractParamKey(string desc)
+        static string Describe(UcpParamInfo param)
         {
-            if (string.IsNullOrEmpty(desc) || !desc.StartsWith("--", StringComparison.Ordinal))
-                return null;
-
-            var end = 2;
-            while (end < desc.Length && (char.IsLetterOrDigit(desc[end]) || desc[end] == '_'))
-                end++;
-
-            return end > 2 ? desc.Substring(2, end - 2) : null;
-        }
-    }
-
-    public static class ShellValidationService
-    {
-        public static string ValidateBeforeExecute(ShellParseResult parse)
-        {
-            if (parse == null || !parse.IsValid)
-                return null;
-
-            var handler = CommandRegistry.Find(CommandRegistry.RuntimeHost, parse.CommandName);
-            if (handler?.ParamType == null)
-                return null;
-
-            var (_, error) = CliParamBinder.Bind(handler.ParamType, parse.Args);
-            return error;
+            var values = string.IsNullOrEmpty(param.AllowedValues) ? "" : $" [{param.AllowedValues}]";
+            var req = param.Required ? " (required)" : "";
+            return $"--{param.Key} <{param.TypeName}>{values} {param.Description}{req}".TrimEnd();
         }
     }
 

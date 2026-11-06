@@ -12,34 +12,14 @@ cd unity-command-platform/ucp-cli
 ```
 
 If `ucp-cli` is not found afterwards, add the npm global folder (`npm prefix -g`) to `PATH` and
-open a new terminal. Local without global link: `node .\ucp-cli ping` or `npm run ucp-cli -- ping`.
+open a new terminal. Without a global link: `node .\bin\ucp-cli.js ping` or `npm run ucp-cli -- ping`.
 
-## Usage (Unity Editor open)
+Everyday commands, sessions, and adding a command: [../docs/GUIDE.zh-CN.md](../docs/GUIDE.zh-CN.md).
+The command list is `ucp-cli help`. A result is `{ ok, data, message, error_code, hint, timing }`;
+the exit code is 0 only when `ok` is true.
 
-```powershell
-ucp-cli ping
-ucp-cli help                                  # command catalog; ucp-cli help <type> for one card
-ucp-cli run echo --args '{"message":"hello"}'
-ucp-cli run-script flow.json                  # [{"command": ..., "args": ..., "timeout": ...}, ...]
-ucp-cli build Builds/Win/Game.exe --platform StandaloneWindows64
-ucp-cli host status
-```
-
-Every result is JSON: `{ ok, data, message, error_code, hint, timing }`; the exit code is 0 only
-when `ok` is true.
-
-## Targets configuration
-
-Targets live in `~/.ucp/targets.json`. Runtime targets use host/port; Editor targets can be auto-discovered from Unity session files or set explicitly.
-
-```powershell
-ucp-cli targets set device-runtime --type runtime --host 192.168.0.10 --port 6620 --project C:/Project/GameDemo
-ucp-cli targets set gamedemo-editor --type editor --project C:/Project/GameDemo
-ucp-cli targets list
-ucp-cli host status
-```
-
-Runtime health is probed via `GET http://{host}:{port}/health` (no heartbeat file).
+Editor sessions are discovered from `~/.ucp/sessions/`. A runtime session exists only when
+`~/.ucp/targets.json` has a runtime target and its `/health` probe succeeds.
 
 ## Play + Runtime integration
 

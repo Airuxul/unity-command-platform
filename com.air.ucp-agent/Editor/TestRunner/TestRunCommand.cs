@@ -1,4 +1,5 @@
 using System;
+using Air.UcpAgent.Completion;
 using System.Collections.Generic;
 using System.Linq;
 using Air.UcpAgent.Cli;
@@ -17,46 +18,43 @@ namespace Air.UcpAgent.Editor.TestRunner
         public const string Edit = "edit";
         public const string Play = "play";
 
-        [CliParam(Description = "edit or play (default: edit)", AllowedValues = Edit + "|" + Play)]
+        [UcpParam(Description = "edit or play (default: edit)", AllowedValues = Edit + "|" + Play)]
         public string Mode { get; set; } = Edit;
 
-        [CliParam(Description = "JSON array of full test names (Namespace.Class.Method), as data.failures prints them")]
+        [UcpParam(Description = "JSON array of full test names (Namespace.Class.Method), as data.failures prints them")]
         public string[] Tests { get; set; }
 
-        [CliParam(Description = "regex on full test names")]
+        [UcpParam(Description = "regex on full test names")]
         public string Filter { get; set; }
 
-        [CliParam(Description = "JSON array of NUnit categories")]
+        [UcpParam(Description = "JSON array of NUnit categories")]
         public string[] Categories { get; set; }
 
-        [CliParam(Description = "JSON array of test assembly names, without .dll")]
+        [UcpParam(Description = "JSON array of test assembly names, without .dll")]
         public string[] Assemblies { get; set; }
     }
 
     /// <summary>Installed only with com.unity.test-framework; see this assembly's defineConstraints.</summary>
-    public sealed class TestRunCommand : CliCommand<TestRunParams>
+    [UcpCommand]
+    public static class TestRunCommand
     {
-        public override InvokeDescriptor Descriptor { get; } = new DeferredInvokeDescriptor<TestRunParams>(
+        public static readonly Type CompletionPolicy = typeof(TestRunPolicy);
+
+        public static readonly InvokeDescriptor Descriptor = new DeferredInvokeDescriptor<TestRunParams>(
             CommandNames.TestRun,
             CommandHostScope.Editor,
             "Run Test Runner tests and wait for the result: counts, and each failure with its message. " +
             "Fails as tests_failed when any test fails. Other commands are refused as busy until the run ends.",
-            InvokeCompletionCatalog.CompletionTests,
+            CompletionPolicy,
             defaultTimeoutMs: 10 * 60_000);
 
-        public override void Run(TestRunParams p)
+        public static object Execute(TestRunParams p, CommandContext ctx)
         {
-            try
-            {
-                Start(p);
-            }
-            catch (Exception ex)
-            {
-                CompleteFail(ex);
-            }
+            Start(p, ctx.CommandId);
+            return null;
         }
 
-        void Start(TestRunParams p)
+        static void Start(TestRunParams p, string commandId)
         {
             if (EditorApplication.isPlaying)
             {
@@ -89,7 +87,7 @@ namespace Air.UcpAgent.Editor.TestRunner
                 assemblyNames = NullIfEmpty(p.Assemblies),
             };
 
-            TestRunState.Begin(CommandId, p.Mode == TestRunParams.Play ? TestRunParams.Play : TestRunParams.Edit);
+            TestRunState.Begin(commandId, p.Mode == TestRunParams.Play ? TestRunParams.Play : TestRunParams.Edit);
             try
             {
                 UcpTestCallbacks.Api.Execute(new ExecutionSettings(filter));

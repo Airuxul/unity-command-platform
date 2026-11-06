@@ -35,14 +35,14 @@ ucp-cli run gameobject_create --args '{...}'
     ↓ POST /commands, then GET /commands/:id?wait=25000 until done   (127.0.0.1:6610, X-UCP-Token)
 ucp-host
     ├── SessionDirectory   picks the session (sessions/*.json, targets.json, runtime /health probes)
-    ├── CommandRunner      one lane per session (read-only commands skip it); deadline from
+    ├── CommandRunner      one lane per session (`runsWhileBusy` skips it); deadline from
     │                      submission; waits for a busy Editor
     └── EditorFileQueueAdapter
             writes ~/.ucp/queues/{projectId}/inbox/{cmdId}.json, watches outbox/
     ↓
 com.air.ucp-agent  (EditorAgentBootstrap, every editor tick)
     ├── claims the file: inbox/{cmdId}.json → {cmdId}.claimed
-    ├── CommandExecutor: CommandRegistry lookup → CliParamBinder → CliCommand.Run
+    ├── CommandExecutor: CommandRegistry lookup → UcpParamBinder → ExecutionHost.Run → Execute
     │       synchronous: result now
     │       deferred:    job in EditorJobStateManager; a completion policy finishes it later
     └── writes outbox/{cmdId}.json
@@ -61,7 +61,7 @@ commands cannot defer.
 | `host.json` | ucp-host | pid, port, token |
 | `host.lock` | ucp-cli | spawn guard |
 | `targets.json` | ucp-cli `targets` | configured Editor / runtime targets |
-| `sessions/{projectId}.json` | Unity agent | status, capabilities, pid, focused, default timeouts, read-only commands; every 2 s |
+| `sessions/{projectId}.json` | Unity agent | status, capabilities, pid, focused, default timeouts, `runsWhileBusy`; every 2 s |
 | `queues/{projectId}/inbox/` | ucp-host | commands to Unity |
 | `queues/{projectId}/outbox/` | Unity agent | results |
 | `jobs/{projectId}/` | Unity agent | deferred commands in flight, for recovery after a reload |
@@ -80,14 +80,16 @@ commands cannot defer.
 
 | Component | Responsibility |
 |-----------|----------------|
-| `Runtime/Cli/CommandRegistry` | Finds every `CliCommand` subclass once per domain; lookup per host (editor / runtime) |
+| `Runtime/Cli/CommandRegistry` | Finds every `[UcpCommand]` static class once per domain, checks its shape (`load_errors`); lookup per host (editor / runtime) |
 | `Runtime/Cli/CommandExecutor` | Bind, run, and map the outcome to a `UcpResult`; creates the job of a deferred command |
 | `Runtime/Cli/UcpException` · `UcpErrorCodes` | The error codes, with hints |
 | `Editor/EditorAgentBootstrap` | Session file, inbox claim, outbox writes, refusing commands while tests run |
 | `Editor/Dispatch/EditorJobStateManager` · `EditorJobLedger` | Jobs in memory, `SessionState` and `jobs/`; reload recovery; deadlines |
 | `Editor/Completion/*Policy` | When a job is done: compilation, enter / exit play, tests, packages, ui_wait |
-| `Editor/Commands/EditorActionCommand<T>` | Command shell: service payload → result, exception → coded failure |
-| `Editor/Commands/EditTargetCommand<T>` + `Editor/Services/Objects/EditBatch` | Node commands: `Apply(scope, p)`; the batch opens the target, commits or reverts |
+| `Runtime/Cli/CommandContext` | One run: id, message, result, failure, deferral; a command's subclass adds what its `Undo` needs |
+| `Editor/Services/Objects/EditorExecutionHost` | Opens an edit target, runs `Execute` in that scope, commits, or takes the step back |
+| `Editor/Group/GroupRun` | `group`: runs steps through the executor, journals what to take back in `Library/ucp/undo/`, resumes after a reload via `GroupPolicy` |
+| `Runtime/Cli/FunctionRegistry` | `[UcpFunction]` static methods, run by `call` |
 
 ### Content command layer (`Editor/Services/`)
 
@@ -117,8 +119,8 @@ result that comes in later.
 ```
 
 ucp-cli turns this into `{ ok, data, message, error_code, hint, timing }`. A failure ucp-host
-decides itself (`timeout`, `unknown_command`, `no_ready_session`, ...) arrives in the same three
-fields.
+decides itself (`host_timeout`, `host_unknown_command`, `no_ready_session`, ...) arrives in the
+same three fields. The constants are `HostError` in `ucp-cli/src/shared/host-error.ts`.
 
 Declared `aliases` are lookup keys and are advertised as capabilities, so they dispatch like real
 names.

@@ -3,64 +3,62 @@ namespace Air.UcpAgent.Params
     /// <summary>Commands that address one asset or folder.</summary>
     public class AssetPathParams
     {
-        [CliParam(ParamKeys.Path, Description = "asset or folder path, e.g. Assets/Prefabs/Player.prefab",
-            Required = true, AlternateKeys = "asset,asset_path")]
+        [UcpParam(ParamKeys.Path, Description = "asset or folder path, e.g. Assets/Prefabs/Player.prefab",
+            Required = true)]
         public string Path { get; set; }
     }
 
     /// <summary>Commands that write an asset somewhere new from an existing one: copy, move, variant.</summary>
     public abstract class CopyParams
     {
-        [CliParam(ParamKeys.Path, Description = "existing asset to start from", Required = true,
-            AlternateKeys = "asset,asset_path")]
+        [UcpParam(ParamKeys.Path, Description = "existing asset to start from", Required = true)]
         public string Path { get; set; }
 
-        [CliParam(ParamKeys.Target, Description = "path to write", Required = true,
-            AlternateKeys = "output,destination,to")]
+        [UcpParam(ParamKeys.Target, Description = "path to write", Required = true)]
         public string Target { get; set; }
     }
 
     /// <summary>The folder search shared by asset_list, prefab_list and scene_list.</summary>
     public abstract class FolderQueryParams
     {
-        [CliParam(ParamKeys.Folder, Description = "folder to search under (default: Assets)")]
+        [UcpParam(ParamKeys.Folder, Description = "folder to search under (default: Assets)")]
         public string Folder { get; set; }
 
-        [CliParam(Description = "name substring filter")]
+        [UcpParam(Description = "name substring filter")]
         public string Name { get; set; }
 
-        [CliParam(Description = "max results (default: 200)")]
+        [UcpParam(Description = "max results (default: 200)")]
         public int? Limit { get; set; }
     }
 
     public sealed class AssetListParams : FolderQueryParams
     {
-        [CliParam(Description = "Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript")]
+        [UcpParam(Description = "Unity type filter, e.g. Prefab, Material, Texture2D, MonoScript")]
         public string Type { get; set; }
 
-        [CliParam(Description = "include sub-folders (default: true)")]
+        [UcpParam(Description = "include sub-folders (default: true)")]
         public bool? Recursive { get; set; }
     }
 
     public sealed class AssetFindParams
     {
-        [CliParam(Description = "raw AssetDatabase filter, e.g. \"t:Material glossy\" or \"l:Boss\"",
-            Required = true, AlternateKeys = "query,search")]
+        [UcpParam(Description = "raw AssetDatabase filter, e.g. \"t:Material glossy\" or \"l:Boss\"",
+            Required = true)]
         public string Filter { get; set; }
 
-        [CliParam(Description = "folders to search under (default: whole project)")]
+        [UcpParam(Description = "folders to search under (default: whole project)")]
         public string[] Folders { get; set; }
 
-        [CliParam(Description = "max results (default: 200)")]
+        [UcpParam(Description = "max results (default: 200)")]
         public int? Limit { get; set; }
     }
 
     public sealed class AssetInfoParams : AssetPathParams
     {
-        [CliParam(Description = "also list direct dependencies")]
+        [UcpParam(Description = "also list direct dependencies")]
         public bool Dependencies { get; set; }
 
-        [CliParam(Description = "also list sub-assets stored in the same file")]
+        [UcpParam(Description = "also list sub-assets stored in the same file")]
         public bool SubAssets { get; set; }
     }
 
@@ -78,16 +76,16 @@ namespace Air.UcpAgent.Params
 
     public sealed class AssetDependenciesParams : AssetPathParams
     {
-        [CliParam(Description = "follow dependencies transitively")]
+        [UcpParam(Description = "follow dependencies transitively")]
         public bool Recursive { get; set; }
     }
 
     public sealed class AssetGuidParams
     {
-        [CliParam(ParamKeys.Path, Description = "asset path to convert to a GUID", AlternateKeys = "asset,asset_path")]
+        [UcpParam(ParamKeys.Path, Description = "asset path to convert to a GUID")]
         public string Path { get; set; }
 
-        [CliParam(Description = "GUID to convert to an asset path")]
+        [UcpParam(Description = "GUID to convert to an asset path")]
         public string Guid { get; set; }
     }
 }

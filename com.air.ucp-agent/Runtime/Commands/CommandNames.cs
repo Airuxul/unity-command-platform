@@ -1,7 +1,10 @@
 // @tag cli-command
 namespace Air.UcpAgent.Commands
 {
-    /// <summary>Built-in ucp-cli command names for ucp-agent.</summary>
+    /// <summary>
+    /// Names other C# mentions. Not a registry: a new command puts its name on its descriptor.
+    /// Add a constant here only when other code has to mention that name.
+    /// </summary>
     public static class CommandNames
     {
         // --- Agent / editor lifecycle -------------------------------------------------
@@ -9,6 +12,7 @@ namespace Air.UcpAgent.Commands
         public const string Compile = "compile";
         public const string Console = "console";
         public const string Echo = "echo";
+        public const string Call = "call";
         public const string Exec = "exec";
         public const string Help = "help";
         public const string Menu = "menu";
@@ -58,9 +62,8 @@ namespace Air.UcpAgent.Commands
         public const string PrefabClose = "prefab_close";
         public const string PrefabStageInfo = "prefab_stage_info";
 
-        // --- Batch: several node commands on one target, kept only if all succeed -------
-        public const string PrefabEdit = "prefab_edit";
-        public const string SceneEdit = "scene_edit";
+        // --- Group: several commands run as one, taken back together or one by one ------
+        public const string Group = "group";
 
         // --- GameObject (scene, or inside a prefab asset via the `prefab` arg) ---------
         public const string GameObjectCreate = "gameobject_create";
@@ -112,12 +115,6 @@ namespace Air.UcpAgent.Commands
         public const string SelectionGet = "selection_get";
         public const string SelectionSet = "selection_set";
         public const string SelectionClear = "selection_clear";
-
-        /// <summary>
-        /// Commands that change nothing in the project or the play state. ucp-host lets them past a
-        /// command still running on the same Editor, and they still run while tests do.
-        /// </summary>
-        public static readonly string[] ReadOnly = { Ping, State, Console, Help, Echo };
 
         // --- Play Mode UI --------------------------------------------------------------
         public const string UiSnapshot = "ui_snapshot";
